@@ -20,7 +20,10 @@
     "dev": "quasar dev",
     "build": "quasar build",
     "typecheck": "vue-tsc --noEmit",
-    "postinstall": "quasar prepare --silent"
+    "test": "echo 'No tests configured yet'",
+    "commitlint": "commitlint",
+    "postinstall": "quasar prepare --silent",
+    "prepare": "husky"
   },
   "dependencies": {
     "@quasar/extras": "^2.0.0",
@@ -31,10 +34,13 @@
     "vue-router": "^5.0.6"
   },
   "devDependencies": {
+    "@commitlint/cli": "^21.2.1",
+    "@commitlint/config-conventional": "^21.2.0",
     "@intlify/unplugin-vue-i18n": "^11.0.0",
     "@quasar/app-vite": "^3.0.0",
     "@types/node": "^22.19.11",
     "autoprefixer": "^10.4.27",
+    "husky": "^9.1.7",
     "oxfmt": "^0.x",
     "oxlint": "^1.x",
     "oxlint-tsgolint": "^0.x",
