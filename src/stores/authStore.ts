@@ -76,7 +76,7 @@ async function buildUserProfile(firebaseUser: User): Promise<UserProfile> {
     uid: firebaseUser.uid,
     email: firebaseUser.email ?? "",
     emailVerified: firebaseUser.emailVerified,
-    displayName: firebaseUser.displayName ?? undefined,
+    displayName: firebaseUser.displayName || "",
     claims
   };
 } /*end buildUserProfile*/

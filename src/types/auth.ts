@@ -37,7 +37,7 @@ export interface UserProfile {
   uid: string;
   email: string;
   emailVerified: boolean;
-  displayName?: string;
+  displayName?: string | undefined;
   claims: AuthClaims | null;
 }
 
