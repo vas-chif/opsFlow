@@ -11,9 +11,9 @@ Questa fase prepara il terreno per uno sviluppo pulito, sicuro e performante.
 
 1.2 Infrastruttura Cloud (Firebase):
 
-[ ] Setup progetto su piano Blaze.
+[X] Setup progetto su piano Blaze.
 
-[ ] Configurazione di Firebase CLI e inizializzazione di hosting, firestore, functions.
+[X] Configurazione di Firebase CLI e inizializzazione di hosting, firestore, functions.
 
 [ ] Setup ambiente locale: .env sanificato (nessuna chiave esposta, uso di dotenv o variabili environment di Firebase).
 

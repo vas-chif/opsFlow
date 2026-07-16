@@ -1,0 +1,47 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Funzioni di utilità per la validazione
+    function isAuthenticated() { return request.auth != null; }
+    function isEmailVerified() { return request.auth.token.email_verified == true; }
+    function belongsToTenant(tenantId) { return request.auth.token.tenantId == tenantId; }
+    function isReadOnly(data) { return data.diff(resource.data).affectedKeys().hasAny(['createdAt', 'createdBy', 'tenantId']); }
+
+    // ── Deny all by default ──────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ── Tenant-isolated collections ─────────────────────────────────────
+    match /tenants/{tenantId}/{document=**} {
+      allow read, write: if isAuthenticated() && belongsToTenant(tenantId) && isEmailVerified();
+      
+      // Impedisci la modifica di campi immutabili di sistema (Non-Ripudio)
+      allow update: if isAuthenticated() 
+        && belongsToTenant(tenantId) 
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdAt', 'createdBy', 'tenantId']);
+    }
+
+    // ── User profiles (Privacy First - Rispetta path users_metadata/{uid}) ────
+    match /users_metadata/{userId}/{document=**} {
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // ── Audit logs (Compliance GDPR Art. 30 - Append Only) ────────────────
+    match /audit/{logId} {
+      allow read: if isAuthenticated() && request.auth.token.role == 'admin';
+      allow create: if isAuthenticated() 
+        && request.resource.data.tenantId == request.auth.token.tenantId
+        && request.resource.data.timestamp == request.time;
+      allow update, delete: if false; // Protezione contro la manomissione dei log
+    }
+    
+    // ── Global reference data (Solo lettura autenticata) ──────────────────
+    match /reference/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if false; 
+    }
+  }
+}
