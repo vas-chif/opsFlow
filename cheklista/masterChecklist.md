@@ -1,63 +1,79 @@
+📋 MASTER CHECKLIST: OpsFlow Platform
 STEP 1: Tooling & Setup Environment
-Questa fase prepara il terreno per uno sviluppo pulito, sicuro e performante.
+1.1 Workstation & IDE
 
-1.1 Workstation & IDE:
+[X] Installazione Cursor (configurato con account e plugin ESLint/Prettier).
 
-[X] Installazione Cursor (configurato con il tuo account e plugin ESLint/Prettier integrati).
+[X] Configurazione Yarn (Gestore pacchetti unico).
 
-[X] Configurazione Yarn come unico gestore pacchetti (vietato npm o pnpm).
+[X] Setup Git Hooks (Husky + Conventional Commits).
 
-[X] Setup Git Hooks: Configurazione di husky per assicurare che ogni commit rispetti il formato dei Conventional Commits.
-
-1.2 Infrastruttura Cloud (Firebase):
+1.2 Infrastruttura Cloud (Firebase)
 
 [X] Setup progetto su piano Blaze.
 
-[X] Configurazione di Firebase CLI e inizializzazione di hosting, firestore, functions.
+[X] Configurazione Firebase CLI (Hosting, Firestore, Functions).
 
-[ ] Setup ambiente locale: .env sanificato (nessuna chiave esposta, uso di dotenv o variabili environment di Firebase).
+[X] Setup ambiente locale (Integrazione .env.example e regole ignorate nel .gitignore).
 
-1.3 Pipeline di Sviluppo:
+1.3 Pipeline di Sviluppo
 
-[X] Setup GitHub Actions per il deploy automatico (configurazione di firebase-tools nel CI/CD).
+[X] Setup GitHub Actions (Merge/PR con CI automatizzata).
 
-[ ] Configurazione eslint e prettier basata sulle regole di stile rigorose dei tuoi progetti precedenti.
+[X] Validazione CI/CD (Linting, Typecheck inseriti nella pipeline).
 
 STEP 2: Architettura Multi-Tenant & Sicurezza
-Fondamentale per gestire i dati di tua moglie e dei suoi clienti senza interferenze.
+2.1 Autenticazione (Identity)
 
-2.1 Autenticazione (Identity):
+[X] Custom Claims (tenantId/role in Firebase Auth).
 
-[X] Implementazione Custom Claims in Firebase Auth per assegnare tenantId e role al login.
+[X] Setup authStore Pinia (JWT hydration).
 
-[X] Setup authStore in Pinia che intercetta il token JWT e decodifica i claims.
+2.2 Firestore (Data Isolation)
 
-2.2 Firestore (Data Isolation):
+[X] Implementazione Config-Fenced (useFirestore composable).
 
-[ ] Implementazione del protocollo Config-Fenced: tutte le query devono passare attraverso un composable (useTenantQuery) che forza il path tenants/{tenantId}/....
+[X] Security Rules (Isolamento tenant basato su claims).
 
-[ ] Scrittura Security Rules: allow read, write: if request.auth.token.tenantId == resource.data.tenantId.
+2.3 UI Protection
 
-2.3 UI Protection:
+[ ] Creazione di TenantGuard (Middleware per il routing protetto).
 
-[ ] Creazione di un TenantGuard (Vue Router middleware) che impedisce l'accesso alle rotte operative se il tenantId non è presente nel token.
+[X] State Management (Pinia taskStore configurato e tipizzato).
 
-STEP 3: Integrazione IA (Orchestrazione Agentica)
-Il cuore che trasforma l'app in un assistente operativo.
+STEP 3: Design System & Branding
+3.1 Definizione Identity
 
-3.1 Prototipo Chat (Gemini):
+[X] Setup Palette Colori (Variabili SCSS centralizzate in Quasar).
 
-[ ] Installazione estensione "Chat with Gemini" in Firebase.
+[X] Definizione Tipografia (Font system per leggibilità in ICU/aree critiche).
 
-[ ] Creazione della collezione tenants/{tenantId}/ai_agents per gestire i prompt di sistema (System Instructions).
+[X] Setup Component Library (Base components: BaseButton, BaseInput, StatusBadge).
 
-3.2 Workflow Operativo (RAG):
+3.2 Responsive & Accessibility
 
-[ ] Setup Cloud Function processLead: (Trigger: onCreate su /leads/). Deve inviare il profilo lead a Gemini e salvare il score_compatibilita nel documento.
+[ ] Implementazione Dark Mode Toggle (Global state).
 
-[ ] Implementazione del Proxy di Sicurezza: Ogni chiamata a Gemini deve passare attraverso una funzione che pulisce i dati PII (nome, cognome, mail) prima che l'IA li veda.
+[ ] Ottimizzazione Mobile-First (Testing su viewports stretti).
 
-🤖 Prompt per "AI Anti-Gravity" (Generazione agents.md)
+[ ] Verifica Accessibilità WCAG 2.1 AA.
+
+3.3 Componenti Operativi
+
+[ ] Dashboard Card System (Componenti riutilizzabili per Task/Lead).
+
+[ ] Layout Reattivo (MainLayout con navigazione adattiva).
+
+STEP 4: Integrazione IA (Orchestrazione Agentica)
+4.1 Prototipo Chat (Gemini)
+
+[ ] Inizializzazione Firebase Genkit / Estensione Gemini.
+
+4.2 Workflow Operativo (RAG)
+
+[ ] Setup Agenti (Planner, Ispettore, Archivista) via agents.md.
+
+[ ] Middleware di anonimizzazione PII per le chiamate a Gemini.
 Copia e incolla questo prompt nella tua AI (o nel terminale di Cursor/Anti-Gravity) per inizializzare il contesto del sistema.
 
 Markdown

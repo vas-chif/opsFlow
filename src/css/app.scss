@@ -1,1 +1,82 @@
-// app global css
+/**
+ * @file app.scss
+ * @description Global styles and typography for Design System Elite
+ * @author Vasile Chifeac
+ * @created 2026-07-16
+ *
+ * @notes
+ * - Playfair Display for headings (elegant, distinctive)
+ * - Mulish for body text (readable, clean)
+ * - Elite design system implementation
+ *
+ * @dependencies
+ * - Google Fonts (Playfair Display, Mulish)
+ *
+ * @performance
+ * - Minimal CSS overhead
+ * - Font-display swap for performance
+ */
+
+// ── Typography ───────────────────────────────────────────────────────────────
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Mulish:wght@300;400;500;600;700&display=swap");
+
+// Elite Design System - Typography
+body {
+  font-family:
+    "Mulish",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  background-color: $background;
+  color: $dark;
+}
+
+// Heading styles - Playfair Display
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "Playfair Display", Georgia, serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: $primary;
+}
+
+// Custom heading classes for Quasar
+.text-heading {
+  font-family: "Playfair Display", Georgia, serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: $primary;
+}
+
+// Body text - Mulish
+.text-body-elite {
+  font-family:
+    "Mulish",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  font-weight: 400;
+}
+
+// ── Utilities ───────────────────────────────────────────────────────────────
+.rounded-elite {
+  border-radius: 8px;
+}
+
+.shadow-elite {
+  box-shadow: 0 4px 20px rgba(10, 35, 66, 0.08);
+}
+
+.transition-smooth {
+  transition: all 0.3s ease;
+}
+
+/*end app.scss*/

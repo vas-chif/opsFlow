@@ -32,15 +32,11 @@ export default defineConfig(ctx => {
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#build
     build: {
-      target: {
-        // browser: 'baseline-widely-available',
-        // node: 'node22'
-      },
+      target: {},
 
       typescript: {
         strict: true,
         vueShim: true
-        // extendTsConfig (tsConfig) {}
       },
 
       // https://v2.quasar.dev/quasar-cli-vite/page-routing-with-vue-router#filename-based-routing
@@ -48,7 +44,6 @@ export default defineConfig(ctx => {
 
       vueRouterMode: "hash", // available values: 'hash', 'history'
       // vueRouterBase,
-      // vueDevtools,
 
       // publicPath: '/',
       // define: {},
@@ -102,6 +97,17 @@ export default defineConfig(ctx => {
 
       // Quasar plugins
       plugins: []
+    },
+
+    // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#head
+    head: {
+      fonts: [
+        {
+          href: "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Mulish:wght@300;400;500;600;700&display=swap",
+          rel: "stylesheet",
+          type: "text/css"
+        }
+      ]
     },
 
     // animations: 'all', // --- includes all animations
