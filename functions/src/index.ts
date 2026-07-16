@@ -1,32 +1,74 @@
 /**
- * Import function triggers from their respective submodules:
+ * @file index.ts
+ * @description Cloud Functions entrypoint for OpsFlow backend (custom claims).
+ * @author Vasile Chifeac
+ * @created 2026-07-16
+ * @modified 2026-07-16
  *
- * import {onCall} from "firebase-functions/v2/https";
- * import {onDocumentWritten} from "firebase-functions/v2/firestore";
+ * @notes
+ * - Layer 3 security: only admins may assign tenantId/role claims
+ * - Audit trail via structured logger (GDPR Art. 30)
  *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
+ * @dependencies
+ * - firebase-admin
+ * - firebase-functions
+ *
+ * @performance
+ * - maxInstances: 10 for cost control
  */
 
 import { setGlobalOptions } from "firebase-functions";
-// import { onRequest } from "firebase-functions/https";
-// import * as logger from "firebase-functions/logger";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { logger } from "firebase-functions";
+import * as admin from "firebase-admin";
 
-// Start writing functions
-// https://firebase.google.com/docs/functions/typescript
+admin.initializeApp();
 
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
 setGlobalOptions({ maxInstances: 10 });
 
-// export const helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+const ALLOWED_ROLES = new Set(["admin", "manager", "operator", "viewer"]);
+
+/**
+ * Assigns tenantId + role custom claims to a Firebase Auth user.
+ * Callable only by callers with token.admin === true.
+ */
+export const setTenantRole = onCall(async request => {
+  if (request.auth?.token.admin !== true) {
+    throw new HttpsError("permission-denied", "Unauthorized: admin only");
+  }
+
+  const uid = request.data?.uid;
+  const tenantId = request.data?.tenantId;
+  const role = request.data?.role;
+
+  if (typeof uid !== "string" || uid.length === 0) {
+    throw new HttpsError("invalid-argument", "Missing or invalid uid");
+  }
+
+  if (typeof tenantId !== "string" || tenantId.length === 0) {
+    throw new HttpsError("invalid-argument", "Missing or invalid tenantId");
+  }
+
+  if (typeof role !== "string" || !ALLOWED_ROLES.has(role)) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Missing or invalid role (admin|manager|operator|viewer)"
+    );
+  }
+
+  await admin.auth().setCustomUserClaims(uid, {
+    tenantId,
+    role,
+    isActive: true
+  });
+
+  // Audit trail — no PII beyond uid (GDPR Art. 30 / Art. 32)
+  logger.info("setTenantRole", {
+    targetUid: uid,
+    tenantId,
+    role,
+    actorUid: request.auth.uid
+  });
+
+  return { success: true };
+}); /*end setTenantRole*/

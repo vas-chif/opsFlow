@@ -28,9 +28,9 @@ Fondamentale per gestire i dati di tua moglie e dei suoi clienti senza interfere
 
 2.1 Autenticazione (Identity):
 
-[ ] Implementazione Custom Claims in Firebase Auth per assegnare tenantId e role al login.
+[X] Implementazione Custom Claims in Firebase Auth per assegnare tenantId e role al login.
 
-[ ] Setup authStore in Pinia che intercetta il token JWT e decodifica i claims.
+[X] Setup authStore in Pinia che intercetta il token JWT e decodifica i claims.
 
 2.2 Firestore (Data Isolation):
 
