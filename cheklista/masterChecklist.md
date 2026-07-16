@@ -19,7 +19,7 @@ Questa fase prepara il terreno per uno sviluppo pulito, sicuro e performante.
 
 1.3 Pipeline di Sviluppo:
 
-[ ] Setup GitHub Actions per il deploy automatico (configurazione di firebase-tools nel CI/CD).
+[X] Setup GitHub Actions per il deploy automatico (configurazione di firebase-tools nel CI/CD).
 
 [ ] Configurazione eslint e prettier basata sulle regole di stile rigorose dei tuoi progetti precedenti.
 
