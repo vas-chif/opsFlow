@@ -57,6 +57,32 @@ export const useTaskChatStore = defineStore("taskChat", () => {
   });
 
   /**
+   * Helper to load persisted chat messages from localStorage.
+   */
+  function loadMessagesFromStorage(taskId: string): TaskChatMessage[] {
+    try {
+      const raw = localStorage.getItem(`opsflow_task_chat_${taskId}`);
+      if (raw) {
+        return JSON.parse(raw);
+      }
+    } catch {
+      // Ignore storage error
+    }
+    return [];
+  } /*end loadMessagesFromStorage*/
+
+  /**
+   * Helper to save chat messages to localStorage.
+   */
+  function saveMessagesToStorage(taskId: string, msgs: TaskChatMessage[]): void {
+    try {
+      localStorage.setItem(`opsflow_task_chat_${taskId}`, JSON.stringify(msgs));
+    } catch {
+      // Ignore storage error
+    }
+  } /*end saveMessagesToStorage*/
+
+  /**
    * Opens or retrieves an existing ChatSession for a given taskId.
    * @param {string} taskId - Target task ID
    * @param {string} workspaceId - Target workspace ID
@@ -67,11 +93,12 @@ export const useTaskChatStore = defineStore("taskChat", () => {
     if (existing) {
       return existing;
     }
+    const savedMessages = loadMessagesFromStorage(taskId);
     const newSession: ChatSession = {
       taskId,
       workspaceId,
       task: null,
-      messages: [],
+      messages: savedMessages,
       isLoading: false,
       isAgentTyping: false,
       inputDraft: "",
@@ -98,7 +125,7 @@ export const useTaskChatStore = defineStore("taskChat", () => {
   } /*end closeSession*/
 
   /**
-   * Appends a message to a task session.
+   * Appends a message to a task session and persists to storage.
    * @param {string} taskId - Target task ID
    * @param {TaskChatMessage} msg - Message to append
    */
@@ -106,6 +133,7 @@ export const useTaskChatStore = defineStore("taskChat", () => {
     const s = sessions.value.get(taskId);
     if (s) {
       s.messages.push(msg);
+      saveMessagesToStorage(taskId, s.messages);
     }
   } /*end appendMessage*/
 

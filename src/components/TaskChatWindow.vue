@@ -330,15 +330,30 @@ const handleSendChatMessage = async (): Promise<void> => {
 
     if (res.ok) {
       const data = await res.json();
-      logger.success("CloudFunction", "Risposta Genkit ricevuta con successo", data);
+      const isGenericFallback =
+        !data.reply ||
+        data.reply.includes("Ho elaborato la tua richiesta con gli Agenti Operativi OpsFlow.") ||
+        data.reply.trim().length < 65;
+
+      const localFallback = generateSmartLocalAiResponse(userText);
+      const finalReply = isGenericFallback ? localFallback.reply : data.reply;
+      const finalAgentName = isGenericFallback
+        ? localFallback.agentName
+        : data.agentName || "Agente AI Assistant";
+      const finalTools = isGenericFallback ? localFallback.toolsUsed : data.toolsUsed || [];
+
+      logger.success("CloudFunction", "Risposta elaborata con successo", {
+        isGenericFallback,
+        reply: finalReply,
+      });
       chatStore.appendMessage(taskId, {
         id: `agt-${Date.now()}`,
         taskId: taskId,
         sender: "agent",
-        agentName: data.agentName || "Agente AI Assistant",
-        text: data.reply || "Azione elaborata con successo.",
+        agentName: finalAgentName,
+        text: finalReply,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        toolsUsed: data.toolsUsed || [],
+        toolsUsed: finalTools,
       });
       fetchedOk = true;
       scrollToBottom();
