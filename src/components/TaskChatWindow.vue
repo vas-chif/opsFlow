@@ -10,6 +10,7 @@ import { ref, computed, watch, nextTick } from "vue";
 import { useQuasar } from "quasar";
 import { useTaskStore } from "../stores/taskStore";
 import { useTaskChatStore, type FloatingWindow } from "../stores/taskChatStore";
+import { useSecureLogger } from "../composables/useSecureLogger";
 import type { TaskStatus } from "../types/models";
 
 const props = defineProps<{
@@ -19,6 +20,7 @@ const props = defineProps<{
 const q = useQuasar();
 const taskStore = useTaskStore();
 const chatStore = useTaskChatStore();
+const logger = useSecureLogger();
 
 const task = computed(() => props.windowState.task);
 const workspace = computed(
@@ -266,6 +268,8 @@ const handleSendChatMessage = async (): Promise<void> => {
   chatStore.setAgentTyping(taskId, true);
   scrollToBottom();
 
+  logger.info("TaskChat", `Messaggio inviato sul task "${task.value.title}"`, { taskId, userText });
+
   let fetchedOk = false;
 
   try {
@@ -284,6 +288,7 @@ const handleSendChatMessage = async (): Promise<void> => {
 
     if (res.ok) {
       const data = await res.json();
+      logger.success("CloudFunction", "Risposta Genkit ricevuta con successo", data);
       chatStore.appendMessage(taskId, {
         id: `agt-${Date.now()}`,
         taskId: taskId,
@@ -297,11 +302,20 @@ const handleSendChatMessage = async (): Promise<void> => {
       scrollToBottom();
     }
   } catch (err) {
-    console.warn("Cloud Function unreachable, activating Smart Local AI Engine", err);
+    logger.warn(
+      "CloudFunction",
+      "Cloud Function offline o non raggiungibile, attivazione Smart Local AI Engine",
+      err,
+    );
   }
 
   if (!fetchedOk) {
     const localRes = generateSmartLocalAiResponse(userText);
+    logger.success(
+      "SmartLocalAI",
+      `Risposta generata per l'agente "${localRes.agentName}"`,
+      localRes,
+    );
     chatStore.appendMessage(taskId, {
       id: `agt-${Date.now()}`,
       taskId: taskId,

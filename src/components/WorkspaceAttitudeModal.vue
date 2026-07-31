@@ -11,6 +11,7 @@ import { ref, computed, watch } from "vue";
 import { useQuasar } from "quasar";
 import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { useTaskStore } from "../stores/taskStore";
+import { useSecureLogger } from "../composables/useSecureLogger";
 import type { Workspace, WorkspaceLinkedResources } from "../types/models";
 
 const props = defineProps<{
@@ -25,6 +26,7 @@ const emit = defineEmits<{
 
 const q = useQuasar();
 const taskStore = useTaskStore();
+const logger = useSecureLogger();
 
 const isOpen = computed({
   get: () => props.modelValue,
@@ -97,6 +99,9 @@ const handleConnectGoogle = async (): Promise<void> => {
         linkedEmails.value.push(user.email);
       }
       isOAuthConnected.value = true;
+      logger.success("GoogleOAuth2", "Account Google autorizzato via Firebase Auth Popup", {
+        email: user.email,
+      });
       q.notify({
         type: "positive",
         message: `Account Google (${user.email}) autorizzato con successo! Scope Gmail/Sheets attivi.`,
@@ -105,7 +110,7 @@ const handleConnectGoogle = async (): Promise<void> => {
       });
     }
   } catch (err) {
-    console.warn("Firebase Google Auth Popup fallback / local dev:", err);
+    logger.info("GoogleOAuth2", "Fallback autorizzazione Google locale per ambiente dev", err);
     isOAuthConnected.value = true;
     if (!googleEmail.value) {
       googleEmail.value = "studio.opsflow@gmail.com";
@@ -127,6 +132,9 @@ const handleConnectGoogle = async (): Promise<void> => {
 const handleConnectDriveFolder = (): void => {
   if (!defaultDriveFolderId.value.trim()) return;
   defaultDriveFolderId.value = extractIdFromUrl(defaultDriveFolderId.value);
+  logger.success("GoogleDrive", "Cartella Drive collegata", {
+    folderId: defaultDriveFolderId.value,
+  });
   q.notify({
     type: "positive",
     message: `Cartella Google Drive (ID: ${defaultDriveFolderId.value}) collegata con successo!`,
@@ -138,6 +146,7 @@ const handleConnectDriveFolder = (): void => {
 const handleConnectGoogleSheet = (): void => {
   if (!defaultSheetId.value.trim()) return;
   defaultSheetId.value = extractIdFromUrl(defaultSheetId.value);
+  logger.success("GoogleSheets", "Google Sheet collegato", { sheetId: defaultSheetId.value });
   q.notify({
     type: "positive",
     message: `Google Sheet (ID: ${defaultSheetId.value}) collegato con successo!`,
