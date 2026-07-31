@@ -15,6 +15,14 @@ export interface PromptStackOptions {
   workspacePrompt?: string | undefined;
   workspaceName?: string | undefined;
   taskTitle?: string | undefined;
+  linkedResources?:
+    | {
+        googleEmail?: string | undefined;
+        linkedEmails?: string[] | undefined;
+        defaultSheetId?: string | undefined;
+        defaultDriveFolderId?: string | undefined;
+      }
+    | undefined;
 }
 
 /**
@@ -23,7 +31,7 @@ export interface PromptStackOptions {
  * @return {string} Formatted 3-level stacked prompt string
  */
 export function buildStackedPrompt(options: PromptStackOptions): string {
-  const { userPrompt, workspacePrompt, workspaceName, taskTitle } = options;
+  const { userPrompt, workspacePrompt, workspaceName, taskTitle, linkedResources } = options;
 
   const level1Base =
     "=== LEVEL 1: OPSFLOW BASE RULES & SECURITY ===\n" +
@@ -43,7 +51,24 @@ export function buildStackedPrompt(options: PromptStackOptions): string {
     attitudeText = workspacePrompt.trim();
   }
 
-  const level2Workspace = `\n=== LEVEL 2: WORKSPACE OPERATIONAL ATTITUDE ===\n${attitudeText}\n`;
+  let linkedStr = "";
+  if (linkedResources) {
+    if (linkedResources.linkedEmails && linkedResources.linkedEmails.length > 0) {
+      linkedStr += `\n- Account Gmail Autorizzati: [${linkedResources.linkedEmails.join(", ")}]`;
+    } else if (linkedResources.googleEmail) {
+      linkedStr += `\n- Account Gmail Autorizzato: "${linkedResources.googleEmail}"`;
+    }
+    if (linkedResources.defaultSheetId) {
+      linkedStr += `\n- Google Sheet Predefinito ID: "${linkedResources.defaultSheetId}"`;
+    }
+    if (linkedResources.defaultDriveFolderId) {
+      linkedStr += `\n- Cartella Google Drive ID: "${linkedResources.defaultDriveFolderId}"`;
+    }
+  }
+
+  const level2Workspace =
+    "\n=== LEVEL 2: WORKSPACE OPERATIONAL ATTITUDE & LINKED RESOURCES ===\n" +
+    `${attitudeText}${linkedStr}\n`;
 
   let taskContextStr = "";
   if (taskTitle) {

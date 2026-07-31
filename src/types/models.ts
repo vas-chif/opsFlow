@@ -138,6 +138,23 @@ export interface CreateSubTaskPayload {
 } /*end CreateSubTaskPayload*/
 
 /**
+ * Linked Google resources & OAuth state for a Workspace.
+ */
+export interface WorkspaceLinkedResources {
+  googleEmail?: string;
+  linkedEmails?: string[];
+  defaultSheetId?: string;
+  defaultSheetName?: string;
+  defaultDriveFolderId?: string;
+  defaultDriveFolderName?: string;
+  isOAuthConnected?: boolean;
+  assignedAgents?: string[];
+  doList?: string[];
+  dontList?: string[];
+  toneOfVoice?: "formal" | "informal" | "operational" | "roi_synthetic";
+}
+
+/**
  * Workspace entity for grouping tasks.
  * Follows multi-tenant isolation with tenantId.
  */
@@ -153,6 +170,7 @@ export interface Workspace {
   groupName?: string;
   systemPrompt?: string;
   category?: string;
+  linkedResources?: WorkspaceLinkedResources;
 } /*end Workspace*/
 
 /**
@@ -166,6 +184,7 @@ export interface CreateWorkspacePayload {
   groupName?: string;
   systemPrompt?: string;
   category?: string;
+  linkedResources?: WorkspaceLinkedResources;
 } /*end CreateWorkspacePayload*/
 
 /**

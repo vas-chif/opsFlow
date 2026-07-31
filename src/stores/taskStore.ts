@@ -51,6 +51,7 @@ import { useFirestore } from "@/composables/useFirestore";
 interface TaskState {
   tasks: Task[];
   workspaces: Workspace[];
+  activeWorkspaceId: string | null;
   isLoading: boolean;
   error: string | null;
 } /*end TaskState*/
@@ -107,11 +108,25 @@ export const useTaskStore = defineStore("tasks", {
   state: (): TaskState => ({
     tasks: [],
     workspaces: loadCachedWorkspaces(),
+    activeWorkspaceId: null,
     isLoading: false,
     error: null,
   }),
 
   getters: {
+    /**
+     * Active workspace object resolved reactively from activeWorkspaceId.
+     */
+    activeWorkspace: (state): Workspace | null => {
+      if (state.workspaces.length === 0) return null;
+      if (!state.activeWorkspaceId) return state.workspaces[0] || null;
+      return (
+        state.workspaces.find((w) => w.id === state.activeWorkspaceId) ||
+        state.workspaces[0] ||
+        null
+      );
+    },
+
     /**
      * Tasks not yet completed (pending + in-progress).
      * Used for task list view filtering.
@@ -142,6 +157,19 @@ export const useTaskStore = defineStore("tasks", {
   },
 
   actions: {
+    /**
+     * Set active workspace by ID or Workspace object and fetch its tasks.
+     */
+    async setActiveWorkspace(target: Workspace | string | null): Promise<void> {
+      if (!target) {
+        this.activeWorkspaceId = null;
+        return;
+      }
+      const wsId = typeof target === "string" ? target : target.id;
+      this.activeWorkspaceId = wsId;
+      await this.fetchWorkspaceTasks(wsId);
+    } /*end setActiveWorkspace*/,
+
     /**
      * Fetch all workspaces for the current tenant.
      */
@@ -376,6 +404,55 @@ export const useTaskStore = defineStore("tasks", {
         this.isLoading = false;
       }
     } /*end updateWorkspacePrompt*/,
+
+    /**
+     * Update Workspace Linked Google Resources and Attitude Configuration.
+     */
+    async updateWorkspaceLinkedResources(
+      workspaceId: string,
+      linkedResources: Partial<Workspace["linkedResources"]>,
+      systemPrompt?: string,
+    ): Promise<void> {
+      const firestore = useFirestore();
+
+      this.isLoading = true;
+      this.error = null;
+
+      try {
+        const ws = this.workspaces.find((w) => w.id === workspaceId);
+        const mergedResources = {
+          ...ws?.linkedResources,
+          ...linkedResources,
+        };
+
+        const updatePayload: Partial<Workspace> = {
+          linkedResources: mergedResources,
+        };
+        if (systemPrompt !== undefined) {
+          updatePayload.systemPrompt = systemPrompt;
+        }
+
+        await firestore.updateTenantDoc(
+          firestore.COLLECTIONS.WORKSPACES,
+          workspaceId,
+          updatePayload,
+        );
+
+        if (ws) {
+          ws.linkedResources = mergedResources;
+          if (systemPrompt !== undefined) {
+            ws.systemPrompt = systemPrompt;
+          }
+          ws.updatedAt = new Date();
+        }
+        saveCachedWorkspaces(this.workspaces);
+      } catch (err) {
+        this.error = err instanceof Error ? err.message : "Failed to update linked resources";
+        throw err;
+      } finally {
+        this.isLoading = false;
+      }
+    } /*end updateWorkspaceLinkedResources*/,
 
     /**
      * Update task details (title, description) in Firestore workspace collection.

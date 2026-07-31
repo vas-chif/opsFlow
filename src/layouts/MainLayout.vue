@@ -81,6 +81,9 @@ onMounted(async () => {
   try {
     await taskStore.fetchWorkspaces();
     await taskStore.fetchTasks();
+    if (!taskStore.activeWorkspaceId && taskStore.workspaces[0]) {
+      await taskStore.setActiveWorkspace(taskStore.workspaces[0]);
+    }
   } catch {
     // Ignore fetch error on unauthenticated initial render
   }
@@ -88,7 +91,7 @@ onMounted(async () => {
 
 const leftDrawerOpen = ref(true);
 const rightDrawerOpen = ref(false);
-const selectedWorkspace = ref<Workspace | null>(null);
+const selectedWorkspace = computed(() => taskStore.activeWorkspace);
 const selectedTask = ref<Task | null>(null);
 
 // Modals State
@@ -107,7 +110,6 @@ const pageTitle = computed(() => (route.meta?.title as string) || "OpsFlow");
 useMeta(() => ({ title: pageTitle.value }));
 
 // ── Provide state to child pages ─────────────────────────────────────────────
-provide("selectedWorkspace", selectedWorkspace);
 provide("selectedTask", selectedTask);
 provide("rightDrawerOpen", rightDrawerOpen);
 
@@ -122,7 +124,7 @@ const sortedWorkspaces = computed(() => {
 
 // ── Actions ──────────────────────────────────────────────────────────────────
 const selectWorkspace = (workspace: Workspace): void => {
-  selectedWorkspace.value = workspace;
+  taskStore.setActiveWorkspace(workspace);
   selectedTask.value = null;
   rightDrawerOpen.value = true;
 }; /*end selectWorkspace*/
@@ -183,6 +185,7 @@ const sendChatMessage = async (): Promise<void> => {
         taskId: selectedTask.value?.id,
         workspacePrompt: selectedWorkspace.value?.systemPrompt,
         workspaceName: selectedWorkspace.value?.name,
+        linkedResources: selectedWorkspace.value?.linkedResources,
       }),
     });
 
@@ -332,7 +335,7 @@ const confirmDeleteWorkspace = async (): Promise<void> => {
   try {
     await taskStore.deleteWorkspace(workspaceTarget.value.id);
     if (selectedWorkspace.value?.id === workspaceTarget.value.id) {
-      selectedWorkspace.value = null;
+      await taskStore.setActiveWorkspace(null);
     }
     deleteModalOpen.value = false;
     q.notify({

@@ -19,7 +19,7 @@
  */
 
 // ── Vue & Framework ──────────────────────────────────────────────────────────
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, inject, watch, onMounted, type Ref } from "vue";
 import { useQuasar } from "quasar";
 
 // ── Layout ───────────────────────────────────────────────────────────────────
@@ -41,8 +41,8 @@ const q = useQuasar();
 const uiStore = useUiStore();
 const taskStore = useTaskStore();
 
-const selectedWorkspace = ref<Workspace | null>(null);
-const selectedTask = ref<Task | null>(null);
+const selectedWorkspace = computed(() => taskStore.activeWorkspace);
+const selectedTask = inject<Ref<Task | null>>("selectedTask", ref(null));
 
 // Modal states for Task-as-a-Chat & Workspace Attitude
 const showTaskChatModal = ref(false);
@@ -236,13 +236,28 @@ const confirmDeleteTask = async (): Promise<void> => {
   }
 }; /*end confirmDeleteTask*/
 
+watch(
+  selectedWorkspace,
+  async (newWs) => {
+    if (newWs) {
+      try {
+        await taskStore.fetchWorkspaceTasks(newWs.id);
+      } catch {
+        // Error handled in store
+      }
+    }
+  },
+  { immediate: true },
+);
+
 onMounted(async () => {
   try {
     await taskStore.fetchWorkspaces();
-    const firstWs = taskStore.workspaces[0];
-    if (firstWs) {
-      selectedWorkspace.value = firstWs;
-      await taskStore.fetchWorkspaceTasks(firstWs.id);
+    if (!taskStore.activeWorkspaceId && taskStore.workspaces[0]) {
+      await taskStore.setActiveWorkspace(taskStore.workspaces[0]);
+    }
+    if (selectedWorkspace.value) {
+      await taskStore.fetchWorkspaceTasks(selectedWorkspace.value.id);
     }
   } catch {
     // Error handled in store

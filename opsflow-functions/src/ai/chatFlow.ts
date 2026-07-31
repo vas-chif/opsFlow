@@ -25,6 +25,15 @@ export const ChatInputSchema = z.object({
   taskId: z.string().optional().describe("Active task context ID"),
   workspacePrompt: z.string().optional().describe("Dynamic Workspace System Prompt from Firestore"),
   workspaceName: z.string().optional().describe("Active workspace name"),
+  linkedResources: z
+    .object({
+      googleEmail: z.string().optional(),
+      linkedEmails: z.array(z.string()).optional(),
+      defaultSheetId: z.string().optional(),
+      defaultDriveFolderId: z.string().optional(),
+    })
+    .optional()
+    .describe("Linked Google resources for the workspace"),
 });
 
 /**
@@ -41,7 +50,7 @@ export const chatWithAgentFlow = ai.defineFlow(
       toolsUsed: z.array(z.string()),
     }),
   },
-  async ({ message, workspacePrompt, workspaceName, taskId }) => {
+  async ({ message, workspacePrompt, workspaceName, taskId, linkedResources }) => {
     // 1. Sanitize user message for PII protection (GDPR Compliance)
     const sanitized = sanitizePii(message);
 
@@ -51,6 +60,7 @@ export const chatWithAgentFlow = ai.defineFlow(
       workspacePrompt,
       workspaceName,
       taskTitle: taskId,
+      linkedResources,
     });
 
     // 3. Generate response with tool calling support

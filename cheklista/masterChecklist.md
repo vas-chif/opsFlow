@@ -125,3 +125,12 @@ GENERAZIONE: Crea il file seguendo questa struttura rigorosa e commentata.
 - [x] **Web Search & Lead Generation Tools (`searchWebAndPlatformsTool` & `leadSynthesisTool`)**: Ricerca web in tempo reale e profilazione lead/trainer.
 - [x] **Content Marketing Engine (`contentMarketingTool`)**: Piani editoriali, post LinkedIn e cold outreach scripts.
 - [x] **AGENTS.md §14 Update & Zero-Error Pipeline**: `yarn typecheck` (PASSED 0ms), `yarn lint` (PASSED 0 errors, 0 warnings), Firebase Cloud Functions deployed.
+
+---
+
+## 📌 STEP 6: Integrazioni Google OAuth2 & Form Guidato No-Code per Risorse Collegate (COMPLETED ✅)
+
+- [x] **Form Guidato No-Code a 4 Tab (`WorkspaceAttitudeModal.vue`)**: Tab `Comportamento`, Tab `Risorse Google`, Tab `Agenti`, Tab `Sandbox`.
+- [x] **Collegamento Esplicito Risorse**: Account Google Email (OAuth2), ID Foglio Google Sheets Predefinito, ID Cartella Google Drive.
+- [x] **Iniezione Risorse nel System Prompt Stacking (`promptBuilder.ts`)**: Iniezione automatica degli ID risorse nel Livello 2 del prompt.
+- [x] **Zero-Error Pipeline Verification**: `yarn typecheck` (PASSED 0ms) e `yarn lint` (PASSED 0 errors, 0 warnings).

@@ -178,7 +178,8 @@ export const onTaskUpdated = onDocumentUpdated(
  */
 export const chatWithAgent = onRequest({ cors: true }, async (req, res) => {
   try {
-    const { message, workspaceId, taskId, workspacePrompt, workspaceName } = req.body || {};
+    const { message, workspaceId, taskId, workspacePrompt, workspaceName, linkedResources } =
+      req.body || {};
     if (!message || typeof message !== "string") {
       res.status(400).json({ error: "Missing required string 'message'" });
       return;
@@ -190,6 +191,7 @@ export const chatWithAgent = onRequest({ cors: true }, async (req, res) => {
       taskId,
       workspacePrompt,
       workspaceName,
+      linkedResources,
     });
     res.status(200).json(result);
   } catch (err) {
