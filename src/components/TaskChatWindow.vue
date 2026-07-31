@@ -147,6 +147,25 @@ const handleResizeMouseUp = (): void => {
   window.removeEventListener("mouseup", handleResizeMouseUp);
 }; /*end handleResizeMouseUp*/
 
+const renderFormattedMessage = (text: string): string => {
+  if (!text) return "";
+  let escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  escaped = escaped.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+
+  escaped = escaped.replace(
+    /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+    '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-primary text-weight-bold" style="text-decoration: underline;">$1 🔗</a>',
+  );
+
+  escaped = escaped.replace(
+    /(^|[^"'])((https?:\/\/[^\s<]+))/g,
+    '$1<a href="$2" target="_blank" rel="noopener noreferrer" class="text-primary text-weight-bold" style="text-decoration: underline;">$2 🔗</a>',
+  );
+
+  return escaped;
+}; /*end renderFormattedMessage*/
+
 // ── Smart AI Local Engine ────────────────────────────────────────────────────
 const generateSmartLocalAiResponse = (
   userText: string,
@@ -159,7 +178,11 @@ const generateSmartLocalAiResponse = (
     lower.includes("cerca") ||
     lower.includes("lead") ||
     lower.includes("prospect") ||
-    lower.includes("client")
+    lower.includes("client") ||
+    lower.includes("risors") ||
+    lower.includes("programmat") ||
+    lower.includes("analist") ||
+    lower.includes("qa")
   ) {
     return {
       agentName: "AgenteRicerca (Lead Scout & Platform Matcher)",
@@ -167,15 +190,15 @@ const generateSmartLocalAiResponse = (
       reply:
         "🎯 **[AgenteRicerca - Piattaforme Consigliate per Estrarre Clienti IT]**\n\n" +
         "Ho analizzato la richiesta per identificare le migliori piattaforme dove trovare aziende con progetti informatici attivi e ricerca continua di programmatori, analisti e sviluppatori QA:\n\n" +
-        "1. 🌐 **Clutch.co & GoodFirms**\n" +
+        "1. 🌐 **[Clutch.co](https://clutch.co)** & **[GoodFirms](https://goodfirms.co)**\n" +
         "   - **Focus:** Directory B2B di aziende tech, agenzie software ed enterprise.\n" +
         "   - **Vantaggio:** Filtro diretto per budget di progetto ($10k - $50k+), stack tecnologico e recensioni verificate.\n\n" +
-        "2. 💼 **LinkedIn Sales Navigator & Jobs**\n" +
+        "2. 💼 **[LinkedIn Sales Navigator](https://www.linkedin.com/sales)** & **[LinkedIn Jobs](https://www.linkedin.com/jobs)**\n" +
         "   - **Focus:** Ricerca mirata di CTO, VP of Engineering e Head of Talent in aziende IT.\n" +
         "   - **Vantaggio:** Permette di intercettare direttamente i decision maker delle aziende con posizioni aperte per dev/QA.\n\n" +
-        "3. 🚀 **Wellfound (ex AngelList) & Crunchbase**\n" +
+        "3. 🚀 **[Wellfound (ex AngelList)](https://wellfound.com)** & **[Crunchbase](https://www.crunchbase.com)**\n" +
         "   - **Focus:** Startup tech in fase di scaling (Seed / Series A-B) con capitali freschi da investire in team informatici.\n\n" +
-        "4. 🏢 **Upwork Enterprise & Toptal Network**\n" +
+        "4. 🏢 **[Upwork Enterprise](https://www.upwork.com/enterprise)** & **[Toptal Network](https://www.toptal.com)**\n" +
         "   - **Focus:** Piattaforme ad ingaggio rapido per software agency e QA consultant.\n\n" +
         "💡 *Prossimo Passo:* Usa il pulsante **Bozza Email** per generare l'email di presentazione o **Salva su Sheets** per registrare l'elenco.",
     };
@@ -527,7 +550,10 @@ const handleExecuteTaskAI = async (): Promise<void> => {
               :bg-color="msg.sender === 'user' ? 'primary' : 'grey-3'"
               :text-color="msg.sender === 'user' ? 'white' : 'dark'"
             >
-              <div style="white-space: pre-wrap; font-size: 0.82rem">{{ msg.text }}</div>
+              <div
+                style="white-space: pre-wrap; font-size: 0.82rem"
+                v-html="renderFormattedMessage(msg.text)"
+              ></div>
               <div v-if="msg.toolsUsed && msg.toolsUsed.length > 0" class="q-mt-xs">
                 <q-badge
                   v-for="tool in msg.toolsUsed"
