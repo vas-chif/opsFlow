@@ -1,0 +1,9 @@
+**/node_modules/
+dist/
+.quasar/
+src-cordova/
+src-capacitor/
+src/router/typed-router.d.ts
+opsflow-functions/**
+functions/**
+sinkFolder/**

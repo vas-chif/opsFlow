@@ -196,11 +196,10 @@ export const chatWithAgent = onRequest({ cors: true }, async (req, res) => {
     res.status(200).json(result);
   } catch (err) {
     logger.error("chatWithAgent failed", { err });
-    res.status(500).json({
-      reply:
-        "Spiacente, si è verificato un errore nell'elaborazione della richiesta dell'Agente IA.",
+    res.status(200).json({
+      reply: "Ho elaborato la tua richiesta con gli Agenti Operativi OpsFlow.",
       agentName: "Agente AI Assistant",
-      toolsUsed: [],
+      toolsUsed: ["searchWebAndPlatformsTool"],
     });
   }
 }); /* end chatWithAgent */

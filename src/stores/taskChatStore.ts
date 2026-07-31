@@ -26,6 +26,17 @@ export interface ChatSession {
   _unsubscribeMessages?: () => void;
 }
 
+export interface FloatingWindow {
+  id: string;
+  taskId: string;
+  workspaceId: string;
+  task: Task;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  zIndex: number;
+  isMinimized: boolean;
+}
+
 export const useTaskChatStore = defineStore("taskChat", () => {
   // Map of active chat sessions keyed by taskId
   const sessions = ref<Map<string, ChatSession>>(new Map());
@@ -35,6 +46,10 @@ export const useTaskChatStore = defineStore("taskChat", () => {
 
   // Array of parallel session taskIds (e.g. multi-panel split view)
   const parallelSessionIds = ref<string[]>([]);
+
+  // Array of open draggable/resizable floating windows
+  const floatingWindows = ref<FloatingWindow[]>([]);
+  const highestZIndex = ref(1000);
 
   const primarySession = computed(() => {
     if (!primarySessionId.value) return null;
@@ -124,10 +139,79 @@ export const useTaskChatStore = defineStore("taskChat", () => {
     }
   } /*end addParallelSession*/
 
+  /**
+   * Opens or focuses a floating task chat window.
+   */
+  function openFloatingWindow(task: Task, workspaceId: string): FloatingWindow {
+    openSession(task.id, workspaceId);
+
+    const existing = floatingWindows.value.find((w) => w.taskId === task.id);
+    if (existing) {
+      highestZIndex.value += 1;
+      existing.zIndex = highestZIndex.value;
+      existing.isMinimized = false;
+      return existing;
+    }
+
+    highestZIndex.value += 1;
+    const count = floatingWindows.value.length;
+    const initialX = Math.min(window.innerWidth - 650, 120 + (count % 4) * 45);
+    const initialY = Math.min(window.innerHeight - 500, 70 + (count % 4) * 35);
+
+    const newWin: FloatingWindow = {
+      id: `win-${task.id}`,
+      taskId: task.id,
+      workspaceId,
+      task,
+      position: { x: Math.max(20, initialX), y: Math.max(20, initialY) },
+      size: { width: 680, height: 480 },
+      zIndex: highestZIndex.value,
+      isMinimized: false,
+    };
+
+    floatingWindows.value.push(newWin);
+    return newWin;
+  } /*end openFloatingWindow*/
+
+  function closeFloatingWindow(taskId: string): void {
+    floatingWindows.value = floatingWindows.value.filter((w) => w.taskId !== taskId);
+  } /*end closeFloatingWindow*/
+
+  function bringToFront(taskId: string): void {
+    const win = floatingWindows.value.find((w) => w.taskId === taskId);
+    if (win) {
+      highestZIndex.value += 1;
+      win.zIndex = highestZIndex.value;
+    }
+  } /*end bringToFront*/
+
+  function updateWindowPosition(taskId: string, pos: { x: number; y: number }): void {
+    const win = floatingWindows.value.find((w) => w.taskId === taskId);
+    if (win) {
+      win.position = pos;
+    }
+  } /*end updateWindowPosition*/
+
+  function updateWindowSize(taskId: string, size: { width: number; height: number }): void {
+    const win = floatingWindows.value.find((w) => w.taskId === taskId);
+    if (win) {
+      win.size = size;
+    }
+  } /*end updateWindowSize*/
+
+  function toggleMinimizeWindow(taskId: string): void {
+    const win = floatingWindows.value.find((w) => w.taskId === taskId);
+    if (win) {
+      win.isMinimized = !win.isMinimized;
+    }
+  } /*end toggleMinimizeWindow*/
+
   return {
     sessions,
     primarySessionId,
     parallelSessionIds,
+    floatingWindows,
+    highestZIndex,
     primarySession,
     openSession,
     closeSession,
@@ -135,5 +219,11 @@ export const useTaskChatStore = defineStore("taskChat", () => {
     setAgentTyping,
     setPrimary,
     addParallelSession,
+    openFloatingWindow,
+    closeFloatingWindow,
+    bringToFront,
+    updateWindowPosition,
+    updateWindowSize,
+    toggleMinimizeWindow,
   };
 });

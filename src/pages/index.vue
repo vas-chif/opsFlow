@@ -28,12 +28,13 @@ import MainLayout from "@/layouts/MainLayout.vue";
 // ── Stores ───────────────────────────────────────────────────────────────────
 import { useUiStore } from "@/stores/uiStore";
 import { useTaskStore } from "@/stores/taskStore";
+import { useTaskChatStore } from "@/stores/taskChatStore";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 import type { Task, Workspace, TaskStatus } from "@/types/models";
 
 // ── Components ───────────────────────────────────────────────────────────────
-import TaskChatModal from "@/components/TaskChatModal.vue";
+import TaskChatWindow from "@/components/TaskChatWindow.vue";
 import WorkspaceAttitudeModal from "@/components/WorkspaceAttitudeModal.vue";
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -82,9 +83,13 @@ const currentWorkspaceTasks = computed(() => {
   return taskStore.tasks.filter((t: Task) => t.workspaceId === sw.id);
 });
 
+const chatStore = useTaskChatStore();
+
 const selectTask = (task: Task): void => {
   selectedTask.value = task;
-  showTaskChatModal.value = true;
+  if (selectedWorkspace.value) {
+    chatStore.openFloatingWindow(task, selectedWorkspace.value.id);
+  }
 }; /*end selectTask*/
 
 const openSubTaskInspector = (task: Task): void => {
@@ -730,14 +735,8 @@ onMounted(async () => {
         </q-card>
       </q-dialog>
 
-      <!-- Task-as-a-Chat Modal -->
-      <TaskChatModal
-        v-model="showTaskChatModal"
-        :task="selectedTask"
-        :workspace="selectedWorkspace"
-        @task-updated="taskStore.fetchWorkspaceTasks(selectedWorkspace?.id || '')"
-        @task-moved="taskStore.fetchWorkspaceTasks(selectedWorkspace?.id || '')"
-      />
+      <!-- Draggable & Resizable Multi-Window Task Chats -->
+      <TaskChatWindow v-for="win in chatStore.floatingWindows" :key="win.id" :window-state="win" />
 
       <!-- Workspace Attitude Editor Modal -->
       <WorkspaceAttitudeModal
