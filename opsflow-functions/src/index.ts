@@ -199,27 +199,35 @@ export const chatWithAgent = onRequest({ cors: true }, async (req, res) => {
     const isPlatformQuery =
       /piattaform|piatafom|cerca|lead|prospect|client|programmat|analist|qa/i.test(message);
 
-    const replyText = isPlatformQuery
-      ? "🎯 **[AgenteRicerca - Piattaforme Consigliate per Estrarre Clienti IT]**\n\n" +
-        "Ho analizzato la richiesta per identificare le migliori piattaforme dove trovare aziende con progetti informatici attivi e ricerca continua di programmatori, analisti e sviluppatori QA:\n\n" +
+    let replyText =
+      "Ho elaborato la tua richiesta ed eseguito il task con gli Agenti Operativi OpsFlow.";
+    let agentName = "Agente AI Assistant";
+
+    if (isPlatformQuery) {
+      agentName = "AgenteRicerca (Lead Scout & Platform Matcher)";
+      replyText =
+        "🎯 **[AgenteRicerca - Piattaforme Consigliate per Estrarre Clienti IT]**\n\n" +
+        "Ho analizzato la richiesta per identificare le migliori piattaforme dove trovare " +
+        "aziende con progetti informatici attivi e ricerca continua di programmatori:\n\n" +
         "1. 🌐 **[Clutch.co](https://clutch.co)** & **[GoodFirms](https://goodfirms.co)**\n" +
         "   - **Focus:** Directory B2B di aziende tech, agenzie software ed enterprise.\n" +
-        "   - **Vantaggio:** Filtro diretto per budget di progetto ($10k - $50k+), stack tecnologico e recensioni verificate.\n\n" +
-        "2. 💼 **[LinkedIn Sales Navigator](https://www.linkedin.com/sales)** & **[LinkedIn Jobs](https://www.linkedin.com/jobs)**\n" +
-        "   - **Focus:** Ricerca mirata di CTO, VP of Engineering e Head of Talent in aziende IT.\n" +
-        "   - **Vantaggio:** Permette di intercettare direttamente i decision maker delle aziende con posizioni aperte per dev/QA.\n\n" +
-        "3. 🚀 **[Wellfound (ex AngelList)](https://wellfound.com)** & **[Crunchbase](https://www.crunchbase.com)**\n" +
-        "   - **Focus:** Startup tech in fase di scaling (Seed / Series A-B) con capitali freschi da investire in team informatici.\n\n" +
-        "4. 🏢 **[Upwork Enterprise](https://www.upwork.com/enterprise)** & **[Toptal Network](https://www.toptal.com)**\n" +
+        "   - **Vantaggio:** Filtro per budget ($10k - $50k+), stack tecnologico e recensioni.\n\n" +
+        "2. 💼 **[LinkedIn Sales Navigator](https://www.linkedin.com/sales)** & " +
+        "**[LinkedIn Jobs](https://www.linkedin.com/jobs)**\n" +
+        "   - **Focus:** Ricerca mirata di CTO, VP of Engineering e Head of Talent IT.\n" +
+        "   - **Vantaggio:** Intercetta i decision maker con posizioni aperte per dev/QA.\n\n" +
+        "3. 🚀 **[Wellfound (ex AngelList)](https://wellfound.com)** & " +
+        "**[Crunchbase](https://www.crunchbase.com)**\n" +
+        "   - **Focus:** Startup tech in fase di scaling con capitali freschi da investire.\n\n" +
+        "4. 🏢 **[Upwork Enterprise](https://www.upwork.com/enterprise)** & " +
+        "**[Toptal Network](https://www.toptal.com)**\n" +
         "   - **Focus:** Piattaforme ad ingaggio rapido per software agency e QA consultant.\n\n" +
-        "💡 *Prossimo Passo:* Usa il pulsante **Bozza Email** per generare l'email di presentazione o **Salva su Sheets** per registrare l'elenco."
-      : "Ho elaborato la tua richiesta ed eseguito il task con gli Agenti Operativi OpsFlow.";
+        "💡 *Prossimo Passo:* Usa il pulsante **Bozza Email** o **Salva su Sheets**.";
+    }
 
     res.status(200).json({
       reply: replyText,
-      agentName: isPlatformQuery
-        ? "AgenteRicerca (Lead Scout & Platform Matcher)"
-        : "Agente AI Assistant",
+      agentName,
       toolsUsed: ["searchWebAndPlatformsTool", "leadSynthesisTool"],
     });
   }
