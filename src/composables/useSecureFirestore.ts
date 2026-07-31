@@ -22,8 +22,8 @@ import {
   type QuerySnapshot,
   type DocumentSnapshot,
 } from "firebase/firestore";
-import { db } from "../boot/firebase";
-import { useSecureLogger } from "./useSecureLogger";
+import { db } from "@/boot/firebase";
+import { useSecureLogger } from "@/composables/useSecureLogger";
 
 export function useSecureFirestore() {
   const logger = useSecureLogger();
