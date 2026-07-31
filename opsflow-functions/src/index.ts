@@ -177,6 +177,7 @@ export const onTaskUpdated = onDocumentUpdated(
  * Entry point for live AI Chat from Right Drawer UI with tool calling support.
  */
 export const chatWithAgent = onRequest({ cors: true }, async (req, res) => {
+  let userMessage = "";
   try {
     const { message, workspaceId, taskId, workspacePrompt, workspaceName, linkedResources } =
       req.body || {};
@@ -184,6 +185,7 @@ export const chatWithAgent = onRequest({ cors: true }, async (req, res) => {
       res.status(400).json({ error: "Missing required string 'message'" });
       return;
     }
+    userMessage = message;
 
     const result = await chatWithAgentFlow({
       message,
@@ -197,7 +199,7 @@ export const chatWithAgent = onRequest({ cors: true }, async (req, res) => {
   } catch (err) {
     logger.error("chatWithAgent failed", { err });
     const isPlatformQuery =
-      /piattaform|piatafom|cerca|lead|prospect|client|programmat|analist|qa/i.test(message);
+      /piattaform|piatafom|cerca|lead|prospect|client|programmat|analist|qa/i.test(userMessage);
 
     let replyText =
       "Ho elaborato la tua richiesta ed eseguito il task con gli Agenti Operativi OpsFlow.";

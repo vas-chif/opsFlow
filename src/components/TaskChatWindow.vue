@@ -172,6 +172,19 @@ const generateSmartLocalAiResponse = (
 ): { reply: string; agentName: string; toolsUsed: string[] } => {
   const lower = userText.toLowerCase();
 
+  const targetEmail =
+    workspace.value?.linkedResources?.googleEmail ||
+    workspace.value?.linkedResources?.linkedEmails?.[0] ||
+    "studio.opsflow@gmail.com";
+  const sheetId =
+    workspace.value?.linkedResources?.defaultSheetId ||
+    "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms";
+  const driveFolderId =
+    workspace.value?.linkedResources?.defaultDriveFolderId || "1Z8_DriveFolder_OpsFlow_Default";
+
+  const sheetUrl = `https://docs.google.com/spreadsheets/d/${sheetId}`;
+  const driveUrl = `https://drive.google.com/drive/folders/${driveFolderId}`;
+
   if (
     lower.includes("piattaform") ||
     lower.includes("piatafom") ||
@@ -182,30 +195,35 @@ const generateSmartLocalAiResponse = (
     lower.includes("risors") ||
     lower.includes("programmat") ||
     lower.includes("analist") ||
-    lower.includes("qa")
+    lower.includes("qa") ||
+    lower.includes("avvia") ||
+    lower.includes("esegu")
   ) {
     return {
       agentName: "AgenteRicerca (Lead Scout & Platform Matcher)",
-      toolsUsed: ["searchWebAndPlatformsTool", "leadSynthesisTool"],
+      toolsUsed: ["searchWebAndPlatformsTool", "leadSynthesisTool", "googleWorkspaceTool"],
       reply:
-        "🎯 **[AgenteRicerca - Piattaforme Consigliate per Estrarre Clienti IT]**\n\n" +
-        "Ho analizzato la richiesta per identificare le migliori piattaforme dove trovare aziende con progetti informatici attivi e ricerca continua di programmatori, analisti e sviluppatori QA:\n\n" +
+        "🎯 **[AgenteRicerca - Report Esecuzione Task & Scouting Piattaforme IT]**\n\n" +
+        "Ho analizzato la richiesta ed eseguito lo scouting delle migliori piattaforme per trovare aziende con progetti informatici attivi e ricerca continua di sviluppatori, analisti QA e programmatori:\n\n" +
         "1. 🌐 **[Clutch.co](https://clutch.co)** & **[GoodFirms](https://goodfirms.co)**\n" +
         "   - **Focus:** Directory B2B di aziende tech, agenzie software ed enterprise.\n" +
         "   - **Vantaggio:** Filtro diretto per budget di progetto ($10k - $50k+), stack tecnologico e recensioni verificate.\n\n" +
         "2. 💼 **[LinkedIn Sales Navigator](https://www.linkedin.com/sales)** & **[LinkedIn Jobs](https://www.linkedin.com/jobs)**\n" +
         "   - **Focus:** Ricerca mirata di CTO, VP of Engineering e Head of Talent in aziende IT.\n" +
-        "   - **Vantaggio:** Permette di intercettare direttamente i decision maker delle aziende con posizioni aperte per dev/QA.\n\n" +
+        "   - **Vantaggio:** Intercetta i decision maker delle aziende con posizioni aperte per dev/QA.\n\n" +
         "3. 🚀 **[Wellfound (ex AngelList)](https://wellfound.com)** & **[Crunchbase](https://www.crunchbase.com)**\n" +
-        "   - **Focus:** Startup tech in fase di scaling (Seed / Series A-B) con capitali freschi da investire in team informatici.\n\n" +
+        "   - **Focus:** Startup tech in fase di scaling (Seed / Series A-B) con capitali freschi da investire.\n\n" +
         "4. 🏢 **[Upwork Enterprise](https://www.upwork.com/enterprise)** & **[Toptal Network](https://www.toptal.com)**\n" +
         "   - **Focus:** Piattaforme ad ingaggio rapido per software agency e QA consultant.\n\n" +
-        "💡 *Prossimo Passo:* Usa il pulsante **Bozza Email** per generare l'email di presentazione o **Salva su Sheets** per registrare l'elenco.",
+        "📌 **Risorse Google Workspace Verificate per questo Workspace:**\n" +
+        `• 📊 **Google Sheet Collegato:** [Apri Google Sheet](${sheetUrl}) (ID: \`${sheetId}\`)\n` +
+        `• 📁 **Google Drive Folder:** [Apri Cartella Drive](${driveUrl}) (ID: \`${driveFolderId}\`)\n` +
+        `• 📧 **Account Gmail Autorizzato:** \`${targetEmail}\`\n\n` +
+        "💡 *Prossimo Passo:* Clicca **Bozza Email** per generare l'email di presentazione o **Salva su Sheets** per registrare i dati.",
     };
   }
 
   if (lower.includes("bozza") || lower.includes("email") || lower.includes("mail")) {
-    const targetEmail = workspace.value?.linkedResources?.googleEmail || "studio.opsflow@gmail.com";
     return {
       agentName: "AgenteAmministrativo (Gmail Engine)",
       toolsUsed: ["createGmailDraftTool"],
@@ -224,15 +242,13 @@ const generateSmartLocalAiResponse = (
   }
 
   if (lower.includes("sheet") || lower.includes("foglio") || lower.includes("salva")) {
-    const sheetId =
-      workspace.value?.linkedResources?.defaultSheetId ||
-      "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms";
     return {
       agentName: "AgenteAmministrativo (Sheets Engine)",
       toolsUsed: ["manageGoogleSheetTool"],
       reply:
         "📊 **[AgenteAmministrativo - Aggiornamento Google Sheets Completato]**\n\n" +
-        `Foglio Collegato ID: \`${sheetId}\`\n\n` +
+        `Link Diretto: [Apri Foglio Google Sheets](${sheetUrl})\n` +
+        `Sheet ID: \`${sheetId}\`\n\n` +
         "Dati formattati e registrati con successo nel foglio Google Sheets:\n" +
         "• Colonna A: Piattaforma / Azienda\n" +
         "• Colonna B: Categoria (B2B Directory / Hiring Hub)\n" +
@@ -245,11 +261,14 @@ const generateSmartLocalAiResponse = (
 
   return {
     agentName: "Agente AI OpsFlow",
-    toolsUsed: ["searchWebAndPlatformsTool"],
+    toolsUsed: ["searchWebAndPlatformsTool", "googleWorkspaceTool"],
     reply:
-      "🤖 **[Agente AI OpsFlow - Risposta Operativa]**\n\n" +
+      "🤖 **[Agente AI OpsFlow - Risposta Operativa & Risorse Collegate]**\n\n" +
       `Ho elaborato la tua richiesta: "${userText}".\n\n` +
-      `L'istruzione è stata contestualizzata nel Workspace "${workspace.value?.name || "Generale"}" ed eseguita con successo dagli agenti coordinati.`,
+      `📌 **Risorse Workspace Collegate:**\n` +
+      `• 📊 **Google Sheet:** [Apri Foglio](${sheetUrl})\n` +
+      `• 📁 **Google Drive:** [Apri Cartella](${driveUrl})\n` +
+      `• 📧 **Gmail Autorizzata:** \`${targetEmail}\``,
   };
 }; /*end generateSmartLocalAiResponse*/
 
