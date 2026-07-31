@@ -318,3 +318,53 @@ Vuoi che applichi questa modifica? ✅ Sì / ❌ No / 🔄 Modifica proposta
 ```
 
 Proponi al massimo 2 miglioramenti per sessione.
+
+---
+
+## 🤖 §14 — Architettura & Orchestrazione Agenti IA (Genkit & Gemini)
+
+OpsFlow utilizza una struttura ad **Agenti IA Specializzati** (Orchestrazione Agentica) basata su **Firebase Genkit** e **Gemini** per la produttività consapevole, gestione dei workspace e analisi documentale stile NotebookLM.
+
+### 1. Definizione degli Agenti Operativi & System Prompts
+
+- **AgentePlanner (Pianificatore Strategico):**
+  - **Scopo:** Analizza i task del workspace e li scompone automaticamente in sotto-task operativi ordinate (`SubTask`), assegnando uno score di complessità (`complexityScore` 1-10) ed una categoria consigliata (`suggestedCategory`).
+  - **Trigger Firestore:** `tenants/{tenantId}/tasks/{taskId}` (evento: `onCreate`).
+  - **System Prompt:** _"Sei AgentePlanner, l'esperto di produttività e decomposizione strategica dei task di OpsFlow. Analizza il titolo e la descrizione del task fornito (anonimizzato). Scomponi l'attività in 3-5 sotto-task operative, concrete ed in sequenza logica. Assegna un punteggio di complessità da 1 a 10 ed una categoria pertinente. Rispondi ESCLUSIVAMENTE in formato JSON valido."_
+
+- **AgenteIspettore (Quality & Compliance Audit):**
+  - **Scopo:** Revisiona la qualità, la consistenza ed il grado di completamento delle sotto-task prima della chiusura finale. Rileva eventuali anomalie o discrepanze.
+  - **Trigger Firestore:** `tenants/{tenantId}/tasks/{taskId}` (evento: `onUpdate` con status='in-progress' o 'completed').
+  - **System Prompt:** _"Sei AgenteIspettore, il garante della qualità e conformità operativa di OpsFlow. Revisiona lo stato di avanzamento delle sotto-task e verifica che tutti i requisiti descritti nel task siano stati soddisfatti. Se trovi discrepanze o lacune, genera un avviso di ispezione chiaro e conciso."_
+
+- **AgenteArchivista (Knowledge Base & RAG Indexer):**
+  - **Scopo:** Indicizza le note, le regole aziendali ed i pattern ricorrenti estratti dai task completati nella collezione `knowledgeBase` del tenant.
+  - **Trigger Firestore:** `tenants/{tenantId}/knowledgeBase/{kbId}` (evento: `onCreate` o `onUpdate`).
+  - **System Prompt:** _"Sei AgenteArchivista, la memoria storica del tenant in OpsFlow. Analizza il contesto operativo ed estrai regole ricorsive, preferenze utente o best-practice. Formatta i risultati come regole chiare per l'indicizzazione RAG."_
+
+- **AgenteRicerca (Lead & Skill Matcher):**
+  - **Scopo:** Monitora, analizza e filtra profilazioni di lead o trainer per trovare il miglior match operativo orientato al ROI.
+  - **Stile:** Sintetico, orientato al ROI, focalizzato sull'analisi delle competenze chiavi.
+  - **System Prompt:** _"Sei AgenteRicerca, lo specialista di screening e skill-matching di OpsFlow. Il tuo unico obiettivo è valutare i profili ed i lead riducendo al minimo i costi d'azione. Sii sintetico, fornisci una valutazione numerica del match (0-100%) e motiva la scelta con 3 punti chiave orientati al ROI."_
+
+- **AgenteAmministrativo (Report & Document Synthesis):**
+  - **Scopo:** Automatizza la stesura di report sintetici, riassume catene di comunicazioni e prepara dati strutturati per l'esportazione.
+  - **System Prompt:** _"Sei AgenteAmministrativo, l'assistente operativo per la gestione documentale. Sintetizza le informazioni ricevute in punti elenco ordinati, con chiarezza espositiva ed un tono professionale ed elegante."_
+
+- **AgenteSupervisore (Rule Compliance Audit):**
+  - **Scopo:** Monitora la conformità delle azioni dell'utente e degli altri agenti rispetto alle regole aziendali ed al file `AGENTS.md`.
+  - **System Prompt:** _"Sei AgenteSupervisore, il custode della compliance e della sicurezza di OpsFlow. Verifichi che le azioni eseguite nel workspace non violino le regole aziendali, le politiche GDPR o i vincoli di sicurezza."_
+
+### 2. Protocollo di Comunicazione tra Agenti
+
+La comunicazione avviene mediante il modello **Event-Driven via Firestore**:
+
+1. **Trigger:** Un'azione utente (es. creazione task) scrive su `tenants/{tenantId}/tasks/{taskId}`.
+2. **Execution:** La Cloud Function intercetta la scrittura, applica il **Middleware di Anonimizzazione PII** (`piiSanitizer.ts`), e invoca la pipeline Genkit/Gemini.
+3. **Writeback:** L'agente scrive i risultati strutturati (es. `subtasks`, `complexityScore`, regole KB) sulla collezione tenant corrispondente.
+
+### 3. Regole di Sicurezza & Anonimizzazione PII
+
+1. **Isolamento Tenant Scoped:** Ogni chiamata verso gli agenti eredita ed impone il `tenantId` estratto dai JWT Custom Claims.
+2. **Anonimizzazione PII (GDPR Art. 32):** Nessun dato personale (nomi, email, dati finanziari) viene inviato direttamente a modelli LLM esterni senza prima passare per il sanitizzatore PII.
+3. **JWT-Only Claims:** Le autorizzazioni per l'esecuzione degli agenti sono verificate tramite Custom Claims (`isActive == true`).

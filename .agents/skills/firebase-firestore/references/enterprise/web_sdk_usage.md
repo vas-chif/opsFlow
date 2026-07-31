@@ -69,7 +69,7 @@ const articlesWithAuthProfile = db
       .where(field("__name__").documentId().equal(variable("author_id")))
       .select(field("displayName"), field("avatarUrl"), field("handle"))
       .toScalarExpression()
-      .as("author")
+      .as("author"),
   );
 ```
 
@@ -86,7 +86,7 @@ const searchPipeline = db
   .collection("articles")
   .search({
     query: documentMatches("machine learning"),
-    sort: score().descending()
+    sort: score().descending(),
   })
   .limit(5);
 ```
@@ -108,25 +108,25 @@ import {
   doc,
   setDoc,
   updateDoc,
-  addDoc
+  addDoc,
 } from "firebase/firestore";
 
 // 1. Add a new document to a collection
 const newDocRef = await addDoc(collection(db, "tasks"), {
   title: "Refactor Web SDK",
-  status: "pending"
+  status: "pending",
 });
 
 // 2. Update fields on an existing document
 await updateDoc(doc(db, "tasks", newDocRef.id), {
-  priority: "high"
+  priority: "high",
 });
 
 // 3. Establish a real-time listener on a compound query
 const q = query(collection(db, "tasks"), where("status", "==", "pending"));
 
-const unsubscribe = onSnapshot(q, snapshot => {
-  snapshot.docChanges().forEach(change => {
+const unsubscribe = onSnapshot(q, (snapshot) => {
+  snapshot.docChanges().forEach((change) => {
     if (change.type === "added") {
       console.log("Added Task: ", change.doc.id, change.doc.data());
     }

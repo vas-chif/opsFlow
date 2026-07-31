@@ -1,8 +1,7 @@
-/** * @file BaseInput.vue * @description Elite styled input wrapper with
-minimalist design * @author Vasile Chifeac * @created 2026-07-16 * * @notes * -
-Wrapper around q-input with Elite styling * - Minimalist design with subtle
-borders * - Readable labels and clear focus states * * @dependencies * - Quasar
-UI components * * @performance * - No additional overhead */
+/** * @file BaseInput.vue * @description Elite styled input wrapper with minimalist design * @author
+Vasile Chifeac * @created 2026-07-16 * * @notes * - Wrapper around q-input with Elite styling * -
+Minimalist design with subtle borders * - Readable labels and clear focus states * * @dependencies *
+- Quasar UI components * * @performance * - No additional overhead */
 
 <script setup lang="ts">
 // ── Vue & Framework ──────────────────────────────────────────────────────────
@@ -29,7 +28,7 @@ const emit = defineEmits<{
 
 // ── Computed Properties ───────────────────────────────────────────────────────
 const inputClasses = computed(() => ({
-  "input-elite": true
+  "input-elite": true,
 }));
 
 /*end BaseInput.vue*/

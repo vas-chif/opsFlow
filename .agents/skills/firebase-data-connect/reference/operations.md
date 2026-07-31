@@ -229,12 +229,8 @@ mutation CreatePost($title: String!, $content: String!) @auth(level: USER) {
 ### Update
 
 ```graphql
-mutation UpdateMovie($id: UUID!, $title: String, $genre: String)
-@auth(level: USER) {
-  movie_update(
-    id: $id
-    data: { title: $title, genre: $genre, updatedAt_expr: "request.time" }
-  )
+mutation UpdateMovie($id: UUID!, $title: String, $genre: String) @auth(level: USER) {
+  movie_update(id: $id, data: { title: $title, genre: $genre, updatedAt_expr: "request.time" })
 }
 ```
 
@@ -281,10 +277,7 @@ mutation DeleteMovie($id: UUID!) @auth(level: USER) {
 
 mutation DeleteOldDrafts @auth(level: USER) {
   post_deleteMany(
-    where: {
-      status: { eq: "draft" }
-      createdAt: { lt_time: { now: true, sub: { days: 30 } } }
-    }
+    where: { status: { eq: "draft" }, createdAt: { lt_time: { now: true, sub: { days: 30 } } } }
   )
 }
 ```
@@ -345,15 +338,11 @@ mutation CreateAndFetch($title: String!) @auth(level: USER) {
 Ensures atomicity - all steps succeed or all rollback:
 
 ```graphql
-mutation CreateUserWithProfile($name: String!, $bio: String!)
-@auth(level: USER)
-@transaction {
+mutation CreateUserWithProfile($name: String!, $bio: String!) @auth(level: USER) @transaction {
   # Step 1: Create user
   user_insert(data: { uid_expr: "auth.uid", name: $name })
   # Step 2: Create profile (uses response from step 1)
-  userProfile_insert(
-    data: { userId_expr: "response.user_insert.uid", bio: $bio }
-  )
+  userProfile_insert(data: { userId_expr: "response.user_insert.uid", bio: $bio })
 }
 ```
 
@@ -380,13 +369,10 @@ mutation CreateTodoWithItem($listName: String!, $itemText: String!)
 Run queries within mutations for validation:
 
 ```graphql
-mutation AddToPublicList($listId: UUID!, $item: String!)
-@auth(level: USER)
-@transaction {
+mutation AddToPublicList($listId: UUID!, $item: String!) @auth(level: USER) @transaction {
   # Step 1: Verify list exists and is public
   query @redact {
-    todoList(id: $listId)
-      @check(expr: "this != null", message: "List not found") {
+    todoList(id: $listId) @check(expr: "this != null", message: "List not found") {
       isPublic @check(expr: "this == true", message: "List is not public")
     }
   }

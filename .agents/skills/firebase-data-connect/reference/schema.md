@@ -27,8 +27,7 @@ type Movie @table {
 ### Customizing Tables
 
 ```graphql
-type Movie
-  @table(name: "movies", key: "id", singular: "movie", plural: "movies") {
+type Movie @table(name: "movies", key: "id", singular: "movie", plural: "movies") {
   id: UUID! @col(name: "movie_id") @default(expr: "uuidV4()")
   title: String!
   releaseYear: Int @col(name: "release_year")

@@ -75,11 +75,7 @@ query ChatRoom($roomId: UUID!)
     condition: "mutation.variables.roomId == request.variables.roomId"
   }
 ) {
-  messages(
-    where: { roomId: { eq: $roomId } }
-    orderBy: [{ createTime: DESC }]
-    limit: 50
-  ) {
+  messages(where: { roomId: { eq: $roomId } }, orderBy: [{ createTime: DESC }], limit: 50) {
     author
     content
     createTime

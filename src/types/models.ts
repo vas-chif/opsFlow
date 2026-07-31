@@ -18,10 +18,32 @@
  */
 
 /** Allowed task statuses in OpsFlow workflow. */
-export type TaskStatus = "pending" | "in-progress" | "completed" | "cancelled";
+export type TaskStatus =
+  | "pending"
+  | "in-progress"
+  | "contacted"
+  | "positive-response"
+  | "negative-response"
+  | "follow-up-30-days"
+  | "completed"
+  | "cancelled";
 
 /** Timestamp format used by Firestore. */
 export type FirestoreTimestamp = Date | null;
+
+/**
+ * Chat message within a specific Task thread.
+ */
+export interface TaskChatMessage {
+  id: string;
+  taskId: string;
+  sender: "user" | "agent";
+  agentName?: string;
+  text: string;
+  timestamp: string;
+  toolsUsed?: string[];
+  draftUrl?: string;
+}
 
 /**
  * Core Task document model.
@@ -33,6 +55,7 @@ export interface Task {
   description: string;
   status: TaskStatus;
   tenantId: string;
+  workspaceId: string;
   assignedTo: string | null;
   aiMetadata: TaskAIMetadata;
   createdAt: FirestoreTimestamp;
@@ -57,12 +80,21 @@ export interface SubTask {
 /**
  * AI metadata attached to tasks for learning and automation.
  */
+export interface QualityAuditResult {
+  passed: boolean;
+  score: number;
+  summary: string;
+  auditedAt: string;
+}
+
 export interface TaskAIMetadata {
   complexityScore: number; // 1-10 scale
   suggestedCategory: string;
   confidence: number; // 0-1 for AI confidence
   modelVersion: string;
   lastAnalyzed: FirestoreTimestamp;
+  subtasks?: Omit<SubTask, "tenantId" | "taskId">[];
+  qualityAudit?: QualityAuditResult;
 } /*end TaskAIMetadata*/
 
 /**
@@ -104,6 +136,37 @@ export interface CreateSubTaskPayload {
   description: string;
   order?: number;
 } /*end CreateSubTaskPayload*/
+
+/**
+ * Workspace entity for grouping tasks.
+ * Follows multi-tenant isolation with tenantId.
+ */
+export interface Workspace {
+  id: string;
+  name: string;
+  description: string;
+  tenantId: string;
+  createdAt: FirestoreTimestamp;
+  updatedAt: FirestoreTimestamp;
+  icon?: string;
+  isPinned?: boolean;
+  groupName?: string;
+  systemPrompt?: string;
+  category?: string;
+} /*end Workspace*/
+
+/**
+ * Firestore document creation payload for Workspace.
+ */
+export interface CreateWorkspacePayload {
+  name: string;
+  description?: string;
+  icon?: string;
+  isPinned?: boolean;
+  groupName?: string;
+  systemPrompt?: string;
+  category?: string;
+} /*end CreateWorkspacePayload*/
 
 /**
  * Firestore document creation payload for KnowledgeBase.

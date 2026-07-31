@@ -48,7 +48,7 @@ const firebaseConfig = {
   storageBucket: "PROJECT_ID.firebasestorage.app",
   messagingSenderId: "SENDER_ID",
   appId: "APP_ID",
-  measurementId: "G-MEASUREMENT_ID"
+  measurementId: "G-MEASUREMENT_ID",
 };
 
 // Initialize Firebase
@@ -70,7 +70,7 @@ const db = getFirestore(app);
 
 async function getUsers() {
   const querySnapshot = await getDocs(collection(db, "users"));
-  querySnapshot.forEach(doc => {
+  querySnapshot.forEach((doc) => {
     console.log(`${doc.id} => ${doc.data()}`);
   });
 }

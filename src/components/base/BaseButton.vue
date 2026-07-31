@@ -1,9 +1,7 @@
-/** * @file BaseButton.vue * @description Elite styled button wrapper with
-smooth hover transitions * @author Vasile Chifeac * @created 2026-07-16 * *
-@notes * - Wrapper around q-btn with Elite styling * - Smooth hover transition
-(0.3s ease) * - Slightly rounded corners (8px border-radius) * * @dependencies *
-- Quasar UI components * * @performance * - Zero overhead: pure CSS transitions
-*/
+/** * @file BaseButton.vue * @description Elite styled button wrapper with smooth hover transitions
+* @author Vasile Chifeac * @created 2026-07-16 * * @notes * - Wrapper around q-btn with Elite
+styling * - Smooth hover transition (0.3s ease) * - Slightly rounded corners (8px border-radius) * *
+@dependencies * - Quasar UI components * * @performance * - Zero overhead: pure CSS transitions */
 
 <script setup lang="ts">
 // ── Vue & Framework ──────────────────────────────────────────────────────────
@@ -12,14 +10,7 @@ import { computed } from "vue";
 // ── Props Interface ──────────────────────────────────────────────────────────
 interface Props {
   label?: string;
-  color?:
-    | "primary"
-    | "secondary"
-    | "accent"
-    | "positive"
-    | "negative"
-    | "warning"
-    | "info";
+  color?: "primary" | "secondary" | "accent" | "positive" | "negative" | "warning" | "info";
   icon?: string;
   loading?: boolean;
   disabled?: boolean;
@@ -38,7 +29,7 @@ defineEmits<{
 // ── Computed Styles ───────────────────────────────────────────────────────────
 const buttonClasses = computed(() => ({
   "rounded-elite": props.rounded ?? true,
-  "transition-smooth": true
+  "transition-smooth": true,
 }));
 
 /*end BaseButton.vue*/

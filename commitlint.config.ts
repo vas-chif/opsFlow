@@ -21,23 +21,13 @@ const Configuration: UserConfig = {
     "type-enum": [
       2,
       "always",
-      [
-        "feat",
-        "fix",
-        "chore",
-        "security",
-        "style",
-        "docs",
-        "refactor",
-        "test",
-        "perf"
-      ]
+      ["feat", "fix", "chore", "security", "style", "docs", "refactor", "test", "perf"],
     ],
     "scope-case": [2, "always", "lower-case"],
     "subject-case": [2, "always", "lower-case"],
     "subject-empty": [2, "never"],
-    "type-empty": [2, "never"]
-  }
+    "type-empty": [2, "never"],
+  },
 };
 
 export default Configuration;

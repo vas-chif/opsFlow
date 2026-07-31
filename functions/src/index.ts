@@ -26,13 +26,16 @@ admin.initializeApp();
 
 setGlobalOptions({ maxInstances: 10 });
 
+// ── Agents ────────────────────────────────────────────────────────────────────
+export { processTaskFlow } from "./agents/processTaskFlow";
+
 const ALLOWED_ROLES = new Set(["admin", "manager", "operator", "viewer"]);
 
 /**
  * Assigns tenantId + role custom claims to a Firebase Auth user.
  * Callable only by callers with token.admin === true.
  */
-export const setTenantRole = onCall(async request => {
+export const setTenantRole = onCall(async (request) => {
   if (request.auth?.token.admin !== true) {
     throw new HttpsError("permission-denied", "Unauthorized: admin only");
   }
@@ -52,14 +55,14 @@ export const setTenantRole = onCall(async request => {
   if (typeof role !== "string" || !ALLOWED_ROLES.has(role)) {
     throw new HttpsError(
       "invalid-argument",
-      "Missing or invalid role (admin|manager|operator|viewer)"
+      "Missing or invalid role (admin|manager|operator|viewer)",
     );
   }
 
   await admin.auth().setCustomUserClaims(uid, {
     tenantId,
     role,
-    isActive: true
+    isActive: true,
   });
 
   // Audit trail — no PII beyond uid (GDPR Art. 30 / Art. 32)
@@ -67,7 +70,7 @@ export const setTenantRole = onCall(async request => {
     targetUid: uid,
     tenantId,
     role,
-    actorUid: request.auth.uid
+    actorUid: request.auth.uid,
   });
 
   return { success: true };

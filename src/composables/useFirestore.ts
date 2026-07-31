@@ -3,10 +3,11 @@
  * @description Tenant-isolated Firestore composable for secure multi-tenant data operations.
  * @author Vasile Chifeac
  * @created 2026-07-16
- * @modified 2026-07-16
+ * @modified 2026-07-30
  *
  * @notes
  * - Implements Config-Fenced pattern (masterChecklist §2.2)
+ * - Workspace-nested tasks: tenants/{tenantId}/workspaces/{workspaceId}/tasks/{taskId}
  * - All queries auto-filtered by tenantId from JWT claims
  * - Never exposes raw Firestore SDK directly
  *
@@ -28,6 +29,7 @@ import {
   collection,
   doc,
   addDoc,
+  setDoc,
   getDocs,
   getDoc,
   updateDoc,
@@ -41,7 +43,7 @@ import {
   type QueryConstraint,
   type DocumentData,
   type QuerySnapshot,
-  type DocumentSnapshot
+  type DocumentSnapshot,
 } from "firebase/firestore";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -57,16 +59,15 @@ import { db } from "@/boot/firebase";
 const COLLECTIONS = {
   TASKS: "tasks",
   SUBTASKS: "subtasks",
-  KNOWLEDGE_BASE: "knowledgeBase"
+  KNOWLEDGE_BASE: "knowledgeBase",
+  WORKSPACES: "workspaces",
 } as const; /*end COLLECTIONS*/
 
 /**
  * Get the tenant-scoped collection reference.
  * Throws if no tenantId is available (user not authenticated).
  */
-function getTenantCollection(
-  collectionName: string
-): CollectionReference<DocumentData> {
+function getTenantCollection(collectionName: string): CollectionReference<DocumentData> {
   const authStore = useAuthStore();
   const { tenantId } = storeToRefs(authStore);
 
@@ -80,10 +81,7 @@ function getTenantCollection(
 /**
  * Get the tenant-scoped document reference.
  */
-function getTenantDoc(
-  collectionName: string,
-  docId: string
-): DocumentReference<DocumentData> {
+function getTenantDoc(collectionName: string, docId: string): DocumentReference<DocumentData> {
   const authStore = useAuthStore();
   const { tenantId } = storeToRefs(authStore);
 
@@ -95,23 +93,34 @@ function getTenantDoc(
 } /*end getTenantDoc*/
 
 /**
- * Build query constraints with mandatory tenantId filter.
+ * Get collection reference for workspace-nested tasks:
+ * tenants/{tenantId}/workspaces/{workspaceId}/tasks
  */
-function buildTenantQueryConstraints(
-  extraConstraints: QueryConstraint[] = []
-): QueryConstraint[] {
-  // Note: tenantId is enforced at collection level, not document level
-  // The getTenantCollection already scopes to tenants/{tenantId}/...
-  return extraConstraints;
-} /*end buildTenantQueryConstraints*/
+function getWorkspaceTaskCollection(workspaceId: string): CollectionReference<DocumentData> {
+  const authStore = useAuthStore();
+  const { tenantId } = storeToRefs(authStore);
+
+  if (!tenantId.value) {
+    throw new Error("Tenant ID not available - user must be authenticated");
+  }
+
+  return collection(
+    db,
+    "tenants",
+    tenantId.value,
+    COLLECTIONS.WORKSPACES,
+    workspaceId,
+    COLLECTIONS.TASKS,
+  );
+} /*end getWorkspaceTaskCollection*/
 
 /**
- * Add a new document to a tenant-scoped collection.
- * Automatically injects tenantId into the document data.
+ * Add a task inside a specific workspace collection:
+ * tenants/{tenantId}/workspaces/{workspaceId}/tasks/{taskId}
  */
-async function addTenantDoc<T extends { tenantId: string }>(
-  collectionName: string,
-  data: Omit<T, "tenantId">
+async function addWorkspaceTaskDoc<T extends { tenantId: string }>(
+  workspaceId: string,
+  data: Omit<T, "tenantId">,
 ): Promise<string> {
   const authStore = useAuthStore();
   const { tenantId } = storeToRefs(authStore);
@@ -124,7 +133,156 @@ async function addTenantDoc<T extends { tenantId: string }>(
     ...data,
     tenantId: tenantId.value,
     createdAt: new Date(),
-    updatedAt: new Date()
+    updatedAt: new Date(),
+  } as T & { createdAt: Date; updatedAt: Date };
+
+  const taskColl = getWorkspaceTaskCollection(workspaceId);
+  const docRef = await addDoc(taskColl, docData);
+
+  return docRef.id;
+} /*end addWorkspaceTaskDoc*/
+
+/**
+ * Get all tasks for a specific workspace:
+ * tenants/{tenantId}/workspaces/{workspaceId}/tasks
+ */
+async function getWorkspaceTaskDocs<T>(workspaceId: string): Promise<T[]> {
+  const taskColl = getWorkspaceTaskCollection(workspaceId);
+  const querySnapshot: QuerySnapshot<DocumentData> = await getDocs(taskColl);
+
+  return querySnapshot.docs.map((d) => ({
+    id: d.id,
+    ...d.data(),
+  })) as T[];
+} /*end getWorkspaceTaskDocs*/
+
+/**
+ * Update a task inside a specific workspace collection.
+ */
+async function updateWorkspaceTaskDoc(
+  workspaceId: string,
+  taskId: string,
+  data: Partial<DocumentData>,
+): Promise<void> {
+  const authStore = useAuthStore();
+  const { tenantId } = storeToRefs(authStore);
+
+  if (!tenantId.value) {
+    throw new Error("Tenant ID not available - user must be authenticated");
+  }
+
+  const docRef = doc(
+    db,
+    "tenants",
+    tenantId.value,
+    COLLECTIONS.WORKSPACES,
+    workspaceId,
+    COLLECTIONS.TASKS,
+    taskId,
+  );
+  await updateDoc(docRef, {
+    ...data,
+    updatedAt: new Date(),
+  });
+} /*end updateWorkspaceTaskDoc*/
+
+/**
+ * Delete a task inside a specific workspace collection.
+ */
+async function deleteWorkspaceTaskDoc(workspaceId: string, taskId: string): Promise<void> {
+  const authStore = useAuthStore();
+  const { tenantId } = storeToRefs(authStore);
+
+  if (!tenantId.value) {
+    throw new Error("Tenant ID not available - user must be authenticated");
+  }
+
+  const docRef = doc(
+    db,
+    "tenants",
+    tenantId.value,
+    COLLECTIONS.WORKSPACES,
+    workspaceId,
+    COLLECTIONS.TASKS,
+    taskId,
+  );
+  await deleteDoc(docRef);
+} /*end deleteWorkspaceTaskDoc*/
+
+/**
+ * Move a task document from a source workspace to a target workspace atomically.
+ */
+async function moveWorkspaceTaskDoc(
+  sourceWorkspaceId: string,
+  targetWorkspaceId: string,
+  taskId: string,
+): Promise<void> {
+  const authStore = useAuthStore();
+  const { tenantId } = storeToRefs(authStore);
+
+  if (!tenantId.value) {
+    throw new Error("Tenant ID not available - user must be authenticated");
+  }
+
+  const sourceRef = doc(
+    db,
+    "tenants",
+    tenantId.value,
+    COLLECTIONS.WORKSPACES,
+    sourceWorkspaceId,
+    COLLECTIONS.TASKS,
+    taskId,
+  );
+
+  const targetRef = doc(
+    db,
+    "tenants",
+    tenantId.value,
+    COLLECTIONS.WORKSPACES,
+    targetWorkspaceId,
+    COLLECTIONS.TASKS,
+    taskId,
+  );
+
+  const sourceSnap = await getDoc(sourceRef);
+  if (!sourceSnap.exists()) {
+    throw new Error("Source task document does not exist");
+  }
+
+  const taskData = sourceSnap.data();
+  taskData.workspaceId = targetWorkspaceId;
+  taskData.updatedAt = new Date();
+
+  await setDoc(targetRef, taskData);
+  await deleteDoc(sourceRef);
+} /*end moveWorkspaceTaskDoc*/
+
+/**
+ * Build query constraints with mandatory tenantId filter.
+ */
+function buildTenantQueryConstraints(extraConstraints: QueryConstraint[] = []): QueryConstraint[] {
+  return extraConstraints;
+} /*end buildTenantQueryConstraints*/
+
+/**
+ * Add a new document to a tenant-scoped collection.
+ */
+async function addTenantDoc<T extends { tenantId: string }>(
+  collectionName: string,
+  data: Omit<T, "tenantId">,
+): Promise<string> {
+  const authStore = useAuthStore();
+  const { tenantId } = storeToRefs(authStore);
+
+  if (!tenantId.value) {
+    throw new Error("Tenant ID not available - user must be authenticated");
+  }
+
+  const docData = {
+    ...data,
+    tenantId: tenantId.value,
+    createdAt: new Date(),
+    updatedAt: new Date(),
   } as T & { createdAt: Date; updatedAt: Date };
 
   const tenantCollection = getTenantCollection(collectionName);
@@ -135,11 +293,10 @@ async function addTenantDoc<T extends { tenantId: string }>(
 
 /**
  * Get all documents from a tenant-scoped collection.
- * Uses cache-first strategy per §5 (cost optimization).
  */
 async function getTenantDocs<T>(
   collectionName: string,
-  extraConstraints: QueryConstraint[] = []
+  extraConstraints: QueryConstraint[] = [],
 ): Promise<T[]> {
   const tenantCollection = getTenantCollection(collectionName);
   const constraints = buildTenantQueryConstraints(extraConstraints);
@@ -147,19 +304,16 @@ async function getTenantDocs<T>(
 
   const querySnapshot: QuerySnapshot<DocumentData> = await getDocs(q);
 
-  return querySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data()
+  return querySnapshot.docs.map((docItem) => ({
+    id: docItem.id,
+    ...docItem.data(),
   })) as T[];
 } /*end getTenantDocs*/
 
 /**
  * Get a single document by ID from a tenant-scoped collection.
  */
-async function getTenantDocById<T>(
-  collectionName: string,
-  docId: string
-): Promise<T | null> {
+async function getTenantDocById<T>(collectionName: string, docId: string): Promise<T | null> {
   const docRef = getTenantDoc(collectionName, docId);
   const docSnapshot: DocumentSnapshot<DocumentData> = await getDoc(docRef);
 
@@ -169,7 +323,7 @@ async function getTenantDocById<T>(
 
   return {
     id: docSnapshot.id,
-    ...docSnapshot.data()
+    ...docSnapshot.data(),
   } as T;
 } /*end getTenantDocById*/
 
@@ -179,12 +333,12 @@ async function getTenantDocById<T>(
 async function updateTenantDoc(
   collectionName: string,
   docId: string,
-  data: Partial<DocumentData>
+  data: Partial<DocumentData>,
 ): Promise<void> {
   const docRef = getTenantDoc(collectionName, docId);
   const updateData = {
     ...data,
-    updatedAt: new Date()
+    updatedAt: new Date(),
   };
 
   await updateDoc(docRef, updateData);
@@ -193,41 +347,32 @@ async function updateTenantDoc(
 /**
  * Delete a document from a tenant-scoped collection.
  */
-async function deleteTenantDoc(
-  collectionName: string,
-  docId: string
-): Promise<void> {
+async function deleteTenantDoc(collectionName: string, docId: string): Promise<void> {
   const docRef = getTenantDoc(collectionName, docId);
   await deleteDoc(docRef);
 } /*end deleteTenantDoc*/
 
 /**
  * Get tasks filtered by status.
- * Convenience method for the main task list view.
  */
 async function getTasksByStatus(status: TaskStatus): Promise<Task[]> {
-  return getTenantDocs<Task>(COLLECTIONS.TASKS, [
-    where("status", "==", status)
-  ]);
+  return getTenantDocs<Task>(COLLECTIONS.TASKS, [where("status", "==", status)]);
 } /*end getTasksByStatus*/
 
 /**
  * Get tasks assigned to a specific user.
  */
 async function getTasksByAssignee(assigneeId: string): Promise<Task[]> {
-  return getTenantDocs<Task>(COLLECTIONS.TASKS, [
-    where("assignedTo", "==", assigneeId)
-  ]);
+  return getTenantDocs<Task>(COLLECTIONS.TASKS, [where("assignedTo", "==", assigneeId)]);
 } /*end getTasksByAssignee*/
 
 /**
  * Get subtasks for a specific task.
- * Ordered by the 'order' field for proper sequencing.
  */
 async function getSubTasksByTaskId(taskId: string): Promise<SubTask[]> {
   return getTenantDocs<SubTask>(COLLECTIONS.SUBTASKS, [
     where("taskId", "==", taskId),
-    orderBy("order", "asc")
+    orderBy("order", "asc"),
   ]);
 } /*end getSubTasksByTaskId*/
 
@@ -235,20 +380,19 @@ async function getSubTasksByTaskId(taskId: string): Promise<SubTask[]> {
  * Get knowledge base entries by category.
  */
 async function getKnowledgeByCategory(
-  category: "preference" | "rule" | "pattern"
+  category: "preference" | "rule" | "pattern",
 ): Promise<KnowledgeBase[]> {
   return getTenantDocs<KnowledgeBase>(COLLECTIONS.KNOWLEDGE_BASE, [
-    where("category", "==", category)
+    where("category", "==", category),
   ]);
 } /*end getKnowledgeByCategory*/
 
 /**
  * Set a knowledge base entry (upsert pattern).
- * Uses key to determine if it's an insert or update.
  */
 async function setKnowledgeEntry(
   key: string,
-  payload: import("@/types/models").CreateKnowledgeBasePayload
+  payload: import("@/types/models").CreateKnowledgeBasePayload,
 ): Promise<string> {
   const authStore = useAuthStore();
   const { tenantId } = storeToRefs(authStore);
@@ -257,34 +401,26 @@ async function setKnowledgeEntry(
     throw new Error("Tenant ID not available - user must be authenticated");
   }
 
-  // Query for existing entry by key
-  const existing = await getTenantDocs<KnowledgeBase>(
-    COLLECTIONS.KNOWLEDGE_BASE,
-    [where("key", "==", key), limit(1)]
-  );
+  const existing = await getTenantDocs<KnowledgeBase>(COLLECTIONS.KNOWLEDGE_BASE, [
+    where("key", "==", key),
+    limit(1),
+  ]);
 
   const docData = {
     ...payload,
     tenantId: tenantId.value,
     lastUpdated: new Date(),
     source: payload.source ?? ("user_input" as const),
-    confidence: payload.confidence ?? 0.5
+    confidence: payload.confidence ?? 0.5,
   };
 
   const existingEntry = existing[0];
 
   if (existingEntry) {
-    await updateTenantDoc(
-      COLLECTIONS.KNOWLEDGE_BASE,
-      existingEntry.id,
-      docData
-    );
+    await updateTenantDoc(COLLECTIONS.KNOWLEDGE_BASE, existingEntry.id, docData);
     return existingEntry.id;
   } else {
-    return addTenantDoc<Omit<KnowledgeBase, "id">>(
-      COLLECTIONS.KNOWLEDGE_BASE,
-      docData
-    );
+    return addTenantDoc<Omit<KnowledgeBase, "id">>(COLLECTIONS.KNOWLEDGE_BASE, docData);
   }
 } /*end setKnowledgeEntry*/
 
@@ -298,6 +434,13 @@ export function useFirestore() {
     updateTenantDoc,
     deleteTenantDoc,
 
+    // Workspace-nested Task operations
+    addWorkspaceTaskDoc,
+    getWorkspaceTaskDocs,
+    updateWorkspaceTaskDoc,
+    deleteWorkspaceTaskDoc,
+    moveWorkspaceTaskDoc,
+
     // Task operations
     getTasksByStatus,
     getTasksByAssignee,
@@ -310,7 +453,7 @@ export function useFirestore() {
     setKnowledgeEntry,
 
     // Collection constants
-    COLLECTIONS
+    COLLECTIONS,
   };
 } /*end useFirestore*/
 

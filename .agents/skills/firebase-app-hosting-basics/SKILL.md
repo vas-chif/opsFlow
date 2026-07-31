@@ -41,13 +41,7 @@ This is the recommended flow for most users.
      "apphosting": {
        "backendId": "my-app-id",
        "rootDir": "/",
-       "ignore": [
-         "node_modules",
-         ".git",
-         "firebase-debug.log",
-         "firebase-debug.*.log",
-         "functions"
-       ]
+       "ignore": ["node_modules", ".git", "firebase-debug.log", "firebase-debug.*.log", "functions"]
      }
    }
    ```

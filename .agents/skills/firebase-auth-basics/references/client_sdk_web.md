@@ -35,11 +35,11 @@ import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 
 const auth = getAuth();
 createUserWithEmailAndPassword(auth, email, password)
-  .then(userCredential => {
+  .then((userCredential) => {
     const user = userCredential.user;
     // ...
   })
-  .catch(error => {
+  .catch((error) => {
     const errorCode = error.code;
     const errorMessage = error.message;
     // ..
@@ -55,7 +55,7 @@ const auth = getAuth();
 const provider = new GoogleAuthProvider();
 
 signInWithPopup(auth, provider)
-  .then(result => {
+  .then((result) => {
     // This gives you a Google Access Token. You can use it to access the Google API.
     const credential = GoogleAuthProvider.credentialFromResult(result);
     const token = credential.accessToken;
@@ -63,7 +63,7 @@ signInWithPopup(auth, provider)
     const user = result.user;
     // ...
   })
-  .catch(error => {
+  .catch((error) => {
     // Handle Errors here.
     const errorCode = error.code;
     const errorMessage = error.message;
@@ -91,14 +91,14 @@ const auth = getAuth();
 const provider = new FacebookAuthProvider();
 
 signInWithPopup(auth, provider)
-  .then(result => {
+  .then((result) => {
     // The signed-in user info.
     const user = result.user;
     // This gives you a Facebook Access Token. You can use it to access the Facebook API.
     const credential = FacebookAuthProvider.credentialFromResult(result);
     const accessToken = credential.accessToken;
   })
-  .catch(error => {
+  .catch((error) => {
     // Handle Errors here.
   });
 ```
@@ -112,13 +112,13 @@ const auth = getAuth();
 const provider = new OAuthProvider("apple.com");
 
 signInWithPopup(auth, provider)
-  .then(result => {
+  .then((result) => {
     const user = result.user;
     // Apple credential
     const credential = OAuthProvider.credentialFromResult(result);
     const accessToken = credential.accessToken;
   })
-  .catch(error => {
+  .catch((error) => {
     // Handle Errors here.
   });
 ```
@@ -132,14 +132,14 @@ const auth = getAuth();
 const provider = new TwitterAuthProvider();
 
 signInWithPopup(auth, provider)
-  .then(result => {
+  .then((result) => {
     const user = result.user;
     // Twitter credential
     const credential = TwitterAuthProvider.credentialFromResult(result);
     const token = credential.accessToken;
     const secret = credential.secret;
   })
-  .catch(error => {
+  .catch((error) => {
     // Handle Errors here.
   });
 ```
@@ -153,12 +153,12 @@ const auth = getAuth();
 const provider = new GithubAuthProvider();
 
 signInWithPopup(auth, provider)
-  .then(result => {
+  .then((result) => {
     const user = result.user;
     const credential = GithubAuthProvider.credentialFromResult(result);
     const token = credential.accessToken;
   })
-  .catch(error => {
+  .catch((error) => {
     // Handle Errors here.
   });
 ```
@@ -172,12 +172,12 @@ const auth = getAuth();
 const provider = new OAuthProvider("microsoft.com");
 
 signInWithPopup(auth, provider)
-  .then(result => {
+  .then((result) => {
     const user = result.user;
     const credential = OAuthProvider.credentialFromResult(result);
     const accessToken = credential.accessToken;
   })
-  .catch(error => {
+  .catch((error) => {
     // Handle Errors here.
   });
 ```
@@ -191,12 +191,12 @@ const auth = getAuth();
 const provider = new OAuthProvider("yahoo.com");
 
 signInWithPopup(auth, provider)
-  .then(result => {
+  .then((result) => {
     const user = result.user;
     const credential = OAuthProvider.credentialFromResult(result);
     const accessToken = credential.accessToken;
   })
-  .catch(error => {
+  .catch((error) => {
     // Handle Errors here.
   });
 ```
@@ -211,7 +211,7 @@ signInAnonymously(auth)
   .then(() => {
     // Signed in..
   })
-  .catch(error => {
+  .catch((error) => {
     const errorCode = error.code;
     const errorMessage = error.message;
   });
@@ -228,7 +228,7 @@ const auth = getAuth();
 const actionCodeSettings = {
   // URL you want to redirect back to. The domain must be in the authorized domains list in Firebase Console.
   url: "https://www.example.com/finishSignUp?cartId=1234",
-  handleCodeInApp: true
+  handleCodeInApp: true,
 };
 
 sendSignInLinkToEmail(auth, email, actionCodeSettings)
@@ -236,7 +236,7 @@ sendSignInLinkToEmail(auth, email, actionCodeSettings)
     // Save the email locally so you don't need to ask the user for it again
     window.localStorage.setItem("emailForSignIn", email);
   })
-  .catch(error => {
+  .catch((error) => {
     // Error
   });
 ```
@@ -244,11 +244,7 @@ sendSignInLinkToEmail(auth, email, actionCodeSettings)
 **2. Complete Sign In (on landing page)**
 
 ```javascript
-import {
-  getAuth,
-  isSignInWithEmailLink,
-  signInWithEmailLink
-} from "firebase/auth";
+import { getAuth, isSignInWithEmailLink, signInWithEmailLink } from "firebase/auth";
 
 const auth = getAuth();
 
@@ -259,11 +255,11 @@ if (isSignInWithEmailLink(auth, window.location.href)) {
   }
 
   signInWithEmailLink(auth, email, window.location.href)
-    .then(result => {
+    .then((result) => {
       window.localStorage.removeItem("emailForSignIn");
       // You can check result.user
     })
-    .catch(error => {
+    .catch((error) => {
       // Error
     });
 }
@@ -278,7 +274,7 @@ user signs in or out.
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 
 const auth = getAuth();
-onAuthStateChanged(auth, user => {
+onAuthStateChanged(auth, (user) => {
   if (user) {
     // User is signed in, see docs for a list of available properties
     // https://firebase.google.com/docs/reference/js/firebase.User
@@ -301,7 +297,7 @@ signOut(auth)
   .then(() => {
     // Sign-out successful.
   })
-  .catch(error => {
+  .catch((error) => {
     // An error happened.
   });
 ```

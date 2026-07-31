@@ -74,8 +74,7 @@ type Review @table @unique(fields: ["movie", "user"]) {
 # queries.gql
 
 # Public: List movies with filtering
-query ListMovies($genre: String, $minRating: Float, $limit: Int)
-@auth(level: PUBLIC) {
+query ListMovies($genre: String, $minRating: Float, $limit: Int) @auth(level: PUBLIC) {
   movies(
     where: { genre: { eq: $genre }, rating: { ge: $minRating } }
     orderBy: [{ rating: DESC }]
@@ -140,31 +139,19 @@ query MyReviews @auth(level: USER) {
 
 # User: Create/update profile on first login
 mutation UpsertUser($email: String!, $displayName: String) @auth(level: USER) {
-  user_upsert(
-    data: { uid_expr: "auth.uid", email: $email, displayName: $displayName }
-  )
+  user_upsert(data: { uid_expr: "auth.uid", email: $email, displayName: $displayName })
 }
 
 # User: Add review (one per movie per user)
-mutation AddReview($movieId: UUID!, $rating: Int!, $text: String)
-@auth(level: USER) {
+mutation AddReview($movieId: UUID!, $rating: Int!, $text: String) @auth(level: USER) {
   review_upsert(
-    data: {
-      movie: { id: $movieId }
-      user: { uid_expr: "auth.uid" }
-      rating: $rating
-      text: $text
-    }
+    data: { movie: { id: $movieId }, user: { uid_expr: "auth.uid" }, rating: $rating, text: $text }
   )
 }
 
 # User: Delete my review
 mutation DeleteReview($id: UUID!) @auth(level: USER) {
-  review_delete(
-    first: {
-      where: { id: { eq: $id }, user: { uid: { eq_expr: "auth.uid" } } }
-    }
-  )
+  review_delete(first: { where: { id: { eq: $id }, user: { uid: { eq_expr: "auth.uid" } } } })
 }
 ```
 
@@ -230,8 +217,7 @@ query ListMoviesByGenre($genre: String!)
 }
 
 # Counterpart mutation for ListMoviesByGenre
-mutation AddMovieWithGenre($title: String!, $genre: String!)
-@auth(level: USER) {
+mutation AddMovieWithGenre($title: String!, $genre: String!) @auth(level: USER) {
   movie_insert(data: { title: $title, genre: $genre })
 }
 
@@ -272,14 +258,14 @@ import { subscribe } from "firebase/data-connect";
 
 // Subscribe to movie list — refreshes when AddReview mutation runs
 const unsubMovies = subscribe(listMoviesRef({ genre: "Action" }), {
-  onNext: result => updateMovieList(result.data.movies),
-  onError: error => console.error(error)
+  onNext: (result) => updateMovieList(result.data.movies),
+  onError: (error) => console.error(error),
 });
 
 // Subscribe to leaderboard — refreshes every 30 seconds
 const unsubLeaderboard = subscribe(movieLeaderboardRef(), {
-  onNext: result => updateLeaderboard(result.data.movies),
-  onError: error => console.error(error)
+  onNext: (result) => updateLeaderboard(result.data.movies),
+  onError: (error) => console.error(error),
 });
 
 // Cleanup
@@ -352,13 +338,7 @@ type OrderItem @table {
 ```graphql
 # Public: Browse products
 query ListProducts($category: String, $search: String) @auth(level: PUBLIC) {
-  products(
-    where: {
-      category: { eq: $category }
-      name: { contains: $search }
-      stock: { gt: 0 }
-    }
-  ) {
+  products(where: { category: { eq: $category }, name: { contains: $search }, stock: { gt: 0 } }) {
     id
     name
     price
@@ -384,11 +364,7 @@ query MyCart @auth(level: USER) {
 # User: Add to cart
 mutation AddToCart($productId: UUID!, $quantity: Int!) @auth(level: USER) {
   cartItem_upsert(
-    data: {
-      user: { uid_expr: "auth.uid" }
-      product: { id: $productId }
-      quantity: $quantity
-    }
+    data: { user: { uid_expr: "auth.uid" }, product: { id: $productId }, quantity: $quantity }
   )
 }
 
@@ -477,10 +453,7 @@ type Comment @table {
 ```graphql
 # Public: Read published posts
 query PublishedPosts @auth(level: PUBLIC) {
-  posts(
-    where: { status: { eq: PUBLISHED } }
-    orderBy: [{ publishedAt: DESC }]
-  ) {
+  posts(where: { status: { eq: PUBLISHED } }, orderBy: [{ publishedAt: DESC }]) {
     id
     title
     content
@@ -492,43 +465,29 @@ query PublishedPosts @auth(level: PUBLIC) {
 }
 
 # Author+: Create post
-mutation CreatePost($title: String!, $content: String!)
-@auth(level: USER)
-@transaction {
+mutation CreatePost($title: String!, $content: String!) @auth(level: USER) @transaction {
   # Check user is at least AUTHOR
   query @redact {
     blogPermission(key: { user: { uid_expr: "auth.uid" } })
       @check(expr: "this != null", message: "No permission record") {
-      role
-        @check(
-          expr: "this in ['AUTHOR', 'EDITOR', 'ADMIN']"
-          message: "Must be author+"
-        )
+      role @check(expr: "this in ['AUTHOR', 'EDITOR', 'ADMIN']", message: "Must be author+")
     }
   }
-  post_insert(
-    data: { author: { uid_expr: "auth.uid" }, title: $title, content: $content }
-  )
+  post_insert(data: { author: { uid_expr: "auth.uid" }, title: $title, content: $content })
 }
 
 # Editor+: Publish any post
 mutation PublishPost($id: UUID!) @auth(level: USER) @transaction {
   query @redact {
     blogPermission(key: { user: { uid_expr: "auth.uid" } }) {
-      role
-        @check(expr: "this in ['EDITOR', 'ADMIN']", message: "Must be editor+")
+      role @check(expr: "this in ['EDITOR', 'ADMIN']", message: "Must be editor+")
     }
   }
-  post_update(
-    id: $id
-    data: { status: PUBLISHED, publishedAt_expr: "request.time" }
-  )
+  post_update(id: $id, data: { status: PUBLISHED, publishedAt_expr: "request.time" })
 }
 
 # Admin: Grant role
-mutation GrantRole($userUid: String!, $role: UserRole!)
-@auth(level: USER)
-@transaction {
+mutation GrantRole($userUid: String!, $role: UserRole!) @auth(level: USER) @transaction {
   query @redact {
     blogPermission(key: { user: { uid_expr: "auth.uid" } }) {
       role @check(expr: "this == 'ADMIN'", message: "Must be admin")
@@ -565,8 +524,7 @@ query GetMoviesByGenre($genre: String!, $limit: Int!) @auth(level: PUBLIC) {
 ### Basic UPDATE
 
 ```graphql
-mutation UpdateMovieRating($movieId: UUID!, $newRating: Float!)
-@auth(level: USER) {
+mutation UpdateMovieRating($movieId: UUID!, $newRating: Float!) @auth(level: USER) {
   _execute(
     sql: """
     UPDATE movie
@@ -601,8 +559,7 @@ query GetMoviesRankedByRating @auth(level: PUBLIC) {
 ### UPDATE with RETURNING and Auth Context
 
 ```graphql
-mutation UpdateMyReviewText($movieId: UUID!, $newText: String!)
-@auth(level: USER) {
+mutation UpdateMyReviewText($movieId: UUID!, $newText: String!) @auth(level: USER) {
   updatedReview: _executeReturningFirst(
     sql: """
     UPDATE review
@@ -621,8 +578,7 @@ _Note: Data-modifying CTEs are only supported by `_execute`, not
 `_executeReturning`._
 
 ```graphql
-mutation CreateMovieCTE($movieId: UUID!, $userUid: String!, $reviewId: UUID!)
-@auth(level: USER) {
+mutation CreateMovieCTE($movieId: UUID!, $userUid: String!, $reviewId: UUID!) @auth(level: USER) {
   _execute(
     sql: """
     WITH
@@ -660,9 +616,7 @@ Because `mutation` operations are single requests, you can chain multiple
 together.
 
 ```graphql
-mutation SafeTransfer($from: UUID!, $to: UUID!, $amount: Float!)
-@auth(level: USER)
-@transaction {
+mutation SafeTransfer($from: UUID!, $to: UUID!, $amount: Float!) @auth(level: USER) @transaction {
   deduct: _execute(
     sql: "UPDATE account SET balance = balance - $2 WHERE id = $1"
     params: [$from, $amount]
@@ -684,11 +638,8 @@ CREATE EXTENSION IF NOT EXISTS postgis;
 ```
 
 ```graphql
-query GetNearbyActiveRestaurants(
-  $userLong: Float!
-  $userLat: Float!
-  $maxDistanceMeters: Float!
-) @auth(level: USER) {
+query GetNearbyActiveRestaurants($userLong: Float!, $userLat: Float!, $maxDistanceMeters: Float!)
+@auth(level: USER) {
   nearby: _select(
     sql: """
     SELECT

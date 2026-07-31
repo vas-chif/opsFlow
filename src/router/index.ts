@@ -4,8 +4,11 @@ import {
   createMemoryHistory,
   createRouter,
   createWebHashHistory,
-  createWebHistory
+  createWebHistory,
 } from "vue-router";
+
+// ── Guards ───────────────────────────────────────────────────────────────────
+import { registerTenantGuard } from "@/router/TenantGuard";
 
 /*
  * If not building with SSR mode, you can
@@ -30,13 +33,16 @@ export default defineRouter((/* { store, ssrContext } */) => {
     // Leave this as is and make changes in quasar.conf.js instead!
     // quasar.conf.js -> build -> vueRouterMode
     // quasar.conf.js -> build -> publicPath
-    history: createHistory(import.meta.env.QUASAR_VUE_ROUTER_BASE)
+    history: createHistory(import.meta.env.QUASAR_VUE_ROUTER_BASE),
   });
 
   // enable HMR for it
   if (import.meta.hot) {
     handleHotUpdate(Router);
   }
+
+  // Register tenant guard for protected routes
+  registerTenantGuard(Router);
 
   return Router;
 });

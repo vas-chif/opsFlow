@@ -41,10 +41,7 @@ mutation SeedIndependentTables @transaction {
   )
 
   actor_insertMany(
-    data: [
-      { id: "a-1", name: "Leonardo DiCaprio" }
-      { id: "a-2", name: "Keanu Reeves" }
-    ]
+    data: [{ id: "a-1", name: "Leonardo DiCaprio" }, { id: "a-2", name: "Keanu Reeves" }]
   )
 
   # Step 2: Seed join table (depends on pre-existing parent IDs)
@@ -155,9 +152,9 @@ const bulkMoviesData = [
       {
         rating: 5,
         reviewText: "Incredible concept.",
-        user: { id: "user-123" }
-      }
-    ]
+        user: { id: "user-123" },
+      },
+    ],
   },
   {
     id: "m-2",
@@ -167,10 +164,10 @@ const bulkMoviesData = [
       {
         rating: 5,
         reviewText: "A classic.",
-        user: { id: "user-456" }
-      }
-    ]
-  }
+        user: { id: "user-456" },
+      },
+    ],
+  },
 ];
 
 // Atomically load thousands of records (parent and child tables combined)

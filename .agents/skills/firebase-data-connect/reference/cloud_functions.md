@@ -36,14 +36,14 @@ import { logger } from "firebase-functions";
 
 export const logMutation = onMutationExecuted(
   {
-    region: "europe-west1" // Must match the SQL Connect service location
+    region: "europe-west1", // Must match the SQL Connect service location
   },
-  event => {
+  (event) => {
     logger.info("A mutation was executed!", {
       eventId: event.id,
-      type: event.type
+      type: event.type,
     });
-  }
+  },
 );
 ```
 
@@ -71,24 +71,24 @@ import { logger } from "firebase-functions";
 export const onUserCreate = onMutationExecuted(
   {
     service: "myAppService",
-    operation: "CreateUser"
+    operation: "CreateUser",
     // region: "us-central1" // Optional: defaults to us-central1, change if database is elsewhere
   },
-  event => {
+  (event) => {
     logger.info("A new user was created!");
-  }
+  },
 );
 
 // Advanced: Trigger using wildcards or capture variables
 export const onMutationCaptures = onMutationExecuted(
   {
     service: "myAppService",
-    operation: "{operation}" // Captures matching operation name dynamically
+    operation: "{operation}", // Captures matching operation name dynamically
   },
-  event => {
+  (event) => {
     const triggeredOp = event.params.operation;
     logger.info(`Captured operation execution: ${triggeredOp}`);
-  }
+  },
 );
 ```
 
@@ -114,13 +114,13 @@ Extract security credentials about the caller who executed the mutation using
 ```typescript
 export const processSensitiveMutation = onMutationExecuted(
   { operation: "UpdateFinancials" },
-  event => {
+  (event) => {
     if (event.authType === "admin") {
       console.log("Elevated admin mutation execution.");
     } else {
       console.log(`Mutation initiated by user: ${event.authId}`);
     }
-  }
+  },
 );
 ```
 
@@ -169,9 +169,9 @@ export const onNewReview = onMutationExecuted(
   {
     service: "myAppService",
     connector: "reviews",
-    operation: "CreateReview"
+    operation: "CreateReview",
   },
-  event => {
+  (event) => {
     // Extract input variables passed to the mutation
     const inputVariables = event.data.payload.variables;
 
@@ -179,8 +179,8 @@ export const onNewReview = onMutationExecuted(
     const returnedFields = event.data.payload.data;
 
     logger.info(
-      `Processed review ${returnedFields.review_insert.id} for movie ${inputVariables.movieId}`
+      `Processed review ${returnedFields.review_insert.id} for movie ${inputVariables.movieId}`,
     );
-  }
+  },
 );
 ```

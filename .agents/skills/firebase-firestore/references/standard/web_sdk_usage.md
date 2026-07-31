@@ -33,7 +33,7 @@ import { doc, setDoc } from "firebase/firestore";
 await setDoc(doc(db, "cities", "LA"), {
   name: "Los Angeles",
   state: "CA",
-  country: "USA"
+  country: "USA",
 });
 
 // To merge with existing data instead of overwriting:
@@ -49,7 +49,7 @@ import { collection, addDoc } from "firebase/firestore";
 
 const docRef = await addDoc(collection(db, "cities"), {
   name: "Tokyo",
-  country: "Japan"
+  country: "Japan",
 });
 console.log("Document written with ID: ", docRef.id);
 ```
@@ -65,7 +65,7 @@ import { doc, updateDoc } from "firebase/firestore";
 const laRef = doc(db, "cities", "LA");
 
 await updateDoc(laRef, {
-  capital: true
+  capital: true,
 });
 ```
 
@@ -79,7 +79,7 @@ import { runTransaction, doc } from "firebase/firestore";
 const sfDocRef = doc(db, "cities", "SF");
 
 try {
-  await runTransaction(db, async transaction => {
+  await runTransaction(db, async (transaction) => {
     const sfDoc = await transaction.get(sfDocRef);
     if (!sfDoc.exists()) {
       throw "Document does not exist!";
@@ -119,7 +119,7 @@ Fetches all documents in a query or collection once.
 import { collection, getDocs } from "firebase/firestore";
 
 const querySnapshot = await getDocs(collection(db, "cities"));
-querySnapshot.forEach(doc => {
+querySnapshot.forEach((doc) => {
   // doc.data() is never undefined for query doc snapshots
   console.log(doc.id, " => ", doc.data());
 });
@@ -132,7 +132,7 @@ querySnapshot.forEach(doc => {
 ```javascript
 import { doc, onSnapshot } from "firebase/firestore";
 
-const unsub = onSnapshot(doc(db, "cities", "SF"), doc => {
+const unsub = onSnapshot(doc(db, "cities", "SF"), (doc) => {
   console.log("Current data: ", doc.data());
 });
 
@@ -146,8 +146,8 @@ const unsub = onSnapshot(doc(db, "cities", "SF"), doc => {
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 
 const q = query(collection(db, "cities"), where("state", "==", "CA"));
-const unsubscribe = onSnapshot(q, snapshot => {
-  snapshot.docChanges().forEach(change => {
+const unsubscribe = onSnapshot(q, (snapshot) => {
+  snapshot.docChanges().forEach((change) => {
     if (change.type === "added") {
       console.log("New city: ", change.doc.data());
     }
@@ -177,11 +177,7 @@ const q1 = query(citiesRef, where("state", "==", "CA"));
 
 // Compound (AND)
 // Note: Requires an index if filtering on different fields
-const q2 = query(
-  citiesRef,
-  where("state", "==", "CA"),
-  where("population", ">", 1000000)
-);
+const q2 = query(citiesRef, where("state", "==", "CA"), where("population", ">", 1000000));
 ```
 
 ### Order and Limit

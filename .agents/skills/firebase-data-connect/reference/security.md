@@ -140,9 +140,7 @@ query @redact { ... }  # Query result hidden but @check still runs
 Check database permissions before allowing mutation:
 
 ```graphql
-mutation UpdateMovie($id: UUID!, $title: String!)
-@auth(level: USER)
-@transaction {
+mutation UpdateMovie($id: UUID!, $title: String!) @auth(level: USER) @transaction {
   # Step 1: Check user has permission
   query @redact {
     moviePermission(key: { movieId: $id, userId_expr: "auth.uid" })
@@ -193,9 +191,7 @@ mutation UpdatePost($id: UUID!, $content: String!) @auth(level: USER) {
 
 # Delete own data only
 mutation DeletePost($id: UUID!) @auth(level: USER) {
-  post_delete(
-    first: { where: { id: { eq: $id }, authorUid: { eq_expr: "auth.uid" } } }
-  )
+  post_delete(first: { where: { id: { eq: $id }, authorUid: { eq_expr: "auth.uid" } } })
 }
 ```
 
@@ -226,12 +222,7 @@ mutation AdminAction($id: UUID!) @auth(level: USER) @transaction {
 
 ```graphql
 query PublicPosts @auth(level: PUBLIC) {
-  posts(
-    where: {
-      visibility: { eq: "public" }
-      publishedAt: { lt_expr: "request.time" }
-    }
-  ) {
+  posts(where: { visibility: { eq: "public" }, publishedAt: { lt_expr: "request.time" } }) {
     id
     title
     content

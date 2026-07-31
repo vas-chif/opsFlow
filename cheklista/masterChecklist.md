@@ -37,43 +37,55 @@ STEP 2: Architettura Multi-Tenant & Sicurezza
 
 2.3 UI Protection
 
-[ ] Creazione di TenantGuard (Middleware per il routing protetto).
+[X] Creazione di TenantGuard (Middleware per il routing protetto).
 
 [X] State Management (Pinia taskStore configurato e tipizzato).
 
-STEP 3: Design System & Branding
+STEP 3: Design System "Matita & Leggerezza" (Elite)
 3.1 Definizione Identity
 
-[X] Setup Palette Colori (Variabili SCSS centralizzate in Quasar).
+[X] Design System "Hand-drawn/Light": Palette definita (Royal Navy, Gold, Sand) applicata con linee sottili, bordi a mano libera (sketchy borders), ombre soffuse (non nette).
 
-[X] Definizione Tipografia (Font system per leggibilità in ICU/aree critiche).
+[X] Tipografia: Playfair Display (titoli) e Mulish (testo) con pesi leggeri.
 
-[X] Setup Component Library (Base components: BaseButton, BaseInput, StatusBadge).
+[X] Component Library: BaseButton e BaseInput in stile minimale/matita.
 
 3.2 Responsive & Accessibility
 
-[ ] Implementazione Dark Mode Toggle (Global state).
+[X] Implementazione Dark Mode Toggle (che simula il contrasto carta/grafite).
 
-[ ] Ottimizzazione Mobile-First (Testing su viewports stretti).
+[X] Ottimizzazione Mobile-First (Testing viewports stretti).
 
-[ ] Verifica Accessibilità WCAG 2.1 AA.
+[X] Verifica Accessibilità WCAG 2.1 AA.
 
 3.3 Componenti Operativi
 
-[ ] Dashboard Card System (Componenti riutilizzabili per Task/Lead).
+[X] Dashboard Card System (Design "foglio di carta" fluttuante).
 
-[ ] Layout Reattivo (MainLayout con navigazione adattiva).
+[X] Layout Reattivo (MainLayout con navigazione adattiva).
 
 STEP 4: Integrazione IA (Orchestrazione Agentica)
 4.1 Prototipo Chat (Gemini)
 
-[ ] Inizializzazione Firebase Genkit / Estensione Gemini.
+[X] Inizializzazione Firebase Genkit / Estensione Gemini.
 
 4.2 Workflow Operativo (RAG)
 
-[ ] Setup Agenti (Planner, Ispettore, Archivista) via agents.md.
+[X] Setup Agenti (Planner, Ispettore, Archivista) via AGENTS.md §14.
 
-[ ] Middleware di anonimizzazione PII per le chiamate a Gemini.
+[X] Middleware di anonimizzazione PII per le chiamate a Gemini.
+
+STEP 5: Agentic Workspace & Automation Hub (0% IN CORSO)
+5.1 UI Bridge & Reattività IA
+[ ] Modale "+ New Task" guidata da Prompt Operativo.
+[ ] SubTask Inspector Component (Complexity Score & Checklist sotto-task).
+[ ] Chat Live Genkit Streaming nel Right Drawer.
+
+5.2 Integration Suite (Google Workspace & Web Search)
+[ ] Tool Gmail Drafts (createGmailDraftTool - Human in the Loop, NO invio diretto).
+[ ] Tool Google Sheets & Drive (manageGoogleSheetTool).
+[ ] Tool Web Search & Lead Sourcing (searchWebAndPlatformsTool).
+[ ] Tool Content & Marketing Automation Engine (contentMarketingTool).
 Copia e incolla questo prompt nella tua AI (o nel terminale di Cursor/Anti-Gravity) per inizializzare il contesto del sistema.
 
 Markdown
@@ -101,3 +113,15 @@ Analizza i file di resume forniti e genera il file `agents.md` che contenga:
 3. SYSTEM PROMPT AGENTI: Definisci il comportamento dell'AgenteRicerca: deve essere sintetico, orientato al ROI, focalizzato sul match di skill.
 
 GENERAZIONE: Crea il file seguendo questa struttura rigorosa e commentata.
+
+---
+
+## 📌 STEP 5: Agentic Workspace & Automation Hub (COMPLETED ✅)
+
+- [x] **Prompt-Driven `+ New Task` Modal**: Dialog con Titolo, Obiettivo / Prompt Operativo per IA e Categoria (`general`, `marketing`, `research`, `admin`, `dev`).
+- [x] **AI SubTask Inspector Component**: Visualizzatore del Complexity Score (1-10 progress bar), checklist interattiva sotto-task e card esito audit AgenteIspettore.
+- [x] **Right Drawer Genkit Live Chat**: Streaming chat tra utente ed agenti IA con badge visivi per ciascun Tool attivato.
+- [x] **Google Workspace Suite (`createGmailDraftTool` & `manageGoogleSheetTool`)**: Generazione bozze email su Gmail (NO invio diretto automatizzato) e gestione tabelle Google Sheets.
+- [x] **Web Search & Lead Generation Tools (`searchWebAndPlatformsTool` & `leadSynthesisTool`)**: Ricerca web in tempo reale e profilazione lead/trainer.
+- [x] **Content Marketing Engine (`contentMarketingTool`)**: Piani editoriali, post LinkedIn e cold outreach scripts.
+- [x] **AGENTS.md §14 Update & Zero-Error Pipeline**: `yarn typecheck` (PASSED 0ms), `yarn lint` (PASSED 0 errors, 0 warnings), Firebase Cloud Functions deployed.

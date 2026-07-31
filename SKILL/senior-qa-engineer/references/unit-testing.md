@@ -18,12 +18,12 @@ vi.mock("firebase/firestore", () => ({
   getFirestore: vi.fn(),
   doc: vi.fn(),
   getDoc: vi.fn(),
-  setDoc: vi.fn()
+  setDoc: vi.fn(),
 }));
 
 // Mock logger custom (mai usare console.log diretto)
 vi.mock("src/utils/logger", () => ({
-  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() }
+  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
 }));
 ```
 

@@ -59,11 +59,7 @@ import { connectorConfig, getSongs } from "@dataconnect/admin-generated";
 const adminApp = initializeApp();
 const adminDc = getDataConnect(connectorConfig);
 
-const songs = await getSongs(
-  adminDc,
-  { limit: 4 },
-  { impersonate: { unauthenticated: true } }
-);
+const songs = await getSongs(adminDc, { limit: 4 }, { impersonate: { unauthenticated: true } });
 ```
 
 #### 2. Impersonating a Specific User (Cloud Functions)
@@ -75,14 +71,14 @@ verified.
 import { HttpsError, onCall } from "firebase-functions/https";
 import { getMyFavoriteSongs } from "@dataconnect/admin-generated";
 
-export const callableExample = onCall(async req => {
+export const callableExample = onCall(async (req) => {
   const authClaims = req.auth?.token;
   if (!authClaims) {
     throw new HttpsError("unauthenticated", "Unauthorized");
   }
 
   const favoriteSongs = await getMyFavoriteSongs(adminDc, undefined, {
-    impersonate: { authClaims }
+    impersonate: { authClaims },
   });
 
   return favoriteSongs;
@@ -115,7 +111,7 @@ export const httpExample = onRequest(async (req, res) => {
   }
 
   const favoriteSongs = await getMyFavoriteSongs(adminDc, undefined, {
-    impersonate: { authClaims }
+    impersonate: { authClaims },
   });
 
   res.send(favoriteSongs);
@@ -132,6 +128,6 @@ import { upsertSong } from "@dataconnect/admin-generated";
 
 await upsertSong(adminDc, {
   title: "New Song",
-  genre: "Rock"
+  genre: "Rock",
 });
 ```

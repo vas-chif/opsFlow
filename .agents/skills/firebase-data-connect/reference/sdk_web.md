@@ -30,10 +30,7 @@ firebase init dataconnect:sdk
 ### Initialization
 
 ```typescript
-import {
-  connectDataConnectEmulator,
-  getDataConnect
-} from "firebase/data-connect";
+import { connectDataConnectEmulator, getDataConnect } from "firebase/data-connect";
 import { connectorConfig } from "@dataconnect/generated";
 
 const dataConnect = getDataConnect(connectorConfig);
@@ -59,7 +56,7 @@ console.log(data.movies);
 ```typescript
 import { listMovies } from "@dataconnect/generated";
 
-listMovies().then(data => showInUI(data));
+listMovies().then((data) => showInUI(data));
 ```
 
 ### Resilient Enum Handling
@@ -119,7 +116,7 @@ import { getMovieByIdRef } from "@dataconnect/generated";
 
 const queryRef = getMovieByIdRef({ id: "<MOVIE_ID>" });
 
-const unsubscribe = subscribe(queryRef, result => {
+const unsubscribe = subscribe(queryRef, (result) => {
   console.log("Updated result:", result);
 });
 ```

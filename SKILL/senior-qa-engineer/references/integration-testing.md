@@ -51,9 +51,7 @@ describe("Invoice + Inventory WriteBatch", () => {
     vi.spyOn(batch, "commit").mockRejectedValueOnce(new Error("Network error"));
 
     const store = useInvoiceStore();
-    await expect(
-      store.createInvoice({ productId: "PROD-001", qty: 1 })
-    ).rejects.toThrow();
+    await expect(store.createInvoice({ productId: "PROD-001", qty: 1 })).rejects.toThrow();
 
     // Verificare che l'inventario NON sia stato decrementato
     const stock = await getStockLevel("PROD-001");
@@ -72,7 +70,7 @@ describe("Cache Sync Strategy", () => {
     // Seed cache con timestamp recente
     localStorage.setItem(
       `opsflow_user_${userId}_patients`,
-      JSON.stringify({ data: mockPatients, timestamp: Date.now() })
+      JSON.stringify({ data: mockPatients, timestamp: Date.now() }),
     );
 
     const store = usePatientStore();
@@ -86,7 +84,7 @@ describe("Cache Sync Strategy", () => {
     const expiredTimestamp = Date.now() - 31 * 24 * 60 * 60 * 1000; // 31 giorni fa
     localStorage.setItem(
       `opsflow_user_${userId}_patients`,
-      JSON.stringify({ data: mockPatients, timestamp: expiredTimestamp })
+      JSON.stringify({ data: mockPatients, timestamp: expiredTimestamp }),
     );
 
     const store = usePatientStore();

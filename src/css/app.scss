@@ -1,13 +1,15 @@
 /**
  * @file app.scss
- * @description Global styles and typography for Design System Elite
+ * @description Global styles and typography for Design System "Matita/Leggero"
  * @author Vasile Chifeac
  * @created 2026-07-16
+ * @modified 2026-07-16
  *
  * @notes
  * - Playfair Display for headings (elegant, distinctive)
  * - Mulish for body text (readable, clean)
- * - Elite design system implementation
+ * - "Matita/Leggero" utilities: paper canvas, pencil-gold borders, graphite dark mode
+ * - Soft hover transitions and generous whitespace to reduce visual noise
  *
  * @dependencies
  * - Google Fonts (Playfair Display, Mulish)
@@ -71,12 +73,41 @@ h6 {
   border-radius: 8px;
 }
 
+.rounded-paper {
+  border-radius: 16px;
+}
+
 .shadow-elite {
   box-shadow: 0 4px 20px rgba(10, 35, 66, 0.08);
 }
 
+// Pencil sketch border: thin gold line + very soft depth
+.sketch-border {
+  border: 1px solid $pencil-gold;
+  box-shadow: 0 2px 12px rgba(197, 160, 101, 0.12);
+}
+
+// Card depth: soft hover lift with shadow increase
+.card-depth {
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(10, 35, 66, 0.12);
+  }
+}
+
 .transition-smooth {
   transition: all 0.3s ease;
+}
+
+// Generous whitespace for reduced visual noise
+.content-leggero {
+  padding: 32px;
+  @media (max-width: 599px) {
+    padding: 20px;
+  }
 }
 
 /*end app.scss*/

@@ -1,14 +1,16 @@
 /**
  * @file quasar.variables.scss
- * @description Design System Elite color palette configuration
+ * @description Design System "Matita/Leggero" — warm paper/graphite palette, WCAG 2.1 AA contrasts
  * @author Vasile Chifeac
  * @created 2026-07-16
+ * @modified 2026-07-16
  *
  * @notes
- * - Royal Navy (#0a2342) as primary brand color
- * - Gold (#c5a065) for secondary actions
- * - Sand (#d4a373) for accents and highlights
- * - Off-White (#f9f7f2) for backgrounds
+ * - Pencil-inspired, soft UI: paper backgrounds, gold accents, graphite dark mode
+ * - Light mode uses warm off-white paper (#f9f7f2)
+ * - Dark mode uses deep graphite (#1a1a1a) instead of pure black
+ * - Text on dark mode uses soft graphite (#e0e0e0), not pure white
+ * - Centralized variables so all components inherit the same feel
  *
  * @dependencies
  * - Quasar SCSS variables system
@@ -22,19 +24,30 @@
 // To customize the look and feel of this app, you can override
 // the Sass/SCSS variables found in Quasar's source Sass/SCSS files.
 
-// Design System Elite - Color Palette
-$primary: #0a2342; // Royal Navy - primary brand color
-$secondary: #c5a065; // Gold - secondary actions
-$accent: #d4a373; // Sand - accents and highlights
+// ── Design System "Matita/Leggero" ─────────────────────────────────────────────
+$primary: #0a2342; // Royal Navy - primary brand color (kept)
+$secondary: #c5a065; // Gold - secondary actions (kept)
+$accent: #d4a373; // Sand - accents and highlights (kept)
 
-$dark: #1b1b1b; // Dark mode background
-$dark-page: #121212;
+// Paper / Pencil palette
+$paper: #f9f7f2; // Warm off-white — main canvas feel
+$pencil-gold: #c5a065; // Soft gold border/accent (same as secondary)
 
-// Semantic colors (kept for compatibility)
+// Graphite dark mode (NOT pure black)
+$graphite: #1a1a1a; // Dark mode surface
+$graphite-light: #252525; // Dark mode elevated surface
+$graphite-soft: #2a2a2a; // Dark mode border/elevation
+$text-graphite: #e0e0e0; // Soft light text on dark
+
+// Dark mode backgrounds (Quasar)
+$dark: $graphite; // Main dark background
+$dark-page: $graphite; // Dark page background
+
+// Semantic colors (WCAG-safe contrast retained)
 $positive: #21ba45;
 $negative: #c10015;
 $info: #31ccec;
 $warning: #f2c037;
 
-// Background color for app
-$background: #f9f7f2; // Off-White - main background
+// Background color for app (light mode paper)
+$background: $paper; // Warm off-white canvas

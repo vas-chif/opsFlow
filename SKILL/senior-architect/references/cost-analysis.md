@@ -67,8 +67,8 @@ localStorage.setItem(
   JSON.stringify({
     data: data.data(),
     timestamp: Date.now(),
-    userId
-  })
+    userId,
+  }),
 );
 ```
 
@@ -95,10 +95,7 @@ if (userDoc.data()?.role === "admin") {
 // 1. Scrivi Firestore (persistenza cloud garantita)
 await setDoc(doc(db, "collection", id), data);
 // 2. Solo dopo → aggiorna cache locale
-localStorage.setItem(
-  cacheKey,
-  JSON.stringify({ data, timestamp: Date.now(), userId })
-);
+localStorage.setItem(cacheKey, JSON.stringify({ data, timestamp: Date.now(), userId }));
 
 // ❌ ORDINE SBAGLIATO (rischio perdita dati se Firestore fallisce)
 localStorage.setItem(cacheKey, JSON.stringify(data));
@@ -188,7 +185,7 @@ Con 1.000 utenti:
 
 ```typescript
 // ❌ Pattern 1: onSnapshot continuo (€86+/mese)
-onSnapshot(collection(db, "userProfiles"), snap => {
+onSnapshot(collection(db, "userProfiles"), (snap) => {
   // si aggiorna ogni modifica → migliaia di reads!
 });
 
@@ -197,16 +194,16 @@ setInterval(
   async () => {
     await syncProfile(); // 1 read ogni 30min = 1440/mese
   },
-  30 * 60 * 1000
+  30 * 60 * 1000,
 );
 
 // ❌ Pattern 3: Firestore per ogni permission check
-router.beforeEach(async to => {
+router.beforeEach(async (to) => {
   const doc = await getDoc(doc(db, "userProfiles", uid)); // 1 read per OGNI navigazione!
 });
 
 // ✅ Tutti e tre si risolvono con JWT claims (0 reads)
-router.beforeEach(async to => {
+router.beforeEach(async (to) => {
   const token = await getIdToken(auth.currentUser!);
   const claims = token.claims; // Da JWT, GRATIS
   if (!claims.isActive) router.push("/auth");

@@ -45,15 +45,10 @@ mutation CreateItem($name: String!, $description: String) @auth(level: USER) {
   item_insert(data: { name: $name, description: $description })
 }
 
-mutation UpdateItem($id: UUID!, $name: String, $description: String)
-@auth(level: USER) {
+mutation UpdateItem($id: UUID!, $name: String, $description: String) @auth(level: USER) {
   item_update(
     id: $id
-    data: {
-      name: $name
-      description: $description
-      updatedAt_expr: "request.time"
-    }
+    data: { name: $name, description: $description, updatedAt_expr: "request.time" }
   )
 }
 
@@ -86,10 +81,7 @@ type Note @table {
 ```graphql
 # queries.gql
 query MyNotes @auth(level: USER) {
-  notes(
-    where: { owner: { uid: { eq_expr: "auth.uid" } } }
-    orderBy: [{ createdAt: DESC }]
-  ) {
+  notes(where: { owner: { uid: { eq_expr: "auth.uid" } } }, orderBy: [{ createdAt: DESC }]) {
     id
     title
     content
@@ -98,11 +90,7 @@ query MyNotes @auth(level: USER) {
 }
 
 query GetMyNote($id: UUID!) @auth(level: USER) {
-  note(
-    first: {
-      where: { id: { eq: $id }, owner: { uid: { eq_expr: "auth.uid" } } }
-    }
-  ) {
+  note(first: { where: { id: { eq: $id }, owner: { uid: { eq_expr: "auth.uid" } } } }) {
     id
     title
     content
@@ -113,27 +101,18 @@ query GetMyNote($id: UUID!) @auth(level: USER) {
 ```graphql
 # mutations.gql
 mutation CreateNote($title: String!, $content: String) @auth(level: USER) {
-  note_insert(
-    data: { owner: { uid_expr: "auth.uid" }, title: $title, content: $content }
-  )
+  note_insert(data: { owner: { uid_expr: "auth.uid" }, title: $title, content: $content })
 }
 
-mutation UpdateNote($id: UUID!, $title: String, $content: String)
-@auth(level: USER) {
+mutation UpdateNote($id: UUID!, $title: String, $content: String) @auth(level: USER) {
   note_update(
-    first: {
-      where: { id: { eq: $id }, owner: { uid: { eq_expr: "auth.uid" } } }
-    }
+    first: { where: { id: { eq: $id }, owner: { uid: { eq_expr: "auth.uid" } } } }
     data: { title: $title, content: $content }
   )
 }
 
 mutation DeleteNote($id: UUID!) @auth(level: USER) {
-  note_delete(
-    first: {
-      where: { id: { eq: $id }, owner: { uid: { eq_expr: "auth.uid" } } }
-    }
-  )
+  note_delete(first: { where: { id: { eq: $id }, owner: { uid: { eq_expr: "auth.uid" } } } })
 }
 ```
 
@@ -163,9 +142,7 @@ type ArticleTag @table(key: ["article", "tag"]) {
 ```graphql
 # queries.gql
 query ArticlesByTag($tagName: String!) @auth(level: PUBLIC) {
-  articles(
-    where: { articleTags_on_article: { tag: { name: { eq: $tagName } } } }
-  ) {
+  articles(where: { articleTags_on_article: { tag: { name: { eq: $tagName } } } }) {
     id
     title
     tags: tags_via_ArticleTag {
@@ -193,8 +170,7 @@ mutation AddTagToArticle($articleId: UUID!, $tagId: UUID!) @auth(level: USER) {
   articleTag_insert(data: { article: { id: $articleId }, tag: { id: $tagId } })
 }
 
-mutation RemoveTagFromArticle($articleId: UUID!, $tagId: UUID!)
-@auth(level: USER) {
+mutation RemoveTagFromArticle($articleId: UUID!, $tagId: UUID!) @auth(level: USER) {
   articleTag_delete(key: { articleId: $articleId, tagId: $tagId })
 }
 ```
@@ -267,16 +243,13 @@ npx -y firebase-tools@latest deploy --only dataconnect
 // lib/firebase.ts
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import {
-  getDataConnect,
-  connectDataConnectEmulator
-} from "firebase/data-connect";
+import { getDataConnect, connectDataConnectEmulator } from "firebase/data-connect";
 import { connectorConfig } from "@myapp/dataconnect";
 
 const firebaseConfig = {
   apiKey: "...",
   authDomain: "...",
-  projectId: "..."
+  projectId: "...",
 };
 
 export const app = initializeApp(firebaseConfig);
@@ -343,11 +316,11 @@ import { liveDashboardRef } from "@myapp/dataconnect";
 import { subscribe } from "firebase/data-connect";
 
 const unsubscribe = subscribe(liveDashboardRef(), {
-  onNext: result => {
+  onNext: (result) => {
     // Called immediately with current data, then on each refresh
     renderDashboard(result.data.items);
   },
-  onError: error => console.error("Subscription error:", error)
+  onError: (error) => console.error("Subscription error:", error),
 });
 
 // Cleanup when done

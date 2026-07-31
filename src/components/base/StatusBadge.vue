@@ -1,8 +1,7 @@
-/** * @file StatusBadge.vue * @description Task status badge component with
-Elite themed colors * @author Vasile Chifeac * @created 2026-07-16 * * @notes *
-- Displays task status: pending, completed, in-progress * - Uses Elite color
-palette * - Pill shape with uppercase text * * @dependencies * - Quasar UI
-components * * @performance * - Minimal rendering cost */
+/** * @file StatusBadge.vue * @description Task status badge component with Elite themed colors *
+@author Vasile Chifeac * @created 2026-07-16 * * @notes * - Displays task status: pending,
+completed, in-progress * - Uses Elite color palette * - Pill shape with uppercase text * *
+@dependencies * - Quasar UI components * * @performance * - Minimal rendering cost */
 
 <script setup lang="ts">
 // ── Vue & Framework ──────────────────────────────────────────────────────────
@@ -21,25 +20,22 @@ const props = defineProps<Props>();
 
 // ── Computed Properties ───────────────────────────────────────────────────────
 const statusConfig = computed(() => {
-  const configs: Record<
-    TaskStatus,
-    { label: string; color: string; textColor: string }
-  > = {
+  const configs: Record<TaskStatus, { label: string; color: string; textColor: string }> = {
     pending: {
       label: "Pending",
       color: "#c5a065", // Gold
-      textColor: "#ffffff"
+      textColor: "#ffffff",
     },
     completed: {
       label: "Completed",
       color: "#21ba45", // Positive (green)
-      textColor: "#ffffff"
+      textColor: "#ffffff",
     },
     "in-progress": {
       label: "In Progress",
       color: "#0a2342", // Royal Navy
-      textColor: "#ffffff"
-    }
+      textColor: "#ffffff",
+    },
   };
   return configs[props.status];
 });
@@ -52,7 +48,7 @@ const badgeStyle = computed(() => ({
   fontSize: props.dense ? "10px" : "12px",
   fontWeight: 600,
   textTransform: "uppercase",
-  letterSpacing: "0.05em"
+  letterSpacing: "0.05em",
 }));
 
 /*end StatusBadge.vue*/

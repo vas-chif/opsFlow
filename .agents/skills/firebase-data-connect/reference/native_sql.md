@@ -69,10 +69,7 @@ Use these root fields in `query` or `mutation` operations:
 - `_select`: Executes a SQL query returning zero or more rows. Returns `[Any]`.
   ```graphql
   query GetMovies($genre: String!) @auth(level: PUBLIC) {
-    movies: _select(
-      sql: "SELECT id, title FROM movie WHERE genre = $1"
-      params: [$genre]
-    )
+    movies: _select(sql: "SELECT id, title FROM movie WHERE genre = $1", params: [$genre])
   }
   ```
 - `_selectFirst`: Executes a SQL query expected to return zero or one row.
@@ -92,10 +89,7 @@ Use these root fields in `query` or `mutation` operations:
     (e.g., `WITH new_row AS (INSERT...)`).
   ```graphql
   mutation UpdateRating($id: UUID!, $rating: Float!) @auth(level: USER) {
-    _execute(
-      sql: "UPDATE movie SET rating = $2 WHERE id = $1"
-      params: [$id, $rating]
-    )
+    _execute(sql: "UPDATE movie SET rating = $2 WHERE id = $1", params: [$id, $rating])
   }
   ```
 - `_executeReturning`: Executes DML with a `RETURNING` clause. Returns `[Any]`.

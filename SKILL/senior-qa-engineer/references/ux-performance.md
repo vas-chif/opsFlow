@@ -87,20 +87,8 @@ $background: #f9f7f2; // Off-White
 
 ```html
 <!-- Verificare in index.html: preload obbligatorio -->
-<link
-  rel="preload"
-  href="/fonts/PlayfairDisplay.woff2"
-  as="font"
-  type="font/woff2"
-  crossorigin
-/>
-<link
-  rel="preload"
-  href="/fonts/Mulish.woff2"
-  as="font"
-  type="font/woff2"
-  crossorigin
-/>
+<link rel="preload" href="/fonts/PlayfairDisplay.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="preload" href="/fonts/Mulish.woff2" as="font" type="font/woff2" crossorigin />
 ```
 
 ### Viewport Testing Checklist
@@ -137,24 +125,14 @@ npx @axe-core/cli http://localhost:4173 --exit
 ```html
 <!-- ✅ Form accessibile -->
 <label for="patient-name">Nome paziente</label>
-<input
-  id="patient-name"
-  type="text"
-  aria-required="true"
-  aria-describedby="name-hint"
-/>
+<input id="patient-name" type="text" aria-required="true" aria-describedby="name-hint" />
 <span id="name-hint" class="sr-only">Inserire nome e cognome completi</span>
 
 <!-- ✅ Feedback dinamico accessibile -->
 <div role="alert" aria-live="polite">{{ errorMessage }}</div>
 
 <!-- ✅ Immagini con alt significativo -->
-<img
-  src="/logo.png"
-  alt="OPSFlow — Sistema gestione clinica"
-  width="120"
-  height="40"
-/>
+<img src="/logo.png" alt="OPSFlow — Sistema gestione clinica" width="120" height="40" />
 ```
 
 ---

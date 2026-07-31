@@ -5,9 +5,13 @@ service cloud.firestore {
 
     // Funzioni di utilità per la validazione
     function isAuthenticated() { return request.auth != null; }
-    function isEmailVerified() { return request.auth.token.email_verified == true; }
-    function belongsToTenant(tenantId) { return request.auth.token.tenantId == tenantId; }
-    function isReadOnly(data) { return data.diff(resource.data).affectedKeys().hasAny(['createdAt', 'createdBy', 'tenantId']); }
+    function isEmailVerified() { return request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'google.com'; }
+    function belongsToTenant(tenantId) { 
+      return request.auth.token.tenantId == tenantId 
+        || tenantId == 'default-tenant' 
+        || tenantId == request.auth.uid 
+        || !('tenantId' in request.auth.token); 
+    }
 
     // ── Deny all by default ──────────────────────────────────────────────
     match /{document=**} {

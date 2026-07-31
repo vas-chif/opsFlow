@@ -65,16 +65,12 @@ store embeddings on creation.
 
 ```graphql
 # connector/mutations.gql
-mutation CreateMovieWithEmbedding($title: String!, $description: String!)
-@auth(level: USER) {
+mutation CreateMovieWithEmbedding($title: String!, $description: String!) @auth(level: USER) {
   movie_insert(
     data: {
       title: $title
       description: $description
-      descriptionEmbedding_embed: {
-        model: "textembedding-gecko@003"
-        text: $description
-      }
+      descriptionEmbedding_embed: { model: "textembedding-gecko@003", text: $description }
     }
   )
 }
@@ -84,16 +80,12 @@ mutation CreateMovieWithEmbedding($title: String!, $description: String!)
 
 ```graphql
 # connector/mutations.gql
-mutation UpdateMovieDescription($id: UUID!, $description: String!)
-@auth(level: USER) {
+mutation UpdateMovieDescription($id: UUID!, $description: String!) @auth(level: USER) {
   movie_update(
     id: $id
     data: {
       description: $description
-      descriptionEmbedding_embed: {
-        model: "textembedding-gecko@003"
-        text: $description
-      }
+      descriptionEmbedding_embed: { model: "textembedding-gecko@003", text: $description }
     }
   )
 }
@@ -130,13 +122,8 @@ directly to the search without calling Vertex AI.
 
 ```graphql
 # connector/queries.gql
-query SearchMoviesByCustomVector($vector: Vector!, $limit: Int!)
-@auth(level: PUBLIC) {
-  movies_descriptionEmbedding_similarity(
-    compare: $vector
-    method: L2
-    limit: $limit
-  ) {
+query SearchMoviesByCustomVector($vector: Vector!, $limit: Int!) @auth(level: PUBLIC) {
+  movies_descriptionEmbedding_similarity(compare: $vector, method: L2, limit: $limit) {
     id
     title
   }
@@ -255,8 +242,7 @@ Results default to sorting by descending relevance rank. Select
 
 ```graphql
 # connector/queries.gql
-query SearchMoviesHighRelevance($query: String!, $threshold: Float!)
-@auth(level: PUBLIC) {
+query SearchMoviesHighRelevance($query: String!, $threshold: Float!) @auth(level: PUBLIC) {
   movies_search(
     query: $query
     relevanceThreshold: $threshold # E.g., 0.05
