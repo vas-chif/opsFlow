@@ -12,18 +12,21 @@
 
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
-import type { Task, TaskChatMessage } from "../types/models";
+import type { Task, TaskChatMessage, ApprovalRecord } from "../types/models";
 
 export interface ChatSession {
   taskId: string;
   workspaceId: string;
   task: Task | null;
   messages: TaskChatMessage[];
+  approvals: ApprovalRecord[];
   isLoading: boolean;
   isAgentTyping: boolean;
   inputDraft: string;
   error: string | null;
+  oauthError: import("../types/models").OAuthError | null;
   _unsubscribeMessages?: () => void;
+  _unsubscribeApprovals?: () => void;
 }
 
 export interface FloatingWindow {
@@ -99,10 +102,12 @@ export const useTaskChatStore = defineStore("taskChat", () => {
       workspaceId,
       task: null,
       messages: savedMessages,
+      approvals: [],
       isLoading: false,
       isAgentTyping: false,
       inputDraft: "",
       error: null,
+      oauthError: null,
     };
     sessions.value.set(taskId, newSession);
     return newSession;
@@ -116,6 +121,7 @@ export const useTaskChatStore = defineStore("taskChat", () => {
     const s = sessions.value.get(taskId);
     if (s) {
       s._unsubscribeMessages?.();
+      s._unsubscribeApprovals?.();
       sessions.value.delete(taskId);
     }
     if (primarySessionId.value === taskId) {
@@ -234,6 +240,59 @@ export const useTaskChatStore = defineStore("taskChat", () => {
     }
   } /*end toggleMinimizeWindow*/
 
+  /**
+   * Appends or updates an ApprovalRecord in the session.
+   * Called by the Firestore onSnapshot listener for /approvals/.
+   * @param {string} taskId - Target task ID
+   * @param {ApprovalRecord} approval - Approval record from Firestore
+   */
+  function appendApproval(taskId: string, approval: ApprovalRecord): void {
+    const s = sessions.value.get(taskId);
+    if (!s) return;
+    const idx = s.approvals.findIndex((a) => a.id === approval.id);
+    if (idx >= 0) {
+      s.approvals.splice(idx, 1, approval);
+    } else {
+      s.approvals.push(approval);
+    }
+  } /*end appendApproval*/
+
+  /**
+   * Marks an approval as approved or rejected in the local session store.
+   * Called optimistically when the user clicks Approve/Reject before backend confirms.
+   * @param {string} taskId - Target task ID
+   * @param {string} approvalId - Approval record ID to update
+   * @param {'approved' | 'rejected'} status - New status
+   */
+  function resolveApprovalInSession(
+    taskId: string,
+    approvalId: string,
+    status: "approved" | "rejected",
+  ): void {
+    const s = sessions.value.get(taskId);
+    if (!s) return;
+    const approval = s.approvals.find((a) => a.id === approvalId);
+    if (approval) {
+      approval.status = status;
+      approval.resolvedAt = new Date().toISOString();
+    }
+  } /*end resolveApprovalInSession*/
+
+  /**
+   * Sets an OAuthError on a session for UI banner rendering.
+   * @param {string} taskId - Target task ID
+   * @param {import("../types/models").OAuthError | null} error - OAuth error or null to clear
+   */
+  function setSessionOAuthError(
+    taskId: string,
+    error: import("../types/models").OAuthError | null,
+  ): void {
+    const s = sessions.value.get(taskId);
+    if (s) {
+      s.oauthError = error;
+    }
+  } /*end setSessionOAuthError*/
+
   return {
     sessions,
     primarySessionId,
@@ -244,6 +303,9 @@ export const useTaskChatStore = defineStore("taskChat", () => {
     openSession,
     closeSession,
     appendMessage,
+    appendApproval,
+    resolveApprovalInSession,
+    setSessionOAuthError,
     setAgentTyping,
     setPrimary,
     addParallelSession,

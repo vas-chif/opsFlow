@@ -3,12 +3,13 @@
  * @description Central Firestore document models for OpsFlow Task Management & AI Knowledge Base.
  * @author Vasile Chifeac
  * @created 2026-07-16
- * @modified 2026-07-16
+ * @modified 2026-08-14
  *
  * @notes
  * - Multi-tenant isolation: every document MUST have tenantId (validated by Firestore rules)
  * - Task status workflow is intentionally simple for MVP
  * - aiMetadata is structured for future RAG integration
+ * - ApprovalRecord supports Human-in-the-Loop pattern (§AGENTS.md)
  *
  * @dependencies
  * - None (pure types)
@@ -31,8 +32,82 @@ export type TaskStatus =
 /** Timestamp format used by Firestore. */
 export type FirestoreTimestamp = Date | null;
 
+// ── Human-in-the-Loop: Approval Types ────────────────────────────────────────
+
+/**
+ * Type of pending external action requiring user approval.
+ * Covers Gmail Draft creation and Google Sheets row append.
+ */
+export type PendingActionType = "gmail_draft" | "sheet_append" | "platform_sourcing";
+
+/**
+ * Lifecycle status of an approval record.
+ * pending → approved (executes real action) | rejected (discards action).
+ */
+export type PendingActionStatus = "pending" | "approved" | "rejected";
+
+/**
+ * Preview payload for a Gmail draft pending approval.
+ */
+export interface GmailDraftPreview {
+  to: string;
+  subject: string;
+  body: string;
+}
+
+/**
+ * Preview payload for a Google Sheets append pending approval.
+ */
+export interface SheetAppendPreview {
+  spreadsheetId: string;
+  range: string;
+  /** Human-readable preview of the rows to be written (first 5 max). */
+  previewRows: string[][];
+}
+
+/**
+ * Union type representing the data preview for any pending action.
+ */
+export type PendingActionPayload = GmailDraftPreview | SheetAppendPreview;
+
+/**
+ * Firestore document written by backend tools to the /approvals/ subcollection.
+ * Path: tenants/{tenantId}/workspaces/{wsId}/tasks/{taskId}/approvals/{approvalId}
+ */
+export interface ApprovalRecord {
+  id: string;
+  taskId: string;
+  workspaceId: string;
+  tenantId: string;
+  actionType: PendingActionType;
+  status: PendingActionStatus;
+  /** Human-readable summary of the action for the UI card. */
+  summary: string;
+  /** Structured preview data rendered in <ApprovalCard.vue>. */
+  previewData: PendingActionPayload;
+  createdAt: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
+} /*end ApprovalRecord*/
+
+/**
+ * Typed OAuth error codes surfaced by the backend Token Vault.
+ * Used to trigger re-authentication banners in the frontend.
+ */
+export type OAuthErrorCode = "TOKEN_EXPIRED" | "INSUFFICIENT_SCOPES" | "TOKEN_NOT_FOUND";
+
+/**
+ * Structured OAuth error returned by backend when token validation fails.
+ */
+export interface OAuthError {
+  code: OAuthErrorCode;
+  message: string;
+  requiredScopes?: string[];
+} /*end OAuthError*/
+
 /**
  * Chat message within a specific Task thread.
+ * approvalId links to an ApprovalRecord rendered as <ApprovalCard> in the chat.
  */
 export interface TaskChatMessage {
   id: string;
@@ -43,6 +118,9 @@ export interface TaskChatMessage {
   timestamp: string;
   toolsUsed?: string[];
   draftUrl?: string;
+  /** If present, render an <ApprovalCard> inline for this approval. */
+  approvalId?: string;
+  oauthError?: OAuthError;
 }
 
 /**
