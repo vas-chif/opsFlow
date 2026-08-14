@@ -26,7 +26,6 @@ import { getFirestore } from "firebase-admin/firestore";
 
 // ── Google APIs ───────────────────────────────────────────────────────────────
 import { google } from "googleapis";
-import type { OAuth2Client } from "google-auth-library";
 
 // ── Node Built-ins ────────────────────────────────────────────────────────────
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
@@ -51,11 +50,19 @@ interface TokenData {
   expiresAt: number;
 }
 
+/** Typed OAuth2 client returned by googleapis — avoids cross-version type conflicts. */
+type GoogleOAuth2Client = InstanceType<typeof google.auth.OAuth2>;
+
 /** Typed error thrown when OAuth validation fails. */
 export class OAuthVaultError extends Error {
   public readonly code: "TOKEN_EXPIRED" | "INSUFFICIENT_SCOPES" | "TOKEN_NOT_FOUND";
   public readonly requiredScopes?: string[];
 
+  /**
+   * @param {"TOKEN_EXPIRED"|"INSUFFICIENT_SCOPES"|"TOKEN_NOT_FOUND"} code - Error classification code
+   * @param {string} message - Human-readable error message
+   * @param {string[]} [requiredScopes] - Google OAuth scopes that are missing
+   */
   constructor(
     code: "TOKEN_EXPIRED" | "INSUFFICIENT_SCOPES" | "TOKEN_NOT_FOUND",
     message: string,
@@ -65,8 +72,8 @@ export class OAuthVaultError extends Error {
     this.name = "OAuthVaultError";
     this.code = code;
     this.requiredScopes = requiredScopes;
-  }
-} /*end OAuthVaultError*/
+  } /* end constructor */
+} /* end OAuthVaultError */
 
 // ── Encryption helpers ────────────────────────────────────────────────────────
 
@@ -75,6 +82,8 @@ const ALGORITHM = "aes-256-gcm";
 /**
  * Returns the AES-256 key from environment variable.
  * Key must be 32-byte hex string set in Firebase Function config.
+ *
+ * @return {Buffer} 32-byte AES-256 key buffer
  */
 function getEncryptionKey(): Buffer {
   const raw = process.env.OAUTH_ENCRYPTION_KEY ?? "";
@@ -82,11 +91,14 @@ function getEncryptionKey(): Buffer {
     throw new Error("OAUTH_ENCRYPTION_KEY must be a 64-character hex string (32 bytes AES-256).");
   }
   return Buffer.from(raw, "hex");
-} /*end getEncryptionKey*/
+} /* end getEncryptionKey */
 
 /**
  * Encrypts a plain text string with AES-256-GCM.
  * Returns IV, AuthTag and Ciphertext as hex strings.
+ *
+ * @param {string} plaintext - Raw string to encrypt (e.g. refresh token)
+ * @return {Pick<EncryptedTokenRecord, "iv" | "authTag" | "ciphertext">} Encrypted token parts
  */
 function encryptToken(
   plaintext: string,
@@ -103,10 +115,13 @@ function encryptToken(
     authTag: authTag.toString("hex"),
     ciphertext: encrypted.toString("hex"),
   };
-} /*end encryptToken*/
+} /* end encryptToken */
 
 /**
  * Decrypts an AES-256-GCM encrypted token record.
+ *
+ * @param {Pick<EncryptedTokenRecord, "iv" | "authTag" | "ciphertext">} record - Encrypted token parts
+ * @return {string} Decrypted plain text (e.g. refresh token)
  */
 function decryptToken(record: Pick<EncryptedTokenRecord, "iv" | "authTag" | "ciphertext">): string {
   const key = getEncryptionKey();
@@ -118,17 +133,22 @@ function decryptToken(record: Pick<EncryptedTokenRecord, "iv" | "authTag" | "cip
   decipher.setAuthTag(authTag);
 
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
-} /*end decryptToken*/
+} /* end decryptToken */
 
 // ── OAuth Client factory ──────────────────────────────────────────────────────
 
-function buildOAuth2Client(): OAuth2Client {
+/**
+ * Builds a new GoogleAuth OAuth2 client using environment credentials.
+ *
+ * @return {GoogleOAuth2Client} Unconfigured OAuth2 client instance
+ */
+function buildOAuth2Client(): GoogleOAuth2Client {
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
     process.env.GOOGLE_REDIRECT_URI,
   );
-} /*end buildOAuth2Client*/
+} /* end buildOAuth2Client */
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -144,14 +164,14 @@ function buildOAuth2Client(): OAuth2Client {
  * @param {string} tenantId - Multi-tenant isolation identifier
  * @param {string} userId - Firebase Auth user ID
  * @param {string[]} requiredScopes - Scopes needed for the operation
- * @returns {Promise<OAuth2Client>} Authenticated OAuth2 client
+ * @return {Promise<GoogleOAuth2Client>} Authenticated OAuth2 client
  * @throws {OAuthVaultError} If token is missing, expired or lacks required scopes
  */
 export async function getAuthenticatedOAuth2Client(
   tenantId: string,
   userId: string,
   requiredScopes: string[],
-): Promise<OAuth2Client> {
+): Promise<GoogleOAuth2Client> {
   const db = getFirestore();
   const tokenRef = db.doc(`tenants/${tenantId}/users/${userId}/tokens/google`);
 
@@ -218,7 +238,7 @@ export async function getAuthenticatedOAuth2Client(
   }
 
   return oAuth2Client;
-} /*end getAuthenticatedOAuth2Client*/
+} /* end getAuthenticatedOAuth2Client */
 
 /**
  * Stores a new OAuth token for a user in the encrypted Firestore Vault.
@@ -227,6 +247,7 @@ export async function getAuthenticatedOAuth2Client(
  * @param {string} tenantId - Multi-tenant isolation identifier
  * @param {string} userId - Firebase Auth user ID
  * @param {TokenData} tokenData - Raw token data from OAuth consent
+ * @return {Promise<void>}
  */
 export async function saveOAuthToken(
   tenantId: string,
@@ -244,4 +265,4 @@ export async function saveOAuthToken(
     expiresAt: tokenData.expiresAt,
     updatedAt: new Date().toISOString(),
   } satisfies EncryptedTokenRecord);
-} /*end saveOAuthToken*/
+} /* end saveOAuthToken */
