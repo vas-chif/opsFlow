@@ -20,6 +20,12 @@ Non procedere mai ad applicare modifiche senza aver prima scritto questo blocco 
 
 ---
 
+### ⚠️ DIRETTIVA FONDAMENTALE (Full-Stack Alignment)
+
+È fatto divieto assoluto di creare logiche di backend isolate senza la loro controparte visiva e reattiva nel Frontend. Ogni Cloud Function, Tool o listener deve essere **immediatamente collegato e testabile nella UI di Quasar** (Pannelli, Chat, Approval Card, Pinia Store). L'utente deve poter vedere, interagire, approvare e verificare ogni singolo dato a schermo.
+
+---
+
 ## 📌 §1 — Git & Branch Management (Regola §1.9)
 
 - **Branch Check**: All'inizio di ogni sessione, verificare il branch corrente (`git branch`).
