@@ -74,25 +74,64 @@ export const searchWebAndPlatformsTool = ai.defineTool(
     }),
   },
   async ({ query, category }) => {
-    const mockResults = [
-      {
-        title: `Risultato Ricerca: ${query}`,
-        snippet: `Piattaforma identificata per ${category}. Aziende con forte richiesta di servizi IT e consulenza.`,
-        url: `https://www.google.com/search?q=${encodeURIComponent(query)}`,
-      },
-      {
-        title: "Profilo Professionale / Portale Target",
-        snippet:
-          "Analisi requisiti completata: coincidenza del 95% con il profilo cliente ideale (ICP).",
-        url: "https://linkedin.com/company/example-it-solutions",
-      },
-    ];
+    // Real web search via Jina AI Reader on DuckDuckGo HTML (zero infrastructure cost)
+    const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    const jinaUrl = `https://r.jina.ai/${searchUrl}`;
 
-    return {
-      success: true,
-      results: mockResults,
-      summary: `Trovati ${mockResults.length} risultati per la ricerca "${query}" nella categoria ${category}.`,
-    };
+    try {
+      const response = await fetch(jinaUrl, {
+        headers: {
+          Accept: "text/markdown",
+          "X-Return-Format": "markdown",
+        },
+      });
+
+      const rawMarkdown = response.ok ? await response.text() : "";
+      const trimmed = rawMarkdown.slice(0, 6000);
+
+      // Parse the first 5 result blocks from the markdown
+      const lines = trimmed.split("\n").filter((l) => l.trim().length > 0);
+      const results: { title: string; snippet: string; url: string }[] = [];
+      let i = 0;
+      while (results.length < 5 && i < lines.length) {
+        const urlMatch = lines[i]?.match(/https?:\/\/[^\s)]+/);
+        if (urlMatch) {
+          results.push({
+            title: lines[i - 1]?.replace(/^#+\s*/, "").trim() || query,
+            snippet: lines[i + 1]?.trim() || `Risultato per la categoria: ${category}`,
+            url: urlMatch[0],
+          });
+        }
+        i++;
+      }
+
+      // Fallback: at least one entry pointing to direct search
+      if (results.length === 0) {
+        results.push({
+          title: `Ricerca: ${query}`,
+          snippet: `Nessun risultato estratto automaticamente. Apri la ricerca diretta per la categoria "${category}".`,
+          url: `https://duckduckgo.com/?q=${encodeURIComponent(query)}`,
+        });
+      }
+
+      return {
+        success: true,
+        results,
+        summary: `Estratti ${results.length} risultati reali per la ricerca "${query}" (categoria: ${category}) tramite Jina AI Reader.`,
+      };
+    } catch {
+      return {
+        success: false,
+        results: [
+          {
+            title: `Ricerca: ${query}`,
+            snippet: "Errore durante il fetch della ricerca web. Verifica la connettività.",
+            url: `https://duckduckgo.com/?q=${encodeURIComponent(query)}`,
+          },
+        ],
+        summary: `Ricerca fallita per "${query}" (categoria: ${category}).`,
+      };
+    }
   },
 ); /* end searchWebAndPlatformsTool */
 

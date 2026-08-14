@@ -166,7 +166,6 @@ export const onTaskUpdated = onDocumentUpdated(
  * Callable Function: chatWithAgent
  */
 export const chatWithAgent = onRequest({ cors: true }, async (req, res) => {
-  let userMessage = "";
   try {
     const { message, workspaceId, taskId, workspacePrompt, workspaceName, linkedResources } =
       req.body || {};
@@ -174,7 +173,6 @@ export const chatWithAgent = onRequest({ cors: true }, async (req, res) => {
       res.status(400).json({ error: "Missing required string 'message'" });
       return;
     }
-    userMessage = message;
 
     const result = await chatWithAgentFlow({
       message,
@@ -187,39 +185,10 @@ export const chatWithAgent = onRequest({ cors: true }, async (req, res) => {
     res.status(200).json(result);
   } catch (err) {
     logger.error("chatWithAgent failed", { err });
-    const isPlatformQuery =
-      /piattaform|piatafom|cerca|lead|prospect|client|programmat|analist|qa/i.test(userMessage);
-
-    let replyText =
-      "Ho elaborato la tua richiesta ed eseguito il task con gli Agenti Operativi OpsFlow.";
-    let agentName = "Agente AI Assistant";
-
-    if (isPlatformQuery) {
-      agentName = "AgenteRicerca (Lead Scout & Platform Matcher)";
-      replyText =
-        "🎯 **[AgenteRicerca - Piattaforme Consigliate per Estrarre Clienti IT]**\n\n" +
-        "Ho analizzato la richiesta per identificare le migliori piattaforme dove trovare " +
-        "aziende con progetti informatici attivi e ricerca continua di programmatori:\n\n" +
-        "1. 🌐 **[Clutch.co](https://clutch.co)** & **[GoodFirms](https://goodfirms.co)**\n" +
-        "   - **Focus:** Directory B2B di aziende tech, agenzie software ed enterprise.\n" +
-        "   - **Vantaggio:** Filtro per budget ($10k - $50k+), stack tecnologico e recensioni.\n\n" +
-        "2. 💼 **[LinkedIn Sales Navigator](https://www.linkedin.com/sales)** & " +
-        "**[LinkedIn Jobs](https://www.linkedin.com/jobs)**\n" +
-        "   - **Focus:** Ricerca mirata di CTO, VP of Engineering e Head of Talent IT.\n" +
-        "   - **Vantaggio:** Intercetta i decision maker con posizioni aperte per dev/QA.\n\n" +
-        "3. 🚀 **[Wellfound (ex AngelList)](https://wellfound.com)** & " +
-        "**[Crunchbase](https://www.crunchbase.com)**\n" +
-        "   - **Focus:** Startup tech in fase di scaling con capitali freschi da investire.\n\n" +
-        "4. 🏢 **[Upwork Enterprise](https://www.upwork.com/enterprise)** & " +
-        "**[Toptal Network](https://www.toptal.com)**\n" +
-        "   - **Focus:** Piattaforme ad ingaggio rapido per software agency e QA consultant.\n\n" +
-        "💡 *Prossimo Passo:* Usa il pulsante **Bozza Email** o **Salva su Sheets**.";
-    }
-
-    res.status(200).json({
-      reply: replyText,
-      agentName,
-      toolsUsed: ["searchWebAndPlatformsTool", "leadSynthesisTool"],
+    res.status(500).json({
+      reply: "⚠️ Agente AI temporaneamente non disponibile. Riprova tra qualche istante.",
+      agentName: "Sistema",
+      toolsUsed: [],
     });
   }
 }); /* end chatWithAgent */

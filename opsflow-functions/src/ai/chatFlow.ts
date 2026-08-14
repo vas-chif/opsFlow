@@ -15,7 +15,7 @@ import { z } from "genkit";
 import { sanitizePii } from "./piiSanitizer";
 import { buildStackedPrompt } from "./promptBuilder";
 import { createGmailDraftTool, manageGoogleSheetTool } from "../tools/googleWorkspace";
-import { searchWebAndPlatformsTool, leadSynthesisTool } from "../tools/webSearch";
+import { searchWebAndPlatformsTool, leadSynthesisTool, jinaReaderTool } from "../tools/webSearch";
 import { contentMarketingTool } from "../tools/contentMarketing";
 
 /** Input schema for the chat flow. */
@@ -71,6 +71,7 @@ export const chatWithAgentFlow = ai.defineFlow(
         manageGoogleSheetTool,
         searchWebAndPlatformsTool,
         leadSynthesisTool,
+        jinaReaderTool,
         contentMarketingTool,
       ],
     });
