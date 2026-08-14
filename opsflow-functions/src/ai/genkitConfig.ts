@@ -26,6 +26,7 @@ const geminiApiKey =
   process.env.GEMINI_API_KEY ||
   process.env.GOOGLE_GENAI_API_KEY ||
   process.env.GOOGLE_API_KEY ||
+  process.env.VITE_FIREBASE_API_KEY ||
   "";
 
 export const ai = genkit({
