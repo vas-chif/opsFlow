@@ -100,88 +100,6 @@ watch(
   },
 );
 
-const generateSmartLocalAiResponse = (
-  userText: string,
-): { reply: string; agentName: string; toolsUsed: string[] } => {
-  const lower = userText.toLowerCase();
-
-  if (
-    lower.includes("piattaform") ||
-    lower.includes("piatafom") ||
-    lower.includes("cerca") ||
-    lower.includes("lead") ||
-    lower.includes("prospect") ||
-    lower.includes("client")
-  ) {
-    return {
-      agentName: "AgenteRicerca (Lead Scout & Platform Matcher)",
-      toolsUsed: ["searchWebAndPlatformsTool", "leadSynthesisTool"],
-      reply:
-        "🎯 **[AgenteRicerca - Piattaforme Consigliate per Estrarre Clienti IT]**\n\n" +
-        "Ho analizzato la richiesta per identificare le migliori piattaforme dove trovare aziende con progetti informatici attivi e ricerca continua di programmatori, analisti e sviluppatori QA:\n\n" +
-        "1. 🌐 **Clutch.co & GoodFirms**\n" +
-        "   - **Focus:** Directory B2B di aziende tech, agenzie software ed enterprise.\n" +
-        "   - **Vantaggio:** Filtro diretto per budget di progetto ($10k - $50k+), stack tecnologico e recensioni verificate.\n\n" +
-        "2. 💼 **LinkedIn Sales Navigator & Jobs**\n" +
-        "   - **Focus:** Ricerca mirata di CTO, VP of Engineering e Head of Talent in aziende IT.\n" +
-        "   - **Vantaggio:** Permette di intercettare direttamente i decision maker delle aziende con posizioni aperte per dev/QA.\n\n" +
-        "3. 🚀 **Wellfound (ex AngelList) & Crunchbase**\n" +
-        "   - **Focus:** Startup tech in fase di scaling (Seed / Series A-B) con capitali freschi da investire in team informatici.\n\n" +
-        "4. 🏢 **Upwork Enterprise & Toptal Network**\n" +
-        "   - **Focus:** Piattaforme ad ingaggio rapido per software agency e QA consultant.\n\n" +
-        "💡 *Prossimo Passo:* Usa il pulsante **Bozza Email** per generare l'email di presentazione o **Salva su Sheets** per registrare l'elenco.",
-    };
-  }
-
-  if (lower.includes("bozza") || lower.includes("email") || lower.includes("mail")) {
-    const targetEmail = props.workspace?.linkedResources?.googleEmail || "studio.opsflow@gmail.com";
-    return {
-      agentName: "AgenteAmministrativo (Gmail Engine)",
-      toolsUsed: ["createGmailDraftTool"],
-      reply:
-        "📧 **[AgenteAmministrativo - Bozza Email di Presentazione Creata]**\n\n" +
-        `Account Mittente Autorizzato: \`${targetEmail}\`\n\n` +
-        "**Oggetto:** Proposta Collaborazione Tech & Fornitura Risorse Software/QA\n\n" +
-        "**Testo Bozza:**\n" +
-        "Gentile Team,\n\n" +
-        "Vi scrivo in merito alle vostre attuali ed imminenti esigenze di sviluppo software ed assicurazione qualità (QA).\n\n" +
-        "OpsFlow fornisce team e professionisti IT qualificati (Sviluppatori Full-Stack, Analisti e QA Engineers) pronti per l'integrazione immediata sui vostri progetti.\n\n" +
-        "Possiamo fissare una breve call conoscitiva di 15 minuti questa settimana per valutare come possiamo supportare la vostra roadmap tecnologica?\n\n" +
-        "Cordiali saluti,\n" +
-        "OpsFlow Partner Network",
-    };
-  }
-
-  if (lower.includes("sheet") || lower.includes("foglio") || lower.includes("salva")) {
-    const sheetId =
-      props.workspace?.linkedResources?.defaultSheetId ||
-      "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms";
-    return {
-      agentName: "AgenteAmministrativo (Sheets Engine)",
-      toolsUsed: ["manageGoogleSheetTool"],
-      reply:
-        "📊 **[AgenteAmministrativo - Aggiornamento Google Sheets Completato]**\n\n" +
-        `Foglio Collegato ID: \`${sheetId}\`\n\n` +
-        "Dati formattati e registrati con successo nel foglio Google Sheets:\n" +
-        "• Colonna A: Piattaforma / Azienda\n" +
-        "• Colonna B: Categoria (B2B Directory / Hiring Hub)\n" +
-        "• Colonna C: Stato Contatto (In Corso / Da Contattare)\n" +
-        "• Colonna D: Data Inserimento (" +
-        new Date().toLocaleDateString() +
-        ")",
-    };
-  }
-
-  return {
-    agentName: "Agente AI OpsFlow",
-    toolsUsed: ["searchWebAndPlatformsTool"],
-    reply:
-      "🤖 **[Agente AI OpsFlow - Risposta Operativa]**\n\n" +
-      `Ho elaborato la tua richiesta: "${userText}".\n\n` +
-      `L'istruzione è stata contestualizzata nel Workspace "${props.workspace?.name || "Generale"}" ed eseguita con successo dagli agenti coordinati.`,
-  };
-}; /*end generateSmartLocalAiResponse*/
-
 const handleStatusChange = async (newStatus: TaskStatus): Promise<void> => {
   if (!props.task || !props.workspace) return;
   try {
@@ -256,16 +174,20 @@ const handleSendChatMessage = async (): Promise<void> => {
   }
 
   if (!fetchedOk) {
-    // Smart Local Fallback Response Engine
-    const localRes = generateSmartLocalAiResponse(userText);
     chatStore.appendMessage(taskId, {
       id: `agt-${Date.now()}`,
       taskId: taskId,
       sender: "agent",
-      agentName: localRes.agentName,
-      text: localRes.reply,
+      agentName: "Sistema",
+      text:
+        "⚠️ **Connessione all'Agente AI non disponibile.**\n\n" +
+        "La Cloud Function `chatWithAgent` non è raggiungibile. Verifica:\n" +
+        "- La connessione internet\n" +
+        "- Lo stato del deploy Firebase Functions\n" +
+        "- La configurazione CORS\n\n" +
+        "Riprova tra qualche istante.",
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      toolsUsed: localRes.toolsUsed,
+      toolsUsed: [],
     });
     scrollToBottom();
   }
@@ -401,50 +323,59 @@ const handleMoveTask = async (): Promise<void> => {
                 @click="handleExecuteTaskAI"
               />
               <div class="text-caption text-grey-7 text-weight-bold q-mb-xs">Azioni Rapide IA:</div>
-              <div class="row q-gutter-xs">
-                <q-btn
-                  outline
-                  dense
-                  size="sm"
-                  color="secondary"
-                  icon="search"
-                  label="Cerca Lead"
-                  no-caps
-                  :disabled="isSending"
-                  @click="
-                    handleSendCustomPrompt('Trova lead e prospect rilevanti per questo task.')
-                  "
-                />
-                <q-btn
-                  outline
-                  dense
-                  size="sm"
-                  color="positive"
-                  icon="mail"
-                  label="Bozza Email"
-                  no-caps
-                  :disabled="isSending"
-                  @click="
-                    handleSendCustomPrompt(
-                      'Genera una bozza email di presentazione per i prospect trovati.',
-                    )
-                  "
-                />
-                <q-btn
-                  outline
-                  dense
-                  size="sm"
-                  color="amber-10"
-                  icon="table_chart"
-                  label="Salva su Sheets"
-                  no-caps
-                  :disabled="isSending"
-                  @click="
-                    handleSendCustomPrompt(
-                      'Salva ed organizza i dati estratti nel foglio Google Sheets predefinito.',
-                    )
-                  "
-                />
+              <div class="row q-col-gutter-xs full-width">
+                <div class="col-12 col-sm-4">
+                  <q-btn
+                    outline
+                    dense
+                    size="sm"
+                    color="secondary"
+                    icon="search"
+                    label="Cerca Lead"
+                    no-caps
+                    class="full-width q-py-xs text-weight-bold"
+                    :disabled="isSending"
+                    @click="
+                      handleSendCustomPrompt('Trova lead e prospect rilevanti per questo task.')
+                    "
+                  />
+                </div>
+                <div class="col-12 col-sm-4">
+                  <q-btn
+                    outline
+                    dense
+                    size="sm"
+                    color="positive"
+                    icon="mail"
+                    label="Bozza Email"
+                    no-caps
+                    class="full-width q-py-xs text-weight-bold"
+                    :disabled="isSending"
+                    @click="
+                      handleSendCustomPrompt(
+                        'Genera una bozza email di presentazione per i prospect trovati.',
+                      )
+                    "
+                  />
+                </div>
+                <div class="col-12 col-sm-4">
+                  <q-btn
+                    outline
+                    dense
+                    size="sm"
+                    color="amber-10"
+                    icon="table_chart"
+                    label="Salva su Sheets"
+                    no-caps
+                    class="full-width q-py-xs text-weight-bold"
+                    :disabled="isSending"
+                    @click="
+                      handleSendCustomPrompt(
+                        'Salva ed organizza i dati estratti nel foglio Google Sheets predefinito.',
+                      )
+                    "
+                  />
+                </div>
               </div>
             </div>
 
@@ -494,16 +425,24 @@ const handleMoveTask = async (): Promise<void> => {
                 :bg-color="msg.sender === 'user' ? 'primary' : 'grey-3'"
                 :text-color="msg.sender === 'user' ? 'white' : 'dark'"
               >
-                <div style="white-space: pre-wrap">{{ msg.text }}</div>
-                <div v-if="msg.toolsUsed && msg.toolsUsed.length > 0" class="q-mt-xs">
-                  <q-badge
+                <div style="white-space: pre-wrap; font-size: 0.85rem">{{ msg.text }}</div>
+                <div
+                  v-if="msg.toolsUsed && msg.toolsUsed.length > 0"
+                  class="row wrap q-gutter-xs q-mt-xs"
+                >
+                  <q-chip
                     v-for="tool in msg.toolsUsed"
                     :key="tool"
-                    color="secondary"
-                    class="q-mr-xs text-caption"
+                    dense
+                    square
+                    outline
+                    color="amber-9"
+                    text-color="dark"
+                    class="q-pa-xs text-weight-medium"
+                    style="font-size: 0.78rem; border-radius: 6px"
                   >
                     🔧 {{ tool }}
-                  </q-badge>
+                  </q-chip>
                 </div>
               </q-chat-message>
             </div>
