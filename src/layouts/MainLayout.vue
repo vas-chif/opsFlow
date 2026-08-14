@@ -373,7 +373,7 @@ const confirmDeleteWorkspace = async (): Promise<void> => {
 
         <!-- Logo + Title -->
         <q-avatar size="32px" class="q-mr-sm">
-          <img src="~@/assets/quasar-logo-vertical.svg" alt="OpsFlow logo" />
+          <img src="~@/assets/logo_OPS.png" alt="OpsFlow logo" />
         </q-avatar>
         <q-toolbar-title>
           {{ pageTitle }}
