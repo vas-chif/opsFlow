@@ -222,13 +222,15 @@ const handleSendChatMessage = async (): Promise<void> => {
       }),
     });
 
-    if (res.ok) {
-      const data = await res.json();
-      const finalReply = data.reply || "Operazione completata dall'Agente AI OpsFlow.";
+    const data = await res.json().catch(() => null);
+
+    if (data && data.reply) {
+      const finalReply = data.reply;
       const finalAgentName = data.agentName || "Agente AI Assistant";
       const finalTools: string[] = data.toolsUsed || [];
 
       logger.success("CloudFunction", "Risposta ricevuta dalla Cloud Function", {
+        status: res.status,
         reply: finalReply,
       });
       chatStore.appendMessage(taskId, {

@@ -155,14 +155,15 @@ const handleSendChatMessage = async (): Promise<void> => {
       }),
     });
 
-    if (res.ok) {
-      const data = await res.json();
+    const data = await res.json().catch(() => null);
+
+    if (data && data.reply) {
       chatStore.appendMessage(taskId, {
         id: `agt-${Date.now()}`,
         taskId: taskId,
         sender: "agent",
         agentName: data.agentName || "Agente AI Assistant",
-        text: data.reply || "Azione elaborata con successo.",
+        text: data.reply,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         toolsUsed: data.toolsUsed || [],
       });
