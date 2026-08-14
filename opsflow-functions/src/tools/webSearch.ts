@@ -117,7 +117,9 @@ export const searchWebAndPlatformsTool = ai.defineTool(
       return {
         success: true,
         results,
-        summary: `Estratti ${results.length} risultati reali per la ricerca "${query}" (categoria: ${category}) tramite Jina AI Reader.`,
+        summary:
+          `Estratti ${results.length} risultati reali per la ricerca "${query}" ` +
+          `(categoria: ${category}) tramite Jina AI Reader.`,
       };
     } catch {
       return {
