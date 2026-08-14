@@ -96,9 +96,7 @@ export const chatWithAgentFlow = ai.defineFlow(
       reply: replyText,
       agentName: "Agente AI Assistant",
       toolsUsed:
-        toolsUsed.length > 0
-          ? Array.from(new Set(toolsUsed))
-          : ["searchWebAndPlatformsTool"],
+        toolsUsed.length > 0 ? Array.from(new Set(toolsUsed)) : ["searchWebAndPlatformsTool"],
     };
   },
 ); /* end chatWithAgentFlow */
