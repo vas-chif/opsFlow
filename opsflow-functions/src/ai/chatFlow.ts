@@ -79,10 +79,26 @@ export const chatWithAgentFlow = ai.defineFlow(
     const replyText =
       llmResponse.text || "Operazione completata con successo dall'Agente IA OpsFlow.";
 
+    const toolsUsed: string[] = [];
+    if (llmResponse.messages) {
+      for (const msg of llmResponse.messages) {
+        if (msg.content) {
+          for (const part of msg.content) {
+            if (part.toolRequest) {
+              toolsUsed.push(part.toolRequest.name);
+            }
+          }
+        }
+      }
+    }
+
     return {
       reply: replyText,
       agentName: "Agente AI Assistant",
-      toolsUsed: ["createGmailDraftTool", "searchWebAndPlatformsTool"],
+      toolsUsed:
+        toolsUsed.length > 0
+          ? Array.from(new Set(toolsUsed))
+          : ["searchWebAndPlatformsTool"],
     };
   },
 ); /* end chatWithAgentFlow */
