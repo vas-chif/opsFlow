@@ -163,7 +163,7 @@ const navigateToLogin = (): void => {
           <!-- Logo & Title -->
           <div class="text-center q-mb-xl">
             <q-avatar size="72px" class="q-mb-md logo-avatar">
-              <img src="~@/assets/quasar-logo-vertical.svg" alt="OpsFlow" />
+              <img src="~@/assets/logo_OPS.png" alt="OpsFlow" />
             </q-avatar>
             <h1
               class="text-h4 text-weight-bold q-my-none auth-title"
