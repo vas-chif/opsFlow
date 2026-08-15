@@ -107,7 +107,7 @@ export const onTaskCreated = onDocumentCreated(
             complexityScore,
             suggestedCategory,
             confidence: 0.95,
-            modelVersion: "gemini-1.5-flash",
+            modelVersion: "gemini-3.5-flash",
             lastAnalyzed: new Date().toISOString(),
             piiSanitizedCount: sanitizedTitle.piiCount + sanitizedDesc.piiCount,
           },

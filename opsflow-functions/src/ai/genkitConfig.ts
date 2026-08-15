@@ -31,7 +31,7 @@ const geminiApiKey =
 
 export const ai = genkit({
   plugins: [googleAI({ apiKey: geminiApiKey || undefined })],
-  model: "googleai/gemini-1.5-flash",
+  model: "googleai/gemini-3.5-flash",
 });
 
 /** Schema for AgentePlanner task breakdown output. */
