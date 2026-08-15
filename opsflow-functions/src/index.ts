@@ -15,6 +15,7 @@
  * - maxInstances: 10 (Cloud Cost Control < €1/1000 users/mo)
  */
 
+import "dotenv/config";
 import { setGlobalOptions } from "firebase-functions";
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import * as logger from "firebase-functions/logger";

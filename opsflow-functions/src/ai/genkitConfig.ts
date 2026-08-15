@@ -19,6 +19,7 @@
  * - Gemini 1.5 Flash stream response <800ms
  */
 
+import "dotenv/config";
 import { genkit, z } from "genkit";
 import { googleAI } from "@genkit-ai/google-genai";
 
