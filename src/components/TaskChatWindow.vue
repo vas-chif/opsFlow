@@ -452,13 +452,16 @@ const handleExecuteTaskAI = async (): Promise<void> => {
           </div>
 
           <!-- AI Complexity Score Badge -->
-          <div v-if="task.aiMetadata" class="q-mb-xs">
+          <div
+            v-if="task.aiMetadata && task.aiMetadata.complexityScore !== undefined"
+            class="q-mb-xs"
+          >
             <div class="row items-center justify-between text-caption text-weight-bold text-grey-8">
               <span>Complexity IA:</span>
               <span>{{ task.aiMetadata.complexityScore }}/10</span>
             </div>
             <q-linear-progress
-              :value="(task.aiMetadata.complexityScore || 5) / 10"
+              :value="task.aiMetadata.complexityScore / 10"
               color="secondary"
               size="6px"
               rounded

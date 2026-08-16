@@ -25,6 +25,7 @@ import { google } from "googleapis";
 
 // ── AI & Sanitizer ───────────────────────────────────────────────────────────
 import { sanitizePii } from "./ai/piiSanitizer";
+import { ai, TaskBreakdownSchema } from "./ai/genkitConfig";
 
 // Cloud Cost Control: cap maximum running instances to 10
 import { onRequest } from "firebase-functions/v2/https";
@@ -67,23 +68,12 @@ export const onTaskCreated = onDocumentCreated(
     const sanitizedTitle = sanitizePii(taskData.title || "");
     const sanitizedDesc = sanitizePii(taskData.description || "");
 
-    const complexityScore = Math.min(
-      10,
-      Math.max(1, Math.ceil((sanitizedDesc.sanitizedText.length + 10) / 20)),
-    );
-
+    let complexityScore = 5;
     let suggestedCategory = "operational";
-    const titleLower = sanitizedTitle.sanitizedText.toLowerCase();
-    if (titleLower.includes("bug")) {
-      suggestedCategory = "bugfix";
-    } else if (titleLower.includes("feature")) {
-      suggestedCategory = "feature";
-    }
-
-    const generatedSubtasks = [
+    let generatedSubtasks = [
       {
         order: 1,
-        title: `Setup e analisi requisiti per: ${sanitizedTitle.sanitizedText}`,
+        title: `Setup ed analisi requisiti per: ${sanitizedTitle.sanitizedText}`,
         description: "Definizione dell'ambito operativo e verifica prerequisiti.",
         completed: false,
       },
@@ -100,6 +90,38 @@ export const onTaskCreated = onDocumentCreated(
         completed: false,
       },
     ];
+
+    try {
+      // Dynamic AI Task Breakdown via Genkit & Gemini 3.5 Flash
+      const plannerPrompt = `Sei AgentePlanner, l'esperto di produttività e decomposizione strategica dei task di OpsFlow.
+Analizza il titolo e la descrizione del seguente task:
+Titolo: "${sanitizedTitle.sanitizedText}"
+Descrizione: "${sanitizedDesc.sanitizedText}"
+
+Scomponi l'attività in 3-5 sotto-task operative, concrete ed in sequenza logica.
+Assegna un punteggio di complessità reale da 1 (banale/rapidissimo) a 10 (altamente complesso/articolato) ed una categoria pertinente (es: bugfix, feature, marketing, research, operational, legal, healthcare).`;
+
+      const llmResponse = await ai.generate({
+        model: "googleai/gemini-3.5-flash",
+        prompt: plannerPrompt,
+        output: { schema: TaskBreakdownSchema },
+      });
+
+      if (llmResponse.output) {
+        complexityScore = Math.min(10, Math.max(1, llmResponse.output.complexityScore));
+        suggestedCategory = llmResponse.output.suggestedCategory || "operational";
+        if (Array.isArray(llmResponse.output.subtasks) && llmResponse.output.subtasks.length > 0) {
+          generatedSubtasks = llmResponse.output.subtasks.map((st, idx) => ({
+            order: st.order || idx + 1,
+            title: st.title,
+            description: st.description,
+            completed: false,
+          }));
+        }
+      }
+    } catch (err) {
+      logger.error("AgentePlanner AI generation error", { err });
+    }
 
     try {
       await snap.ref.set(

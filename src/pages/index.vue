@@ -441,17 +441,24 @@ onMounted(async () => {
             </div>
 
             <!-- AI Complexity Score Indicator -->
-            <div v-if="task.aiMetadata" class="q-mb-md">
+            <div
+              v-if="task.aiMetadata && task.aiMetadata.complexityScore !== undefined"
+              class="q-mb-md"
+            >
               <div class="row items-center justify-between text-caption q-mb-xs text-grey-7">
                 <span>Complexity Score (AgentePlanner)</span>
-                <span class="text-weight-bold">{{ task.aiMetadata.complexityScore || 5 }}/10</span>
+                <span class="text-weight-bold">{{ task.aiMetadata.complexityScore }}/10</span>
               </div>
               <q-linear-progress
-                :value="(task.aiMetadata.complexityScore || 5) / 10"
+                :value="task.aiMetadata.complexityScore / 10"
                 color="amber-9"
                 track-color="grey-4"
                 style="height: 6px; border-radius: 3px"
               />
+            </div>
+            <div v-else class="q-mb-md row items-center text-caption text-grey-6">
+              <q-spinner-dots color="amber-9" size="1.2em" class="q-mr-xs" />
+              <span>Analisi Complessità IA in corso...</span>
             </div>
 
             <!-- Footer Badge & Bubble -->
@@ -578,15 +585,18 @@ onMounted(async () => {
             </div>
 
             <!-- Score Complexity -->
-            <div class="q-mb-md q-pa-sm bg-amber-1 rounded-borders">
+            <div
+              v-if="inspectorTask.aiMetadata?.complexityScore !== undefined"
+              class="q-mb-md q-pa-sm bg-amber-1 rounded-borders"
+            >
               <div
                 class="row items-center justify-between text-body2 text-weight-bold text-amber-10"
               >
                 <span>Score Complessità Agente:</span>
-                <span>{{ inspectorTask.aiMetadata?.complexityScore || 5 }} / 10</span>
+                <span>{{ inspectorTask.aiMetadata.complexityScore }} / 10</span>
               </div>
               <q-linear-progress
-                :value="(inspectorTask.aiMetadata?.complexityScore || 5) / 10"
+                :value="inspectorTask.aiMetadata.complexityScore / 10"
                 color="amber-9"
                 class="q-mt-xs"
                 style="height: 8px; border-radius: 4px"

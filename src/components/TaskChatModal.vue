@@ -380,12 +380,15 @@ const handleMoveTask = async (): Promise<void> => {
               </div>
             </div>
 
-            <div v-if="task?.aiMetadata" class="q-mb-md">
+            <div
+              v-if="task?.aiMetadata && task.aiMetadata.complexityScore !== undefined"
+              class="q-mb-md"
+            >
               <div class="text-subtitle2 text-weight-bold text-primary q-mb-xs">
                 ⚡ Complexity Score IA
               </div>
               <q-linear-progress
-                :value="(task.aiMetadata.complexityScore || 5) / 10"
+                :value="task.aiMetadata.complexityScore / 10"
                 color="secondary"
                 size="10px"
                 stripe
