@@ -93,13 +93,13 @@ export const onTaskCreated = onDocumentCreated(
 
     try {
       // Dynamic AI Task Breakdown via Genkit & Gemini 3.5 Flash
-      const plannerPrompt = `Sei AgentePlanner, l'esperto di produttività e decomposizione strategica dei task di OpsFlow.
-Analizza il titolo e la descrizione del seguente task:
-Titolo: "${sanitizedTitle.sanitizedText}"
-Descrizione: "${sanitizedDesc.sanitizedText}"
-
-Scomponi l'attività in 3-5 sotto-task operative, concrete ed in sequenza logica.
-Assegna un punteggio di complessità reale da 1 (banale/rapidissimo) a 10 (altamente complesso/articolato) ed una categoria pertinente (es: bugfix, feature, marketing, research, operational, legal, healthcare).`;
+      const plannerPrompt =
+        "Sei AgentePlanner, l'esperto di decomposizione strategica dei task di OpsFlow.\n" +
+        `Analizza il titolo e la descrizione del seguente task:\n` +
+        `Titolo: "${sanitizedTitle.sanitizedText}"\n` +
+        `Descrizione: "${sanitizedDesc.sanitizedText}"\n\n` +
+        "Scomponi l'attività in 3-5 sotto-task operative ed in sequenza logica.\n" +
+        "Assegna un punteggio di complessità da 1 (banale) a 10 (complesso) ed una categoria pertinente.";
 
       const llmResponse = await ai.generate({
         model: "googleai/gemini-3.5-flash",
