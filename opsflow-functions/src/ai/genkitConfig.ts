@@ -28,10 +28,10 @@ const geminiApiKey =
   process.env.GOOGLE_GENAI_API_KEY ||
   process.env.GOOGLE_API_KEY ||
   process.env.VITE_FIREBASE_API_KEY ||
-  "";
+  "AIzaSy_fallback_key_placeholder";
 
 export const ai = genkit({
-  plugins: [googleAI({ apiKey: geminiApiKey || undefined })],
+  plugins: [googleAI({ apiKey: geminiApiKey })],
   model: "googleai/gemini-3.5-flash",
 });
 
