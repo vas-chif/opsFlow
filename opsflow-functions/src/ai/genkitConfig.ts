@@ -23,16 +23,31 @@ import "dotenv/config";
 import { genkit, z } from "genkit";
 import { googleAI } from "@genkit-ai/google-genai";
 
-const geminiApiKey =
-  process.env.GEMINI_API_KEY ||
-  process.env.GOOGLE_GENAI_API_KEY ||
-  process.env.GOOGLE_API_KEY ||
-  process.env.VITE_FIREBASE_API_KEY ||
-  "AIzaSy_fallback_key_placeholder";
+let _aiInstance: ReturnType<typeof genkit> | null = null;
 
-export const ai = genkit({
-  plugins: [googleAI({ apiKey: geminiApiKey })],
-  model: "googleai/gemini-3.5-flash",
+export const getAi = (): ReturnType<typeof genkit> => {
+  if (!_aiInstance) {
+    const apiKey =
+      process.env.GEMINI_API_KEY ||
+      process.env.GOOGLE_GENAI_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
+      process.env.VITE_FIREBASE_API_KEY ||
+      "AIzaSy_fallback_key_placeholder";
+
+    _aiInstance = genkit({
+      plugins: [googleAI({ apiKey })],
+      model: "googleai/gemini-3.5-flash",
+    });
+  }
+  return _aiInstance;
+};
+
+export const ai = new Proxy({} as ReturnType<typeof genkit>, {
+  get(_target, prop) {
+    const instance = getAi();
+    const value = Reflect.get(instance, prop);
+    return typeof value === "function" ? value.bind(instance) : value;
+  },
 });
 
 /** Schema for AgentePlanner task breakdown output. */
