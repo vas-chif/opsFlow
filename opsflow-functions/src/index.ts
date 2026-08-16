@@ -102,7 +102,7 @@ export const onTaskCreated = onDocumentCreated(
         "Assegna un punteggio di complessità da 1 (banale) a 10 (complesso) ed una categoria pertinente.";
 
       const llmResponse = await ai.generate({
-        model: "googleai/gemini-3.5-flash",
+        model: "googleai/gemini-3.6-flash",
         prompt: plannerPrompt,
         output: { schema: TaskBreakdownSchema },
       });
@@ -130,7 +130,7 @@ export const onTaskCreated = onDocumentCreated(
             complexityScore,
             suggestedCategory,
             confidence: 0.95,
-            modelVersion: "gemini-3.5-flash",
+            modelVersion: "gemini-3.6-flash",
             lastAnalyzed: new Date().toISOString(),
             piiSanitizedCount: sanitizedTitle.piiCount + sanitizedDesc.piiCount,
           },
