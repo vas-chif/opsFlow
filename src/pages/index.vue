@@ -809,6 +809,11 @@ onMounted(async () => {
 .task-card {
   border-radius: 20px;
   transition: all 0.25s ease;
+  height: 260px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
 }
 
 .task-title-text {
@@ -816,6 +821,25 @@ onMounted(async () => {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 80%;
+}
+
+.task-desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+  line-height: 1.5;
+  margin-bottom: auto;
+}
+
+@media (max-width: 599px) {
+  .task-card {
+    height: auto;
+    min-height: 220px;
+  }
 }
 
 .light-task-card {
