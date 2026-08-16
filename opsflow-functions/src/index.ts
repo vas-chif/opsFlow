@@ -95,7 +95,7 @@ export const onTaskCreated = onDocumentCreated(
       // Dynamic AI Task Breakdown via Genkit & Gemini 3.5 Flash
       const plannerPrompt =
         "Sei AgentePlanner, l'esperto di decomposizione strategica dei task di OpsFlow.\n" +
-        `Analizza il titolo e la descrizione del seguente task:\n` +
+        "Analizza il titolo e la descrizione del seguente task:\n" +
         `Titolo: "${sanitizedTitle.sanitizedText}"\n` +
         `Descrizione: "${sanitizedDesc.sanitizedText}"\n\n` +
         "Scomponi l'attività in 3-5 sotto-task operative ed in sequenza logica.\n" +
