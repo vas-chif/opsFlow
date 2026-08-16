@@ -65,7 +65,7 @@ export const chatWithAgentFlow = ai.defineFlow(
 
     // 3. Generate response with tool calling support
     const llmResponse = await ai.generate({
-      model: "googleai/gemini-3.6-flash",
+      model: "googleai/gemini-3.5-flash",
       prompt: systemInstruction,
       tools: [
         createGmailDraftTool,
