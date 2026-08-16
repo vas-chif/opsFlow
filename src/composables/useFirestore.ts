@@ -187,7 +187,7 @@ async function updateWorkspaceTaskDoc(
 } /*end updateWorkspaceTaskDoc*/
 
 /**
- * Delete a task inside a specific workspace collection.
+ * Delete a task inside a specific workspace collection, including all nested subcollections (cascading delete).
  */
 async function deleteWorkspaceTaskDoc(workspaceId: string, taskId: string): Promise<void> {
   const authStore = useAuthStore();
@@ -197,7 +197,7 @@ async function deleteWorkspaceTaskDoc(workspaceId: string, taskId: string): Prom
     throw new Error("Tenant ID not available - user must be authenticated");
   }
 
-  const docRef = doc(
+  const taskDocRef = doc(
     db,
     "tenants",
     tenantId.value,
@@ -206,8 +206,56 @@ async function deleteWorkspaceTaskDoc(workspaceId: string, taskId: string): Prom
     COLLECTIONS.TASKS,
     taskId,
   );
-  await deleteDoc(docRef);
+
+  // Delete nested subcollections (approvals, sessions, messages)
+  const subcollectionNames = ["approvals", "sessions", "messages"];
+  for (const subName of subcollectionNames) {
+    try {
+      const subColRef = collection(taskDocRef, subName);
+      const subSnap = await getDocs(subColRef);
+      for (const subDoc of subSnap.docs) {
+        await deleteDoc(subDoc.ref);
+      }
+    } catch {
+      // Subcollection might not exist
+    }
+  }
+
+  await deleteDoc(taskDocRef);
 } /*end deleteWorkspaceTaskDoc*/
+
+/**
+ * Delete a workspace document completely, including all tasks and their nested subcollections (cascading delete).
+ */
+async function deleteWorkspaceDoc(workspaceId: string): Promise<void> {
+  const authStore = useAuthStore();
+  const { tenantId } = storeToRefs(authStore);
+
+  if (!tenantId.value) {
+    throw new Error("Tenant ID not available - user must be authenticated");
+  }
+
+  const tasksColRef = collection(
+    db,
+    "tenants",
+    tenantId.value,
+    COLLECTIONS.WORKSPACES,
+    workspaceId,
+    COLLECTIONS.TASKS,
+  );
+
+  try {
+    const tasksSnap = await getDocs(tasksColRef);
+    for (const taskDoc of tasksSnap.docs) {
+      await deleteWorkspaceTaskDoc(workspaceId, taskDoc.id);
+    }
+  } catch {
+    // Tasks collection might not exist
+  }
+
+  const workspaceDocRef = doc(db, "tenants", tenantId.value, COLLECTIONS.WORKSPACES, workspaceId);
+  await deleteDoc(workspaceDocRef);
+} /*end deleteWorkspaceDoc*/
 
 /**
  * Move a task document from a source workspace to a target workspace atomically.
@@ -439,6 +487,7 @@ export function useFirestore() {
     getWorkspaceTaskDocs,
     updateWorkspaceTaskDoc,
     deleteWorkspaceTaskDoc,
+    deleteWorkspaceDoc,
     moveWorkspaceTaskDoc,
 
     // Task operations

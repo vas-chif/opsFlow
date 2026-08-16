@@ -581,8 +581,9 @@ export const useTaskStore = defineStore("tasks", {
       this.error = null;
 
       try {
-        await firestore.deleteTenantDoc(firestore.COLLECTIONS.WORKSPACES, workspaceId);
+        await firestore.deleteWorkspaceDoc(workspaceId);
         this.workspaces = this.workspaces.filter((w) => w.id !== workspaceId);
+        this.tasks = this.tasks.filter((t) => t.workspaceId !== workspaceId);
         saveCachedWorkspaces(this.workspaces);
       } catch (err) {
         this.error = err instanceof Error ? err.message : "Failed to delete workspace";
