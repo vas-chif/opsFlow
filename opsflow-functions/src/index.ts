@@ -188,33 +188,36 @@ export const onTaskUpdated = onDocumentUpdated(
 /**
  * Callable Function: chatWithAgent
  */
-export const chatWithAgent = onRequest({ cors: true }, async (req, res) => {
-  try {
-    const { message, workspaceId, taskId, workspacePrompt, workspaceName, linkedResources } =
-      req.body || {};
-    if (!message || typeof message !== "string") {
-      res.status(400).json({ error: "Missing required string 'message'" });
-      return;
-    }
+export const chatWithAgent = onRequest(
+  { cors: true, timeoutSeconds: 300, memory: "1GiB" },
+  async (req, res) => {
+    try {
+      const { message, workspaceId, taskId, workspacePrompt, workspaceName, linkedResources } =
+        req.body || {};
+      if (!message || typeof message !== "string") {
+        res.status(400).json({ error: "Missing required string 'message'" });
+        return;
+      }
 
-    const result = await chatWithAgentFlow({
-      message,
-      workspaceId,
-      taskId,
-      workspacePrompt,
-      workspaceName,
-      linkedResources,
-    });
-    res.status(200).json(result);
-  } catch (err) {
-    logger.error("chatWithAgent failed", { err });
-    res.status(500).json({
-      reply: "⚠️ Agente AI temporaneamente non disponibile. Riprova tra qualche istante.",
-      agentName: "Sistema",
-      toolsUsed: [],
-    });
-  }
-}); /* end chatWithAgent */
+      const result = await chatWithAgentFlow({
+        message,
+        workspaceId,
+        taskId,
+        workspacePrompt,
+        workspaceName,
+        linkedResources,
+      });
+      res.status(200).json(result);
+    } catch (err) {
+      logger.error("chatWithAgent failed", { err });
+      res.status(500).json({
+        reply: "⚠️ Agente AI temporaneamente non disponibile. Riprova tra qualche istante.",
+        agentName: "Sistema",
+        toolsUsed: [],
+      });
+    }
+  },
+); /* end chatWithAgent */
 
 // ── HUMAN-IN-THE-LOOP: resolveApproval ───────────────────────────────────────
 

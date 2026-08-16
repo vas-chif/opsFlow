@@ -80,6 +80,7 @@ export const searchWebAndPlatformsTool = ai.defineTool(
 
     try {
       const response = await fetch(jinaUrl, {
+        signal: AbortSignal.timeout(8000),
         headers: {
           Accept: "text/markdown",
           "X-Return-Format": "markdown",
@@ -192,6 +193,7 @@ export const jinaReaderTool = ai.defineTool(
     const jinaUrl = `https://r.jina.ai/${url}`;
 
     const response = await fetch(jinaUrl, {
+      signal: AbortSignal.timeout(8000),
       headers: {
         Accept: "text/markdown",
         "X-Return-Format": "markdown",
