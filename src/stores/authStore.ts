@@ -3,13 +3,15 @@
  * @description Pinia store for multi-tenant auth via Firebase JWT custom claims, email verification, and local cache.
  * @author Vasile Chifeac
  * @created 2026-07-16
- * @modified 2026-07-29
+ * @modified 2026-08-17
  *
  * @notes
  * - JWT-only navigation: roles/tenant from getIdTokenResult, not Firestore (§5)
+ * - Step 8 RBAC: superadmin (platform) | admin (tenant) | user (workspace)
  * - Mandatory Email Verification check before session access (§3, GDPR)
  * - Synchronous local session cache (opsflow_user_session) to prevent F5 refresh redirect (§5)
  * - Logout resets Pinia state and clears session cache — never localStorage.clear() (§5, §11)
+ * - setUserRole action calls CF via httpsCallable (§3 HTTP Stack — no fetch direct)
  *
  * @dependencies
  * - pinia
@@ -35,12 +37,19 @@ import {
   signOut,
   type User,
 } from "firebase/auth";
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 // ── Types ────────────────────────────────────────────────────────────────────
-import type { AuthClaims, TenantRole, UserProfile } from "@/types/auth";
+import type {
+  AuthClaims,
+  TenantRole,
+  UserProfile,
+  SetUserRoleRequest,
+  SetUserRoleResponse,
+} from "@/types/auth";
 
 // ── Utils ────────────────────────────────────────────────────────────────────
-import { auth } from "@/boot/firebase";
+import { auth, app } from "@/boot/firebase";
 
 interface AuthState {
   user: UserProfile | null;
@@ -78,6 +87,10 @@ function saveCachedUser(user: UserProfile | null): void {
   }
 } /*end saveCachedUser*/
 
+/**
+ * Maps raw JWT claims to a typed AuthClaims object.
+ * Accepts all Step 8 RBAC roles plus legacy values for backward compat.
+ */
 function mapClaims(claims: Record<string, unknown>): AuthClaims | null {
   const tenantId = claims.tenantId;
   const role = claims.role;
@@ -87,7 +100,8 @@ function mapClaims(claims: Record<string, unknown>): AuthClaims | null {
     return null;
   }
 
-  if (role !== "admin" && role !== "manager" && role !== "operator" && role !== "viewer") {
+  const validRoles: TenantRole[] = ["superadmin", "admin", "user", "manager", "operator", "viewer"];
+  if (!validRoles.includes(role as TenantRole)) {
     return null;
   }
 
@@ -138,12 +152,38 @@ export const useAuthStore = defineStore("auth", {
       return state.user?.claims?.tenantId ?? "default-tenant";
     },
 
+    /** Current user role from JWT claim. Defaults to 'user' for legacy compat. */
     role: (state): TenantRole => {
-      return state.user?.claims?.role ?? "operator";
+      return state.user?.claims?.role ?? "user";
     },
 
+    /** True if the user has the platform-level superadmin role (Step 8). */
+    isSuperAdmin: (state): boolean => {
+      return state.user?.claims?.role === "superadmin";
+    },
+
+    /** True if the user is admin or superadmin — can manage workspaces and members (Step 8). */
     isAdmin: (state): boolean => {
-      return state.user?.claims?.role === "admin";
+      const r = state.user?.claims?.role;
+      return r === "admin" || r === "superadmin";
+    },
+
+    /**
+     * True if the user can manage workspace settings, invite members, and configure integrations.
+     * Requires `admin` or `superadmin` role (Step 8 — Fase 2.2).
+     */
+    canManageWorkspace: (state): boolean => {
+      const r = state.user?.claims?.role;
+      return r === "admin" || r === "superadmin";
+    },
+
+    /**
+     * True if the user can approve or reject critical AI actions (Human-in-the-Loop).
+     * Requires `admin` or `superadmin` role (Step 8 — Fase 2.2).
+     */
+    canApproveAI: (state): boolean => {
+      const r = state.user?.claims?.role;
+      return r === "admin" || r === "superadmin";
     },
   },
 
@@ -276,6 +316,31 @@ export const useAuthStore = defineStore("auth", {
     /**
      * Force-refresh the ID token and re-read custom claims.
      */
+    /**
+     * Assign a role to a user by calling the setUserRole Cloud Function.
+     * Only callable by superadmin or admin (enforced server-side via JWT, Fase 1.1).
+     * On success, the target user must re-login to receive the updated JWT token.
+     */
+    async setUserRole(payload: SetUserRoleRequest): Promise<SetUserRoleResponse> {
+      this.isLoading = true;
+      this.error = null;
+
+      try {
+        const functions = getFunctions(app, "us-central1");
+        const callable = httpsCallable<SetUserRoleRequest, SetUserRoleResponse>(
+          functions,
+          "setUserRole",
+        );
+        const result = await callable(payload);
+        return result.data;
+      } catch (err) {
+        this.error = err instanceof Error ? err.message : "setUserRole failed";
+        throw err;
+      } finally {
+        this.isLoading = false;
+      }
+    } /*end setUserRole*/,
+
     async refreshClaims(): Promise<void> {
       const firebaseUser = auth.currentUser;
       if (!firebaseUser) {

@@ -18,8 +18,10 @@
 import "dotenv/config";
 import { setGlobalOptions } from "firebase-functions";
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import { getFirestore } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
 import { initializeApp } from "firebase-admin/app";
 import { google } from "googleapis";
 
@@ -27,16 +29,15 @@ import { google } from "googleapis";
 import { sanitizePii } from "./ai/piiSanitizer";
 import { ai, TaskBreakdownSchema } from "./ai/genkitConfig";
 
-// Cloud Cost Control: cap maximum running instances to 10
-import { onRequest } from "firebase-functions/v2/https";
-import { chatWithAgentFlow } from "./ai/chatFlow";
-
 // ── OAuth Token Vault ─────────────────────────────────────────────────────────
 import {
   getAuthenticatedOAuth2Client,
   saveOAuthToken,
   OAuthVaultError,
 } from "./tools/googleOAuthHandler";
+
+// ── Chat Flow ─────────────────────────────────────────────────────────────────
+import { chatWithAgentFlow } from "./ai/chatFlow";
 
 // Initialize Firebase Admin SDK (idempotent)
 try {
@@ -46,6 +47,101 @@ try {
 }
 
 setGlobalOptions({ maxInstances: 10 });
+
+// ── RBAC: JWT Middleware Helper (Fase 1.2) ────────────────────────────────────
+
+/**
+ * Validates the caller's JWT token and checks the required role.
+ * Throws HttpsError if unauthorized — never queries Firestore for authz (§5).
+ *
+ * @param auth  - The auth context from an onCall handler.
+ * @param allowedRoles - At least one of these roles must match the token claim.
+ */
+function requireRole(
+  auth: { uid: string; token: Record<string, unknown> } | undefined,
+  allowedRoles: Array<"superadmin" | "admin" | "user">,
+): void {
+  if (!auth) {
+    throw new HttpsError("unauthenticated", "Autenticazione richiesta.");
+  }
+  if (auth.token.isActive !== true) {
+    throw new HttpsError("permission-denied", "Account non attivo. Contatta l'amministratore.");
+  }
+  const callerRole = auth.token.role as string | undefined;
+  if (!callerRole || !allowedRoles.includes(callerRole as "superadmin" | "admin" | "user")) {
+    throw new HttpsError(
+      "permission-denied",
+      `Ruolo insufficiente. Richiesto: ${allowedRoles.join(" o ")}.`,
+    );
+  }
+} /*end requireRole*/
+
+// ── RBAC: setUserRole Callable Function (Fase 1.1) ───────────────────────────
+
+/**
+ * Callable Function: setUserRole
+ *
+ * Sets Firebase Auth custom claims for a target user.
+ * Only callable by `superadmin` (any tenant) or `admin` (same tenant only).
+ * JWT custom claims written: { tenantId, role, isActive }
+ *
+ * @security JWT-only authz (§5) — no Firestore read for permission check.
+ * @gdpr Logs operation to audit trail for GDPR Art. 30 compliance.
+ */
+export const setUserRole = onCall(async (request) => {
+  const caller = request.auth as { uid: string; token: Record<string, unknown> } | undefined;
+
+  // Fase 1.2: validate caller role via JWT middleware
+  requireRole(caller, ["superadmin", "admin"]);
+
+  const {
+    uid,
+    tenantId,
+    role,
+    isActive = true,
+  } = request.data as {
+    uid: string;
+    tenantId: string;
+    role: "superadmin" | "admin" | "user";
+    isActive?: boolean;
+  };
+
+  if (!uid || !tenantId || !role) {
+    throw new HttpsError("invalid-argument", "uid, tenantId e role sono obbligatori.");
+  }
+
+  // Admin can only assign roles within their own tenant
+  const callerRole = caller!.token.role as string;
+  if (callerRole === "admin" && caller!.token.tenantId !== tenantId) {
+    throw new HttpsError(
+      "permission-denied",
+      "Un admin può assegnare ruoli solo all'interno del proprio tenant.",
+    );
+  }
+
+  // Admin cannot elevate to superadmin
+  if (callerRole === "admin" && role === "superadmin") {
+    throw new HttpsError("permission-denied", "Un admin non può assegnare il ruolo superadmin.");
+  }
+
+  await getAuth().setCustomUserClaims(uid, { tenantId, role, isActive });
+
+  // GDPR Art. 30 audit log
+  const db = getFirestore();
+  await db.collection("audit").add({
+    action: "setUserRole",
+    targetUid: uid,
+    tenantId,
+    newRole: role,
+    isActive,
+    performedBy: caller!.uid,
+    performedByRole: callerRole,
+    timestamp: new Date().toISOString(),
+  });
+
+  logger.info("setUserRole: claims updated", { targetUid: uid, tenantId, role, isActive });
+  return { success: true, uid, role };
+}); /* end setUserRole */
 
 /**
  * Trigger: AgentePlanner
