@@ -54,8 +54,9 @@ setGlobalOptions({ maxInstances: 10 });
  * Validates the caller's JWT token and checks the required role.
  * Throws HttpsError if unauthorized — never queries Firestore for authz (§5).
  *
- * @param auth  - The auth context from an onCall handler.
- * @param allowedRoles - At least one of these roles must match the token claim.
+ * @param {object | undefined} auth - The auth context from an onCall handler.
+ * @param {Array<string>} allowedRoles - At least one of these roles must match the token claim.
+ * @returns {void}
  */
 function requireRole(
   auth: { uid: string; token: Record<string, unknown> } | undefined,
@@ -74,7 +75,7 @@ function requireRole(
       `Ruolo insufficiente. Richiesto: ${allowedRoles.join(" o ")}.`,
     );
   }
-} /*end requireRole*/
+} // end requireRole
 
 // ── RBAC: setUserRole Callable Function (Fase 1.1) ───────────────────────────
 
@@ -89,10 +90,13 @@ function requireRole(
  * @gdpr Logs operation to audit trail for GDPR Art. 30 compliance.
  */
 export const setUserRole = onCall(async (request) => {
-  const caller = request.auth as { uid: string; token: Record<string, unknown> } | undefined;
+  const rawAuth = request.auth as { uid: string; token: Record<string, unknown> } | undefined;
 
-  // Fase 1.2: validate caller role via JWT middleware
-  requireRole(caller, ["superadmin", "admin"]);
+  // Fase 1.2: validate caller role via JWT middleware — throws if unauthenticated or missing role
+  requireRole(rawAuth, ["superadmin", "admin"]);
+
+  // After requireRole succeeds, rawAuth is guaranteed non-null. Use typed const to avoid !
+  const caller = rawAuth as { uid: string; token: Record<string, unknown> };
 
   const {
     uid,
@@ -111,8 +115,8 @@ export const setUserRole = onCall(async (request) => {
   }
 
   // Admin can only assign roles within their own tenant
-  const callerRole = caller!.token.role as string;
-  if (callerRole === "admin" && caller!.token.tenantId !== tenantId) {
+  const callerRole = caller.token.role as string;
+  if (callerRole === "admin" && caller.token.tenantId !== tenantId) {
     throw new HttpsError(
       "permission-denied",
       "Un admin può assegnare ruoli solo all'interno del proprio tenant.",
@@ -134,14 +138,14 @@ export const setUserRole = onCall(async (request) => {
     tenantId,
     newRole: role,
     isActive,
-    performedBy: caller!.uid,
+    performedBy: caller.uid,
     performedByRole: callerRole,
     timestamp: new Date().toISOString(),
   });
 
   logger.info("setUserRole: claims updated", { targetUid: uid, tenantId, role, isActive });
   return { success: true, uid, role };
-}); /* end setUserRole */
+}); // end setUserRole
 
 /**
  * Trigger: AgentePlanner
