@@ -51,7 +51,7 @@ Usa esclusivamente **yarn** come package manager principale. Usa **npm** SOLO do
 
 ## 🛡️ §3 — Sicurezza, Privacy & GDPR (Healthcare Data Protection)
 
-Ogni dato sanitario e anagrafica paziente è altamente sensibile (PII).
+Ogni dato sanitario e anagrafica paziente è altamente sensibile (PII). Per i dettagli completi sulla Security Policy ed il protocollo di Responsible Disclosure, fare riferimento al file **[SECURITY.md](file:///home/chif-vas/projects/opsflow/SECURITY.md)**.
 
 ### GDPR Compliance (Art. 30 e 32)
 
