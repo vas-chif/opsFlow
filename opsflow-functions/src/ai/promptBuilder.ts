@@ -78,10 +78,12 @@ export function buildStackedPrompt(options: PromptStackOptions): string {
       level2Constitution += `RUOLI E SKILL ATTIVI: [${attitude.skills.join(", ")}]\n`;
     }
     if (attitude.rules?.doList && attitude.rules.doList.length > 0) {
-      level2Constitution += `REGOLE VINCOLANTI (DO):\n${attitude.rules.doList.map((r, i) => `  ${i + 1}. ${r}`).join("\n")}\n`;
+      const doText = attitude.rules.doList.map((r, i) => `  ${i + 1}. ${r}`).join("\n");
+      level2Constitution += `REGOLE VINCOLANTI (DO):\n${doText}\n`;
     }
     if (attitude.rules?.dontList && attitude.rules.dontList.length > 0) {
-      level2Constitution += `DIVIETI TASSATIVI (DON'T):\n${attitude.rules.dontList.map((r, i) => `  ${i + 1}. ${r}`).join("\n")}\n`;
+      const dontText = attitude.rules.dontList.map((r, i) => `  ${i + 1}. ${r}`).join("\n");
+      level2Constitution += `DIVIETI TASSATIVI (DON'T):\n${dontText}\n`;
     }
   } else if (workspacePrompt && workspacePrompt.trim()) {
     level2Constitution += `SYSTEM PROMPT: ${workspacePrompt.trim()}\n`;
