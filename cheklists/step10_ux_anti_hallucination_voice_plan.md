@@ -1,130 +1,161 @@
-# 📋 Step 10 — Piano Chirurgico: AI Prompt Architect (DBS), Skill Matrix, Anti-Allucinazione, Presets & Voice Experience
+# 📋 Step 10 — Piano Chirurgico DEFINITIVO (v2.1): AI Prompt Architect, Skill Matrix Universale, Anti-Allucinazione & Voice Experience
 
 > **Progetto:** OpsFlow SaaS Platform  
 > **Autore:** Vasile Chifeac & AI Pair Architect  
 > **Data:** 17 Agosto 2026  
-> **Stato:** Planned / In Attesa di Autorizzazione  
+> **Stato:** Planned / In Attesa di Autorizzazione Codice  
 > **Riferimenti AGENTS.md:** §0 (Explain-Before-Doing), §3 (GDPR & Security), §5 (Cloud Cost Optimization €0 Nativo), §14 (Agent Architecture)
 
 ---
 
-## 🌟 1. Innovazione UX: Copilota "AI Prompt Architect" (Framework DBS No-Code)
+## 🔴 ANALISI CRITICA DELLA PROPOSTA — Problemi Architetturali Identificati
 
-Per eliminare la "sindrome della pagina bianca" e consentire a qualsiasi utente (anche senza esperienza di prompt engineering) di configurare l'Agente AI, viene aggiunto il pulsante **`[✨ AI Prompt Architect]`** direttamente nell'header del Workspace.
+> [!CAUTION]
+> Questi non sono dettagli cosmeti. Sono rischi strutturali che, se ignorati, richiederebbero un refactoring massiccio in futuro. L'Agent ha il dovere di segnalarli secondo §0.
 
-### 📌 Layout Workspace Header
+### ❌ Problema 1: Conflitto di Schema Dati — `WorkspaceAttitude` vs `WorkspaceLinkedResources`
 
-```
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│ 🗂️ Versilia Care  [🟢 Active Working]      [✨ AI Prompt Architect] [🎭 Atteggiamento IA] [➕ Nuovo Task] │
-└────────────────────────────────────────────────────────────────────────────────────────┘
-```
+**Il difetto più grave del piano precedente.** Attualmente in [`src/types/models.ts`](file:///home/chif-vas/projects/opsflow/src/types/models.ts#L221-L233) i campi `doList`, `dontList`, `toneOfVoice` e `assignedAgents` sono già presenti ma **annidati dentro `WorkspaceLinkedResources`**, che è un oggetto concettualmente dedicato alle risorse Google OAuth (Gmail, Sheets, Drive). Mescolare le regole operative dell'IA con le credenziali OAuth è una violazione del principio di Separazione delle Responsabilità (Single Responsibility Principle).
 
-### 🔄 Flusso di Interazione Step-by-Step
+La proposta di aggiungere `WorkspaceAttitude` come nuovo campo separato è corretta, ma bisogna **rimuovere i campi duplicati da `WorkspaceLinkedResources`** e migrare i dati Firestore esistenti. Se non si fa, si avranno due sorgenti di verità in conflitto.
 
-1. **Apertura Modale Minimalista:** L'utente clicca `[✨ AI Prompt Architect]`. Si apre un campo di input libero in cui descrivere l'idea a parole semplici:
+### ❌ Problema 2: `systemPrompt: string` è un Anti-Pattern da Eliminare
 
-   > _"Voglio che questo workspace mi aiuti a mappare medici e farmacie in Versilia, creare bozze email per proporre i servizi PICC e post-dimissione e inserire tutto su Google Sheets senza inventare contatti fake."_
+Attualmente `Workspace` ha `systemPrompt?: string` come campo stringa grezza salvata su Firestore. Se si introduce `WorkspaceAttitude` con `doList`, `dontList`, `skills` ed `industryScope`, il campo `systemPrompt` diventa **ridondante e pericoloso**: a runtime `promptBuilder.ts` dovrà scegliere quale dei due usare. Questa ambiguità è una fonte certa di bug e regressioni.
 
-2. **Generazione DBS in Background (Gemini Flash-Lite):**
-   Un micro-prompt Genkit converte istantaneamente l'idea nella struttura **DBS (Direction, Blueprints, Solutions)**:
-   - **Direction (Processo Operativo):** Definisce le fasi del task (`Scouting → Analisi → Bozza Email → Tabella Sheets`).
-   - **Blueprints (Regole DO & DON'T):** Estrae i vincoli ferrei (_"DO: usa solo dati geografici verificati di Lucca/Massa-Carrara"_; _"DON'T: non inventare numeri di telefono o email"_).
-   - **Solutions & Skill Matrix:** Seleziona i ruoli specialistici (`[Healthcare Specialist]`, `[Lead Scout]`, `[Business Analyst]`) ed i tool richiesti (`[Gmail Draft]`, `[Google Sheets]`, `[Jina Reader]`).
+La soluzione corretta è eliminare `systemPrompt` come campo primitivo e costruire la stringa di sistema dinamicamente **solo a runtime** nel `promptBuilder.ts` a partire dai campi strutturati di `WorkspaceAttitude`.
 
-3. **Applicazione Istantanea (`[🚀 Applica all'Atteggiamento IA]`):**
-   L'utente visualizza l'anteprima formattata e, con un solo click, i dati vengono scritti su Firestore in `WorkspaceAttitude`. Quando l'utente apre `[🎭 Atteggiamento IA]`, troverà tutti i tab già precompilati alla perfezione!
+### ❌ Problema 3: `gemini-3.5-flash-lite` NON Esiste come Stringa di Modello in Genkit
 
----
+Verificando il codice attuale in [`genkitConfig.ts`](file:///home/chif-vas/projects/opsflow/opsflow-functions/src/ai/genkitConfig.ts#L39), il modello configurato è `"googleai/gemini-3.5-flash"`. Il modello `"googleai/gemini-3.5-flash-lite"` **non è ancora disponibile nel plugin `@genkit-ai/google-genai`**. Usare una stringa non registrata causerebbe un errore runtime silenzioso in produzione. La scelta corretta è usare `"googleai/gemini-1.5-flash-8b"` (equivalente Lite già disponibile su Genkit) oppure restare su `"googleai/gemini-3.5-flash"` che è già ultra-economico.
 
-## 🌍 2. Benchmark Sistemi IA Internazionali (ChatGPT, Gemini, Claude, Perplexity)
+### ❌ Problema 4: `toneOfVoice` è un Enum Chiuso — Incompatibile con la Visione Multi-Settore
 
-### A. Prevenzione Allucinazioni (Anti-Hallucination Engineering)
+Il campo `toneOfVoice` in `WorkspaceLinkedResources` è tipizzato come `"formal" | "informal" | "operational" | "roi_synthetic"`. Questo è esattamente il tipo di enum chiuso e cablato nel codice che **impedisce l'universalità multi-settore**. Un parrucchiere potrebbe aver bisogno di "creativo", un avvocato di "accademico", un medico di "clinico". Il campo `tone` deve essere una **stringa libera `string`** generata dal DBS Engine, non un enum predefinito.
 
-I leader internazionali (Google Gemini, Anthropic Claude 3.5, OpenAI ChatGPT) applicano 4 pilastri per azzerare le allucinazioni:
+### ⚠️ Problema 5: Groq Whisper come Fallback STT — Dipendenza da API Key Esterna
 
-1. **System Prompt Anchoring & Double Boundary:**
-   Le regole ferree (_DO_ e _DON'T_) vengono ancorate in cima ed in fondo al prompt. L'Agente riceve istruzioni per rifiutare risposte se i vincoli territoriali o di dominio non sono soddisfatti.
-2. **Grounding & Source Citation:**
-   Ogni affermazione estratta sul web (`jinaReaderTool`) o da file PDF deve essere riconducibile alla fonte. Se l'informazione non c'è, l'Agente risponde _"Informazione non presente nelle fonti verificate"_.
-3. **Structured Output Schemas (Zod Alignment):**
-   Output forzato via schemi Zod rigidi per tabelle ed estrazioni.
-4. **Confidence Assessment & Refusal Protocol:**
-   Score di affidabilità ed etica per i dati sensibili.
+Il piano prevedeva il Groq Whisper Free Tier come fallback STT. Questo introduce una dipendenza da una credenziale API esterna (`GROQ_API_KEY`) da gestire in Cloud Functions Secrets Manager. Per la strategia **Zero-Dependency**, il fallback ottimale è degradare silenziosamente a un input testuale con un messaggio UI chiaro: _"Il tuo browser non supporta la dettatura vocale. Scrivi il tuo messaggio."_. Il Groq può essere una funzione opzionale attivabile solo se l'utente configura esplicitamente la sua chiave.
 
 ---
 
-### 🎙️ B. Analisi Vocale Approfondita & Mappa delle Alternative a Costo Zero
+## 🌟 1. Architettura DBS Universale Corretta
 
-Le API vocali a pagamento (come ElevenLabs o OpenAI Whisper Cloud) fatturano a carattere o a minuto di audio, arrivando a costare tra **15 € e 50 € / mese** per utente attivo.
+### 📌 Principio Fondamentale: Parameterizzazione, Non Branching
 
-#### Mappa delle Alternative Senza Costi Cloud:
+Il motore DBS NON deve avere logiche `if/else` per settore. Ogni professione diventa un semplice input che il modello LLM interpreta autonomamente.
 
-| Soluzione Vocale                       | Stack Tecnologico                             |   Costo    | Pro & Vantaggi                                                                                                 | Contro / Limitazioni                                         |
-| :------------------------------------- | :-------------------------------------------- | :--------: | :------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------- |
-| **1. Web Speech API (Nativa Browser)** | `webkitSpeechRecognition` + `speechSynthesis` | **€ 0,00** | • Latenza zero e consumo banda nullo.<br>• Nessun server intermedio.<br>• **100% GDPR compliant** (on-device). | Qualità audio dipendente dal SO (ottima su Mac/iOS/Android). |
-| **2. Groq Whisper Cloud (Free Tier)**  | API `Whisper-large-v3` su LPU Groq            | **€ 0,00** | • Trascrizione STT ultra-accurata.<br>• Velocità istantanea (<500ms).<br>• Free Tier: 14.400 req/giorno.       | Richiede connessione web ed invio del chunk audio.           |
-| **3. Modelli WASM / WebGPU On-Device** | `Transformers.js` con Kokoro / Piper TTS      | **€ 0,00** | • Voci neurali realistiche nel browser.<br>• Nessuna API key esterna.                                          | Download iniziale di 30-80 MB di modello WASM nella cache.   |
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 🌍 INPUT UTENTE QUALSIASI (DBS Engine — Linguaggio Naturale Libero)         │
+│ • Parrucchiere: "Gestione appuntamenti, formule colori, richiami clienti"   │
+│ • Ingegnere: "Calcolo computi metrici, capitolati, normative edilizie"      │
+│ • Estetista: "Schede trattamenti corpo/viso, listino prezzi, promozioni"    │
+│ • Avvocato: "Sintesi memorie difensive, scadenze termini, bozze diffide"    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ ⚙️ GEMINI GENERA DINAMICAMENTE L'ATTEGGIAMENTO (JSON Strutturato)           │
+│ • industryScope → Settore rilevato (non hard-coded)                        │
+│ • tone         → Tono consigliato per la professione (stringa libera)      │
+│ • skills[]     → Competenze estratte automaticamente dalla descrizione     │
+│ • rules.doList[]   → Vincoli DO specifici del settore                      │
+│ • rules.dontList[] → Divieti assoluti specifici del settore                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 🗂️ SCRITTO SU FIRESTORE (workspaces/{wsId}) come campo `attitude`           │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 📌 I 4 Preset Universali (Validi per QUALSIASI Mestiere)
+
+| Icona | Preset                       | ID             | Esempi Trasversali                                                                       |
+| :---: | :--------------------------- | :------------- | :--------------------------------------------------------------------------------------- |
+|  📊   | **Dati & Tabelle**           | `sheet_sync`   | Preventivi, listini trattamenti, computi metrici, inventari magazzino, registri presenze |
+|  ✉️   | **Comunicazione & Outreach** | `gmail_draft`  | Conferme appuntamenti, lettere presentazione, risposte clienti, preventivi via Gmail     |
+|  🔍   | **Ricerca & Scouting**       | `web_search`   | Fornitori, normative legali/sanitarie/edilizie, concorrenza locale via Jina Reader       |
+|  📄   | **Analisi Documentale**      | `pdf_analysis` | Capitolati, contratti, referti, schede tecniche, normative                               |
 
 ---
 
-## 💰 3. Analisi Ingegneristica dei Costi (Prima vs Dopo)
+## 💰 2. Matrice dei Costi & Ottimizzazione Zero-Waste (Revisione Critica)
 
-### 📊 Confronto Impatto Economico Mensile (su 1.000 Utenti Attivi):
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│ SOLUZIONE CLOUD TRADIZIONALE (API Whisper + ElevenLabs)                │
-│ • Speech-to-Text Cloud API:  ~ € 15.00 / mese                         │
-│ • Text-to-Speech ElevenLabs: ~ € 35.00 / mese                         │
-│ TOTALE CLOUD:                ~ € 50.00 / utente / mese (INSOSTENIBILE) │
-├────────────────────────────────────────────────────────────────────────┤
-│ ARCHITETTURA OPSFLOW ZERO-COST (Web Speech API + Groq + Gemini Lite)   │
-│ • Text-to-Speech (TTS):     window.speechSynthesis  ➔ € 0,00         │
-│ • Speech-to-Text (STT):     Web Speech API + Groq   ➔ € 0,00         │
-│ • AI Prompt Architect:      Gemini 3.5 Flash-Lite   ➔ € 0,01 / mese  │
-│ TOTALE OPSFLOW:              ~ € 0.01 / MESE (RISPARMIO DEL 99,98%)    │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
-> 💡 **Verdetto Economico:** L'architettura proposta azzera completamente i costi vocali mantenendo le funzionalità vocali fluide sia in ascolto (TTS) che in dettatura (STT), senza richiedere alcun abbonamento esterno!
+| Componente          | Scelta Tecnologica                     |  Costo Stimato / mese  | Note Critiche                                                                               |
+| :------------------ | :------------------------------------- | :--------------------: | :------------------------------------------------------------------------------------------ |
+| **Copilota DBS**    | `gemini-3.5-flash` (non `flash-lite`!) | ~ € 0,005 / 1.000 gen. | ⚠️ `flash-lite` non registrato in Genkit. Usare `gemini-3.5-flash` o `gemini-1.5-flash-8b`. |
+| **STT (Dettatura)** | Native `webkitSpeechRecognition`       |       **€ 0,00**       | Fallback: messaggio testuale se browser non supportato (NO Groq per Zero-Dependency).       |
+| **TTS (Lettura)**   | Native `window.speechSynthesis`        |       **€ 0,00**       | 20 righe di TypeScript puro. Già usato da Gemini Web.                                       |
+| **Web Scraping**    | Jina AI Reader (`r.jina.ai`)           |       **€ 0,00**       | Già attivo in `webSearch.ts`.                                                               |
+| **Motore Chat**     | `gemini-3.5-flash`                     |  ~ € 0,075 / 1M token  | Con 10 € prepagati → centinaia di migliaia di chat.                                         |
+| **TOTALE MENSILE**  |                                        |  **< € 0,10 / mese**   | Ampiamente sotto il target di € 1,00/mese per 1.000 utenti.                                 |
 
 ---
 
-## 🛠️ 4. Checklist Chirurgica delle Modifiche al Codice (5 Fasi)
+## 🛠️ 3. Checklist Chirurgica DEFINITIVA (5 Fasi — Piano v2.1)
 
-### 📌 Fase 1: Copilota "AI Prompt Architect" (Workspace Header)
+### 📌 Fase 1: Modello Dati TypeScript (`src/types/models.ts`) — REFACTORING FONDAMENTALE
 
-- [ ] Aggiungere il pulsante `[✨ AI Prompt Architect]` nell'header di `src/pages/index.vue`.
-- [ ] Creare la modale `AIPromptArchitectModal.vue` per l'inserimento dell'idea in linguaggio naturale.
-- [ ] Creare la Cloud Function Genkit `generateDbsAttitude` (modello `gemini-3.5-flash-lite`) per convertire l'idea in un oggetto `WorkspaceAttitude` strutturato.
-- [ ] Aggiungere il pulsante `[🚀 Applica all'Atteggiamento IA]` per salvare l'atteggiamento generato in Firestore su `workspaces/{wsId}`.
+> [!IMPORTANT]
+> Questa fase è un prerequisito bloccante per tutte le altre. Non procedere alle Fasi 2-5 senza aver completato questa.
 
-### 📌 Fase 2: Estensione Modello Dati TypeScript (`src/types/models.ts`)
+- [ ] **1.1** Creare la nuova interfaccia **`WorkspaceRules`** separata:
+  ```typescript
+  export interface WorkspaceRules {
+    doList: string[]; // Regole vincolanti (es. "Cita articoli di legge", "Usa prezzi IVA inclusa")
+    dontList: string[]; // Divieti assoluti (es. "Non inventare dati", "Non confermare ordini senza ok")
+    outputFormat: "markdown" | "table" | "json" | "bullet_points";
+  }
+  ```
+- [ ] **1.2** Creare la nuova interfaccia **`WorkspaceAttitude`** separata:
+  ```typescript
+  export interface WorkspaceAttitude {
+    industryScope: string; // Settore rilevato (stringa libera — NON enum fisso)
+    tone: string; // Tono consigliato (stringa libera — NON enum fisso)
+    skills: string[]; // Tag competenze (es. ["Colorimetria", "Computi Metrici"])
+    rules: WorkspaceRules;
+  }
+  ```
+- [ ] **1.3** Aggiungere il campo `attitude?: WorkspaceAttitude` all'interfaccia `Workspace`.
+- [ ] **1.4** Aggiungere `TaskPresetCategory` come tipo union: `'web_search' | 'sheet_sync' | 'gmail_draft' | 'pdf_analysis'`.
+- [ ] **1.5** ⚠️ Rimuovere da `WorkspaceLinkedResources` i campi duplicati (`doList`, `dontList`, `toneOfVoice`, `assignedAgents`) perché migrati in `WorkspaceAttitude` — con migrazione dati Firestore.
+- [ ] **1.6** ⚠️ Valutare il deprecamento di `systemPrompt?: string` in `Workspace`, da sostituire con la costruzione dinamica a runtime in `promptBuilder.ts`.
 
-- [ ] Estendere `Workspace` e `WorkspaceLinkedResources` con `skills: string[]` (Skill Matrix ad input tag).
-- [ ] Estendere `WorkspaceRules` con `doList: string[]` e `dontList: string[]`.
-- [ ] Definire `TaskPresetCategory = 'web_search' | 'sheet_sync' | 'gmail_draft' | 'pdf_analysis'`.
+### 📌 Fase 2: Cloud Function DBS (`generateDbsAttitude`)
 
-### 📌 Fase 3: Interfaccia Configurazione Workspace & Task (`WorkspaceAttitudeModal.vue` & `CreateTaskModal.vue`)
+- [ ] **2.1** Creare la Cloud Function Genkit `generateDbsAttitude` con modello **`gemini-3.5-flash`** (non `flash-lite`).
+- [ ] **2.2** Definire il `DBS_SYSTEM_PROMPT` rigorosamente agnostico: nessun settore cablato, risposta esclusivamente in JSON strutturato conforme a `WorkspaceAttitude`.
+- [ ] **2.3** Validare l'output con schema Zod corrispondente a `WorkspaceAttitude` prima di scrivere su Firestore.
+- [ ] **2.4** Verificare il JWT Custom Claim (`isActive: true`) prima di eseguire la generazione.
 
-- [ ] **Skill Matrix Tag Input:** Inserire in Tab 1 di `WorkspaceAttitudeModal.vue` il componente `q-select` dinamico (`use-chips`, `multiple`, `new-value-mode="add-unique"`).
-- [ ] **Preset Task Selector:** Inserire in `CreateTaskModal.vue` la tendina Preset rapida (`📊 Genera Tabella`, `🔍 Lead Scout`, `✉️ Bozza Gmail`, `📄 Analisi PDF`).
+### 📌 Fase 3: UI Header & Modale `AIPromptArchitectModal.vue`
 
-### 📌 Fase 4: Motore Stacking Prompt Anti-Allucinazione (`opsflow-functions/src/ai/promptBuilder.ts`)
+- [ ] **3.1** Inserire il pulsante `[✨ AI Prompt Architect]` nell'header del Workspace in `src/pages/index.vue`.
+- [ ] **3.2** Creare `src/components/AIPromptArchitectModal.vue` con: campo input testo libero + spinner durante la generazione DBS + sezione preview del `WorkspaceAttitude` generato + pulsante `[🚀 Applica all'Atteggiamento IA]`.
+- [ ] **3.3** Aggiornare `WorkspaceAttitudeModal.vue`:
+  - Sostituire l'enum `toneOfVoice` con campo `q-input` stringa libera.
+  - Aggiungere **Skill Matrix Tag Input** via `q-select` con `use-chips`, `multiple`, `new-value-mode="add-unique"`.
+- [ ] **3.4** Aggiornare `CreateTaskModal.vue` con la tendina Preset universale (`📊 Dati & Tabelle`, `✉️ Comunicazione`, `🔍 Ricerca`, `📄 Analisi PDF`).
 
-- [ ] Formattare nel Level 2 la **Skill Matrix**: `RUOLI SPECIALISTICI ATTIVI: [Healthcare Specialist, Lead Scout, ...]`.
-- [ ] Formattare la sezione `=== EXPLICIT DO & DON'T RULES ===` per ancorare l'output.
+### 📌 Fase 4: Motore Stacking Prompt Anti-Allucinazione (`promptBuilder.ts`)
+
+- [ ] **4.1** Aggiornare `PromptStackOptions` per accettare il nuovo oggetto `WorkspaceAttitude` strutturato (non solo la stringa `workspacePrompt`).
+- [ ] **4.2** Iniettare nel Level 2 la sezione `=== WORKSPACE CONSTITUTION ===` con:
+  - `SETTORE: {industryScope}` — vincola il dominio di competenza.
+  - `TONO: {tone}` — definisce lo stile di risposta.
+  - `RUOLI ATTIVI: [{skills.join(', ')}]` — inietta la Skill Matrix.
+  - `DEVI (DO): {doList}` — regole vincolanti formattate come lista numerata.
+  - `NON DEVI MAI (DON'T): {dontList}` — divieti tassativi formattati.
+- [ ] **4.3** Aggiungere alla fine del prompt il marcatore di ancoraggio: `=== FINE COSTITUZIONE WORKSPACE — RISPETTA RIGOROSAMENTE ===`.
 
 ### 📌 Fase 5: Voice Experience (TTS/STT Nativo) & Upload PDF in `TaskChatWindow.vue`
 
-- [ ] **Composable `useWebSpeech.ts`:** Dettatura vocale (`SpeechRecognition`) con fallback a Groq Whisper Free Tier, e lettura vocale (`window.speechSynthesis`).
-- [ ] **Voice Recorder (STT):** Pulsante microfono 🎙️ nel footer chat.
-- [ ] **Voice Reader (TTS):** Icona altoparlante 🔊 su ogni messaggio per l'ascolto a voce alta.
-- [ ] **Document Understanding (PDF Upload):** Pulsante allegato 📎 / Drag & Drop per inviare file PDF a Gemini Multimodal.
+- [ ] **5.1** Creare `src/composables/useWebSpeech.ts` con:
+  - **TTS:** `window.speechSynthesis` con selezione voce in italiano (`lang = 'it-IT'`).
+  - **STT:** `webkitSpeechRecognition` con gestione errori (no Groq — fallback a input testuale).
+- [ ] **5.2** Aggiungere il pulsante microfono 🎙️ nel footer di `TaskChatWindow.vue` con feedback visivo (animazione pulse).
+- [ ] **5.3** Aggiungere l'icona altoparlante 🔊 su ogni fumetto risposta Agente AI.
+- [ ] **5.4** Aggiungere il pulsante allegato 📎 per l'upload PDF con invio del buffer base64 al backend Gemini Multimodal.
+- [ ] **5.5** Verificare compatibilità browser: `SpeechRecognition` supportata su Chrome/Edge/Safari ma NON su Firefox Desktop (mostrare avviso `q-banner` in caso di browser non supportato).
 
 ---
 
-## 💡 Verdetto Finale
+## 💡 Verdetto Definitivo
 
-L'introduzione del copilota **AI Prompt Architect (Framework DBS)** e la **Voice Experience Nativa a costo zero** rendono OpsFlow una piattaforma SaaS di livello mondiale, immediata per qualsiasi utente e finanziariamente perfetta.
+L'architettura DBS universale, zero-cost e senza enum fissi rappresenta la soluzione ottimale per OpsFlow. La priorità assoluta prima di qualsiasi codice UI è la **Fase 1** (refactoring del modello dati TypeScript) per evitare doppioni ed ambiguità tra `WorkspaceLinkedResources` e `WorkspaceAttitude`. Solo su questa base solida si può costruire tutto il resto senza debito tecnico.
