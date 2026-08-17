@@ -116,6 +116,13 @@ Il motore DBS NON deve avere logiche `if/else` per settore. Ogni professione div
 - [ ] **1.4** Aggiungere `TaskPresetCategory` come tipo union: `'web_search' | 'sheet_sync' | 'gmail_draft' | 'pdf_analysis'`.
 - [ ] **1.5** ⚠️ Rimuovere da `WorkspaceLinkedResources` i campi duplicati (`doList`, `dontList`, `toneOfVoice`, `assignedAgents`) perché migrati in `WorkspaceAttitude` — con migrazione dati Firestore.
 - [ ] **1.6** ⚠️ Valutare il deprecamento di `systemPrompt?: string` in `Workspace`, da sostituire con la costruzione dinamica a runtime in `promptBuilder.ts`.
+- [ ] **1.7** 🔴 **Aggiornare `taskStore.ts` (Pinia) — CRITICO:** Adeguare lo store Pinia ai nuovi tipi TypeScript senza rompere la cache localStorage esistente:
+  - Aggiungere `isGeneratingAttitude: boolean` allo `state` come flag reattivo condiviso tra modale DBS e header (previene double-submit).
+  - Aggiungere action sincrona `setAttitude(workspaceId: string, attitude: WorkspaceAttitude)` che aggiorna `this.workspaces` in-memory e chiama `saveCachedWorkspaces()`.
+  - Aggiungere funzione di **idratazione/migrazione** in `loadCachedWorkspaces()`: se un workspace in cache ha i vecchi campi `linkedResources.doList`/`dontList`/`toneOfVoice` ma `attitude` è assente, rimapparli provvisoriamente in `attitude`. Questo è il safety-net per la migrazione live senza downtime e senza corrompere il rendering.
+  - Aggiungere `updateWorkspaceAttitude(workspaceId: string, attitude: WorkspaceAttitude)` come action asincrona che scrive su Firestore il campo `attitude` e aggiorna la cache locale via `setAttitude`.
+  - Esporre il computed getter `activeWorkspaceAttitude` che legge da `activeWorkspace?.attitude`.
+  - Deprecare l'action `updateWorkspacePrompt` (già presente in `taskStore.ts` riga 383) → sostituire con `updateWorkspaceAttitude`.
 
 ### 📌 Fase 2: Cloud Function DBS (`generateDbsAttitude`)
 
@@ -123,6 +130,11 @@ Il motore DBS NON deve avere logiche `if/else` per settore. Ogni professione div
 - [ ] **2.2** Definire il `DBS_SYSTEM_PROMPT` rigorosamente agnostico: nessun settore cablato, risposta esclusivamente in JSON strutturato conforme a `WorkspaceAttitude`.
 - [ ] **2.3** Validare l'output con schema Zod corrispondente a `WorkspaceAttitude` prima di scrivere su Firestore.
 - [ ] **2.4** Verificare il JWT Custom Claim (`isActive: true`) prima di eseguire la generazione.
+- [ ] **2.5** 🔴 **Vertical Slice Step A — Action Pinia FE-BE:** Creare l'action asincrona `generateDbsAttitude(workspaceId: string, userPrompt: string)` dentro `taskStore.ts`:
+  - Imposta `isGeneratingAttitude = true` per bloccare double-submit.
+  - Chiama la Cloud Function `generateDbsAttitude` tramite **Firebase Functions SDK** (`getFunctions` + `httpsCallable`) — non `fetch` diretto (anti-pattern per AGENTS.md §3 HTTP Stack).
+  - In caso di **successo**: chiama `setAttitude()` per aggiornare lo store localmente → poi `updateWorkspaceAttitude()` per persistere su Firestore (pattern Write-Firestore-First di §5).
+  - In caso di **errore**: imposta `this.error` con messaggio user-friendly e reimposta `isGeneratingAttitude = false`.
 
 ### 📌 Fase 3: UI Header & Modale `AIPromptArchitectModal.vue`
 
@@ -132,6 +144,23 @@ Il motore DBS NON deve avere logiche `if/else` per settore. Ogni professione div
   - Sostituire l'enum `toneOfVoice` con campo `q-input` stringa libera.
   - Aggiungere **Skill Matrix Tag Input** via `q-select` con `use-chips`, `multiple`, `new-value-mode="add-unique"`.
 - [ ] **3.4** Aggiornare `CreateTaskModal.vue` con la tendina Preset universale (`📊 Dati & Tabelle`, `✉️ Comunicazione`, `🔍 Ricerca`, `📄 Analisi PDF`).
+
+### 📌 Fase 3.5 — 🧪 E2E Smoke Test: Vertical Slice (Gate Obbligatorio Prima di Fase 4)
+
+> [!IMPORTANT]
+> Questa fase è un **gate di qualità bloccante**. Non procedere a Fase 4 e Fase 5 senza aver superato tutti e 3 gli Step. Sviluppare Fase 4 su uno store non ancora sincronizzato con il backend genera bug silenti difficili da tracciare.
+
+- [ ] **3.5.A** ✅ **Round-trip DBS (Vertical Slice Step A):** Inserire testo libero nella modale `AIPromptArchitectModal.vue` e verificare:
+  - Lo spinner è visibile durante la chiamata CF e `isGeneratingAttitude === true`.
+  - La risposta JSON contiene `industryScope`, `tone`, `skills[]`, `rules.doList[]`, `rules.dontList[]` conformi al tipo `WorkspaceAttitude`.
+  - Il flag `isGeneratingAttitude` torna `false` dopo il completamento (successo o errore).
+- [ ] **3.5.B** ✅ **Salvataggio & Reattività Pinia (Vertical Slice Step B):** Premere `[🚀 Applica]` e verificare:
+  - Il documento Firestore `tenants/{tenantId}/workspaces/{workspaceId}` contiene il campo `attitude` popolato (verificabile da Firebase Console).
+  - Il tab "Atteggiamento" in `WorkspaceAttitudeModal.vue` mostra i dati aggiornati **senza reload di pagina** (reattività Pinia confermata).
+  - La cache `localStorage` con chiave `opsflow_workspaces_cache` contiene il campo `attitude` aggiornato (ispezione da DevTools → Application → Local Storage).
+- [ ] **3.5.C** ✅ **Runtime Prompting End-to-End (Vertical Slice Step C):** Inviare un messaggio nella chat del task e verificare:
+  - Nei log Firebase Functions (`chatWithAgent`) è presente la sezione `=== WORKSPACE CONSTITUTION ===` con `industryScope`, `tone` e `skills` iniettati.
+  - La risposta dell'agente riflette il tono e i vincoli `doList`/`dontList` configurati nel workspace.
 
 ### 📌 Fase 4: Motore Stacking Prompt Anti-Allucinazione (`promptBuilder.ts`)
 
@@ -156,6 +185,40 @@ Il motore DBS NON deve avere logiche `if/else` per settore. Ogni professione div
 
 ---
 
-## 💡 Verdetto Definitivo
+## 🔄 Strategia di Sviluppo: Vertical Slice (FE ↔ BE in Parallelo)
 
-L'architettura DBS universale, zero-cost e senza enum fissi rappresenta la soluzione ottimale per OpsFlow. La priorità assoluta prima di qualsiasi codice UI è la **Fase 1** (refactoring del modello dati TypeScript) per evitare doppioni ed ambiguità tra `WorkspaceLinkedResources` e `WorkspaceAttitude`. Solo su questa base solida si può costruire tutto il resto senza debito tecnico.
+Sviluppare prima tutto il backend e poi il frontend in compartimenti stagni è il modo più lento per trovare bug di integrazione. OpsFlow adopera la strategia **Vertical Slice**: ogni micro-funzionalità viene portata da Firestore fino al rendering UI in un unico ciclo di sviluppo collaudabile immediatamente.
+
+```
+Step A — Round-trip DBS:
+  CF generateDbsAttitude  →  Action Pinia  →  Preview Modale Vue
+       ↑                                           ↓
+  Test: JSON valido ricevuto?          Test: spinner + dati visibili?
+
+Step B — Salvataggio & Reattività Pinia:
+  [Applica]  →  Firestore write  →  setAttitude()  →  WorkspaceAttitudeModal aggiornato
+       ↑                                                         ↓
+  Test: campo 'attitude' su Firestore?           Test: UI reattiva senza reload?
+
+Step C — Runtime Prompting End-to-End:
+  Chat input  →  promptBuilder legge store  →  CF chatWithAgent  →  risposta coerente
+       ↑                                                                    ↓
+  Test: WORKSPACE CONSTITUTION nel log CF?         Test: tone + skills rispettati?
+```
+
+Ogni Step è un **checkpoint autonomo e collaudabile**. Se fallisce uno Step, ci si ferma e si corregge prima di avanzare. Il vantaggio: bug di integrazione vengono scoperti subito, non dopo aver scritto altre 5 Fasi di codice sopra.
+
+---
+
+## 💡 Verdetto Definitivo (v2.2)
+
+L'architettura DBS universale è il cuore di OpsFlow. Il corretto ordine di esecuzione — **mai parallelo, sempre sequenziale per slice** — è:
+
+| Ordine | Fase                                               | Dipendenza                                          |
+| :----: | :------------------------------------------------- | :-------------------------------------------------- |
+|   1    | **Fase 1 + 1.7** — Modello dati TypeScript + Pinia | Prerequisito bloccante per tutto                    |
+|   2    | **Fase 2 + 2.5** — CF Backend + Action Pinia       | FE e BE sviluppati come slice integrato             |
+|   3    | **Fase 3** — UI Modale + Header button             | Costruita sopra store già funzionante               |
+|   4    | **Fase 3.5** — E2E Smoke Test gate                 | ⛔ Gate obbligatorio. Non saltare.                  |
+|   5    | **Fase 4** — Prompt Stacking Anti-Allucinazione    | Potenziato da dati `WorkspaceAttitude` già validati |
+|   6    | **Fase 5** — Voice & PDF Upload                    | Funzionalità additive su base stabile               |
