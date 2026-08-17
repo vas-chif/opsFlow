@@ -35,9 +35,11 @@ const isOpen = computed({
 
 const activeTab = ref<"behavior" | "resources" | "agents" | "sandbox">("behavior");
 
-// Tab 1: Behavior & Prompt
+// Tab 1: Behavior & Prompt (DBS Framework)
 const systemPrompt = ref("");
-const toneOfVoice = ref<"formal" | "informal" | "operational" | "roi_synthetic">("operational");
+const industryScope = ref("Generale");
+const tone = ref("operativo e conciso");
+const skills = ref<string[]>([]);
 const doListInput = ref("");
 const dontListInput = ref("");
 
@@ -182,7 +184,9 @@ const presetTemplates = [
     title: "🎯 Commerciale / Lead Scout",
     prompt:
       "Il tuo ruolo è cercare clienti IT, profilare prospect su LinkedIn/Indeed, generare bozze email e gestire gli stati dei contatti (Contattato, Risposta Positiva, Follow-up 30gg).",
-    tone: "roi_synthetic" as const,
+    industryScope: "Commerciale / B2B Sales",
+    tone: "professionale, sintetico, orientato al ROI",
+    skills: ["Lead Scouting", "Email Outreach", "ROI Analysis"],
     doRules:
       "Cita sempre i link LinkedIn e il Match Score %\nUsa sempre createGmailDraftTool per le bozze",
     dontRules: "Non inviare mai email direttamente\nNon loggare dati PII in chiaro",
@@ -191,7 +195,9 @@ const presetTemplates = [
     title: "📊 Amministrazione & Fogli",
     prompt:
       "Il tuo ruolo è leggere e scrivere dati su Google Sheets, spostare informazioni tra fogli, riassumere email di sistema e filtrare la spam.",
-    tone: "formal" as const,
+    industryScope: "Amministrazione & Contabilità",
+    tone: "formale, preciso, analitico",
+    skills: ["Google Sheets Sync", "Report Sintesi", "Data Validation"],
     doRules:
       "Aggiorna il foglio Google Sheets predefinito\nRichiedi approvazione prima di modificare",
     dontRules: "Non sovrascrivere dati esistenti senza conferma",
@@ -200,7 +206,9 @@ const presetTemplates = [
     title: "🧠 Prompt Optimization Hub",
     prompt:
       "Il tuo ruolo è analizzare i prompt inviati negli altri workspace, rilevare inefficienze o ambiguità e suggerire versioni ottimizzate per ridurre gli errori allo 0%.",
-    tone: "operational" as const,
+    industryScope: "AI Operations & Compliance",
+    tone: "operativo, rigoroso, tecnico",
+    skills: ["Prompt Architecture", "Anti-Hallucination Audit", "GDPR Compliance"],
     doRules: "Analizza la chiarezza delle istruzioni\nFormatta i risultati in tabelle pulite",
     dontRules: "Non modificare il comportamento base di sicurezza",
   },
@@ -211,15 +219,27 @@ watch(
   (newWs) => {
     if (newWs) {
       systemPrompt.value = newWs.systemPrompt || "";
+      const att = newWs.attitude;
+      if (att) {
+        industryScope.value = att.industryScope || "Generale";
+        tone.value = att.tone || "operativo";
+        skills.value = att.skills || [];
+        doListInput.value = att.rules?.doList ? att.rules.doList.join("\n") : "";
+        dontListInput.value = att.rules?.dontList ? att.rules.dontList.join("\n") : "";
+      } else {
+        const res = newWs.linkedResources || {};
+        industryScope.value = newWs.category || "Generale";
+        tone.value = res.toneOfVoice || "operativo";
+        skills.value = res.assignedAgents || [];
+        doListInput.value = res.doList ? res.doList.join("\n") : "";
+        dontListInput.value = res.dontList ? res.dontList.join("\n") : "";
+      }
       const res = newWs.linkedResources || {};
       googleEmail.value = res.googleEmail || "";
       linkedEmails.value = res.linkedEmails || (res.googleEmail ? [res.googleEmail] : []);
       defaultSheetId.value = res.defaultSheetId || "";
       defaultDriveFolderId.value = res.defaultDriveFolderId || "";
       isOAuthConnected.value = res.isOAuthConnected || false;
-      toneOfVoice.value = res.toneOfVoice || "operational";
-      doListInput.value = res.doList ? res.doList.join("\n") : "";
-      dontListInput.value = res.dontList ? res.dontList.join("\n") : "";
       if (res.assignedAgents) {
         assignedAgents.value = res.assignedAgents;
       }
@@ -230,7 +250,9 @@ watch(
 
 const applyPreset = (preset: (typeof presetTemplates)[0]): void => {
   systemPrompt.value = preset.prompt;
-  toneOfVoice.value = preset.tone;
+  industryScope.value = preset.industryScope;
+  tone.value = preset.tone;
+  skills.value = [...preset.skills];
   doListInput.value = preset.doRules;
   dontListInput.value = preset.dontRules;
   q.notify({
@@ -247,10 +269,11 @@ const runSandboxTest = (): void => {
     testOutput.value =
       `🧪 [Simulazione Response Engine OpsFlow]\n` +
       `📌 Workspace: ${props.workspace?.name || "Corrente"}\n` +
+      `🏢 Settore: ${industryScope.value}\n` +
       `📧 Gmail Autorizzata: ${googleEmail.value || "Non collegata"}\n` +
       `📊 Sheet ID: ${defaultSheetId.value || "Non specificato"}\n` +
       `📁 Drive Folder ID: ${defaultDriveFolderId.value || "Non specificato"}\n` +
-      `🎭 Tono: ${toneOfVoice.value}\n\n` +
+      `🎭 Tono: ${tone.value}\n\n` +
       `Risposta IA: Ricevuta istruzione "${testInput.value}". Gli agenti attivi (${assignedAgents.value.join(", ")}) invocheranno searchWebAndPlatformsTool e formatteranno i risultati.`;
     isTesting.value = false;
   }, 600);
@@ -277,9 +300,6 @@ const handleSave = async (): Promise<void> => {
       defaultDriveFolderId: defaultDriveFolderId.value.trim(),
       isOAuthConnected: isOAuthConnected.value,
       assignedAgents: assignedAgents.value,
-      doList,
-      dontList,
-      toneOfVoice: toneOfVoice.value,
     };
 
     await taskStore.updateWorkspaceLinkedResources(
@@ -288,9 +308,20 @@ const handleSave = async (): Promise<void> => {
       systemPrompt.value,
     );
 
+    await taskStore.updateWorkspaceAttitude(props.workspace.id, {
+      industryScope: industryScope.value.trim() || "Generale",
+      tone: tone.value.trim() || "operativo",
+      skills: skills.value,
+      rules: {
+        doList,
+        dontList,
+        outputFormat: "markdown",
+      },
+    });
+
     q.notify({
       type: "positive",
-      message: "Atteggiamento IA e Risorse Google collegate con successo!",
+      message: "Atteggiamento IA & Skill Matrix salvati con successo!",
       position: "top",
     });
     emit("saved");
@@ -364,13 +395,55 @@ const handleSave = async (): Promise<void> => {
               </div>
             </div>
 
+            <div class="row q-col-gutter-md q-mb-md">
+              <div class="col-12 col-md-6">
+                <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
+                  Dominio / Settore Professionale:
+                </div>
+                <q-input
+                  v-model="industryScope"
+                  outlined
+                  dense
+                  placeholder="Es: Parrucchiere, Ingegneria Edile, Avvocato..."
+                />
+              </div>
+              <div class="col-12 col-md-6">
+                <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
+                  Tono di Voce e Stile:
+                </div>
+                <q-input
+                  v-model="tone"
+                  outlined
+                  dense
+                  placeholder="Es: operativo e conciso, clinico, creativo, formale..."
+                />
+              </div>
+            </div>
+
+            <div class="q-mb-md">
+              <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
+                🧠 Skill Matrix (Competenze IA Attive):
+              </div>
+              <q-select
+                v-model="skills"
+                use-input
+                use-chips
+                multiple
+                hide-dropdown-icon
+                new-value-mode="add-unique"
+                outlined
+                dense
+                placeholder="Premi Invio per aggiungere nuove competenze..."
+              />
+            </div>
+
             <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
-              System Prompt (Istruzione Ruolo IA):
+              System Prompt (Istruzioni aggiuntive):
             </div>
             <q-input
               v-model="systemPrompt"
               type="textarea"
-              rows="4"
+              rows="3"
               outlined
               dense
               class="q-mb-md"
@@ -380,7 +453,7 @@ const handleSave = async (): Promise<void> => {
             <div class="row q-col-gutter-md q-mb-md">
               <div class="col-12 col-md-6">
                 <div class="text-caption text-weight-bold text-positive q-mb-xs">
-                  ✅ Regole da Rispettare (Do List):
+                  ✅ Regole Vincolanti (Do List):
                 </div>
                 <q-input
                   v-model="doListInput"
@@ -393,7 +466,7 @@ const handleSave = async (): Promise<void> => {
               </div>
               <div class="col-12 col-md-6">
                 <div class="text-caption text-weight-bold text-negative q-mb-xs">
-                  🚫 Regole Vietate (Don't List):
+                  🚫 Divieti Tassativi (Don't List):
                 </div>
                 <q-input
                   v-model="dontListInput"

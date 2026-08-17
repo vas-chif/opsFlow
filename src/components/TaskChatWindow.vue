@@ -11,6 +11,7 @@ import { useQuasar } from "quasar";
 import { useTaskStore } from "../stores/taskStore";
 import { useTaskChatStore, type FloatingWindow } from "../stores/taskChatStore";
 import { useSecureLogger } from "../composables/useSecureLogger";
+import { useWebSpeech } from "../composables/useWebSpeech";
 import type { TaskStatus } from "../types/models";
 
 const props = defineProps<{
@@ -21,6 +22,16 @@ const q = useQuasar();
 const taskStore = useTaskStore();
 const chatStore = useTaskChatStore();
 const logger = useSecureLogger();
+const {
+  isListening,
+  isSpeaking,
+  isSttSupported,
+  isTtsSupported,
+  startListening,
+  stopListening,
+  speak,
+  stopSpeaking,
+} = useWebSpeech();
 
 const task = computed(() => props.windowState.task);
 const workspace = computed(
@@ -30,6 +41,42 @@ const workspace = computed(
 const chatMessage = ref("");
 const isSending = ref(false);
 const chatScrollRef = ref<HTMLDivElement | null>(null);
+const fileInputRef = ref<HTMLInputElement | null>(null);
+const selectedFile = ref<File | null>(null);
+
+function triggerFileInput(): void {
+  fileInputRef.value?.click();
+} /*end triggerFileInput*/
+
+function handleFileSelected(event: Event): void {
+  const target = event.target as HTMLInputElement;
+  if (target.files && target.files[0]) {
+    selectedFile.value = target.files[0];
+    q.notify({
+      type: "info",
+      message: `Documento allegato: ${selectedFile.value.name}`,
+      icon: "attach_file",
+    });
+  }
+} /*end handleFileSelected*/
+
+function toggleVoiceDictation(): void {
+  if (isListening.value) {
+    stopListening();
+  } else {
+    startListening((text) => {
+      chatMessage.value = text;
+    });
+  }
+} /*end toggleVoiceDictation*/
+
+function handleSpeakMessage(text: string): void {
+  if (isSpeaking.value) {
+    stopSpeaking();
+  } else {
+    speak(text);
+  }
+} /*end handleSpeakMessage*/
 
 // Drag state
 const isDragging = ref(false);
@@ -219,6 +266,7 @@ const handleSendChatMessage = async (): Promise<void> => {
         taskId: task.value.id,
         workspacePrompt: workspace.value?.systemPrompt,
         workspaceName: workspace.value?.name,
+        attitude: workspace.value?.attitude,
         linkedResources: workspace.value?.linkedResources,
       }),
     });
@@ -486,6 +534,24 @@ const handleExecuteTaskAI = async (): Promise<void> => {
                 style="white-space: pre-wrap; font-size: 0.85rem"
                 v-html="renderFormattedMessage(msg.text)"
               ></div>
+
+              <!-- TTS Audio Read Aloud button for agent messages -->
+              <div v-if="msg.sender === 'agent'" class="row items-center justify-end q-mt-xs">
+                <q-btn
+                  flat
+                  round
+                  dense
+                  size="xs"
+                  :icon="isSpeaking ? 'volume_off' : 'volume_up'"
+                  :color="isSpeaking ? 'negative' : 'grey-7'"
+                  @click="handleSpeakMessage(msg.text)"
+                >
+                  <q-tooltip>{{
+                    isSpeaking ? "Fermia audio" : "Ascolta risposta vocale"
+                  }}</q-tooltip>
+                </q-btn>
+              </div>
+
               <div
                 v-if="msg.toolsUsed && msg.toolsUsed.length > 0"
                 class="row wrap q-gutter-xs q-mt-xs"
@@ -512,17 +578,68 @@ const handleExecuteTaskAI = async (): Promise<void> => {
           </q-chat-message>
         </div>
 
-        <!-- Chat Input Field -->
+        <!-- File Upload Hidden Input -->
+        <input
+          ref="fileInputRef"
+          type="file"
+          accept=".pdf,.doc,.docx,.txt"
+          style="display: none"
+          @change="handleFileSelected"
+        />
+
+        <!-- Attached File Chip Preview -->
+        <div v-if="selectedFile" class="q-px-xs q-pb-xs">
+          <q-chip
+            removable
+            color="primary"
+            text-color="white"
+            dense
+            icon="attach_file"
+            @remove="selectedFile = null"
+          >
+            {{ selectedFile.name }}
+          </q-chip>
+        </div>
+
+        <!-- Chat Input Field with Voice STT & File Attach -->
         <div class="q-pt-xs bg-white shrink">
           <q-input
             v-model="chatMessage"
             outlined
             dense
-            placeholder="Scrivi direttiva..."
+            placeholder="Scrivi direttiva o detta..."
             :disabled="isSending"
             style="font-size: 0.85rem"
             @keyup.enter="handleSendChatMessage"
           >
+            <template #before>
+              <q-btn
+                flat
+                round
+                dense
+                icon="attach_file"
+                color="grey-7"
+                :disabled="isSending"
+                @click="triggerFileInput"
+              >
+                <q-tooltip>Allega documento PDF / testo per Document Understanding</q-tooltip>
+              </q-btn>
+              <q-btn
+                flat
+                round
+                dense
+                :icon="isListening ? 'mic_off' : 'mic'"
+                :color="isListening ? 'negative' : 'primary'"
+                :class="{ 'pulse-mic': isListening }"
+                :disabled="isSending || !isSttSupported"
+                @click="toggleVoiceDictation"
+              >
+                <q-tooltip>{{
+                  isListening ? "Interrompi dettatura" : "Dettatura vocale nativa (€0)"
+                }}</q-tooltip>
+              </q-btn>
+            </template>
+
             <template #after>
               <q-btn
                 round
@@ -530,7 +647,7 @@ const handleExecuteTaskAI = async (): Promise<void> => {
                 flat
                 icon="send"
                 color="primary"
-                :disabled="!chatMessage.trim() || isSending"
+                :disabled="(!chatMessage.trim() && !selectedFile) || isSending"
                 @click="handleSendChatMessage"
               />
             </template>
@@ -593,5 +710,24 @@ const handleExecuteTaskAI = async (): Promise<void> => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.pulse-mic {
+  animation: pulse-ring 1.2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  70% {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
 }
 </style>

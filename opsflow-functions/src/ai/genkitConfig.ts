@@ -82,3 +82,33 @@ export const QualityAuditSchema = z.object({
 });
 
 export type QualityAuditResult = z.infer<typeof QualityAuditSchema>;
+
+/** Schema for AI Prompt Architect DBS Workspace Attitude output (Step 10). */
+export const WorkspaceAttitudeSchema = z.object({
+  industryScope: z
+    .string()
+    .describe(
+      "Professional sector or domain identified (e.g. Parrucchiere, Ingegneria Edile, Avvocato, Estetica)",
+    ),
+  tone: z
+    .string()
+    .describe(
+      "Recommended communication style and tone (e.g. formale, operativo, creativo, clinico)",
+    ),
+  skills: z
+    .array(z.string())
+    .describe("Array of 3-6 vertical skills and competencies extracted from the prompt"),
+  rules: z.object({
+    doList: z
+      .array(z.string())
+      .describe("Array of 3-5 binding DO rules specific to this professional domain"),
+    dontList: z
+      .array(z.string())
+      .describe("Array of 3-5 strict DON'T rules to prevent hallucinations and errors"),
+    outputFormat: z
+      .enum(["markdown", "table", "json", "bullet_points"])
+      .describe("Default output format preference"),
+  }),
+});
+
+export type WorkspaceAttitudeResult = z.infer<typeof WorkspaceAttitudeSchema>;

@@ -216,6 +216,30 @@ export interface CreateSubTaskPayload {
 } /*end CreateSubTaskPayload*/
 
 /**
+ * Universal Task Preset categories (Step 10 DBS Engine).
+ */
+export type TaskPresetCategory = "web_search" | "sheet_sync" | "gmail_draft" | "pdf_analysis";
+
+/**
+ * Universal binding rules for AI agent execution in a workspace (Step 10).
+ */
+export interface WorkspaceRules {
+  doList: string[];
+  dontList: string[];
+  outputFormat: "markdown" | "table" | "json" | "bullet_points";
+}
+
+/**
+ * Universal DBS Workspace Attitude & Skill Matrix constitution (Step 10).
+ */
+export interface WorkspaceAttitude {
+  industryScope: string;
+  tone: string;
+  skills: string[];
+  rules: WorkspaceRules;
+}
+
+/**
  * Linked Google resources & OAuth state for a Workspace.
  */
 export interface WorkspaceLinkedResources {
@@ -227,8 +251,11 @@ export interface WorkspaceLinkedResources {
   defaultDriveFolderName?: string;
   isOAuthConnected?: boolean;
   assignedAgents?: string[];
+  /** @deprecated Migrated to WorkspaceAttitude.rules.doList */
   doList?: string[];
+  /** @deprecated Migrated to WorkspaceAttitude.rules.dontList */
   dontList?: string[];
+  /** @deprecated Migrated to WorkspaceAttitude.tone */
   toneOfVoice?: "formal" | "informal" | "operational" | "roi_synthetic";
 }
 
@@ -246,9 +273,11 @@ export interface Workspace {
   icon?: string;
   isPinned?: boolean;
   groupName?: string;
+  /** @deprecated Sostituito dalla costruzione dinamica in promptBuilder.ts via attitude */
   systemPrompt?: string;
   category?: string;
   linkedResources?: WorkspaceLinkedResources;
+  attitude?: WorkspaceAttitude;
 } /*end Workspace*/
 
 /**
@@ -263,6 +292,7 @@ export interface CreateWorkspacePayload {
   systemPrompt?: string;
   category?: string;
   linkedResources?: WorkspaceLinkedResources;
+  attitude?: WorkspaceAttitude;
 } /*end CreateWorkspacePayload*/
 
 /**

@@ -27,7 +27,7 @@ import { google } from "googleapis";
 
 // ── AI & Sanitizer ───────────────────────────────────────────────────────────
 import { sanitizePii } from "./ai/piiSanitizer";
-import { ai, TaskBreakdownSchema } from "./ai/genkitConfig";
+import { ai, TaskBreakdownSchema, WorkspaceAttitudeSchema } from "./ai/genkitConfig";
 
 // ── OAuth Token Vault ─────────────────────────────────────────────────────────
 import {
@@ -292,8 +292,15 @@ export const chatWithAgent = onRequest(
   { cors: true, timeoutSeconds: 300, memory: "1GiB" },
   async (req, res) => {
     try {
-      const { message, workspaceId, taskId, workspacePrompt, workspaceName, linkedResources } =
-        req.body || {};
+      const {
+        message,
+        workspaceId,
+        taskId,
+        workspacePrompt,
+        workspaceName,
+        attitude,
+        linkedResources,
+      } = req.body || {};
       if (!message || typeof message !== "string") {
         res.status(400).json({ error: "Missing required string 'message'" });
         return;
@@ -305,6 +312,7 @@ export const chatWithAgent = onRequest(
         taskId,
         workspacePrompt,
         workspaceName,
+        attitude,
         linkedResources,
       });
       res.status(200).json(result);
@@ -498,4 +506,74 @@ export const googleOAuthCallback = onRequest({ cors: true }, async (req, res) =>
     logger.error("googleOAuthCallback: failed", { err });
     res.status(500).json({ error: "OAuth token exchange failed." });
   }
-}); /* end googleOAuthCallback */
+}); // end googleOAuthCallback
+
+// ── AI PROMPT ARCHITECT: generateDbsAttitude (Step 10 Fase 2) ─────────────────
+
+const DBS_SYSTEM_PROMPT = `Sei AgenteArchitect, il copilota no-code di OpsFlow esperto nel framework DBS (Direction, Blueprints, Solutions).
+Il tuo compito è analizzare la descrizione in linguaggio naturale fornita dall'utente ed estrarre l'atteggiamento operativo universale per l'Agente AI del Workspace.
+
+REGOLE TASSATIVE:
+1. Sii agnostico rispetto al settore (es. Parrucchiere, Ingegneria Edile, Avvocato, Estetica, Software, Sanità).
+2. Identifica con precisione il settore (industryScope) ed il tono di voce consigliato (tone).
+3. Estrai 3-6 competenze chiave (skills) ed inseriscile nella Skill Matrix.
+4. Genera 3-5 regole vincolanti DO (doList) e 3-5 divieti tassativi DON'T (dontList) specifici per quel dominio per prevenire allucinazioni.
+5. Rispondi ESCLUSIVAMENTE in formato JSON strutturato conforme allo schema richiesto.`;
+
+/**
+ * Callable Function: generateDbsAttitude
+ *
+ * Generates structured WorkspaceAttitude (industryScope, tone, skills, DO/DON'T rules)
+ * from a natural language prompt using Genkit & Gemini 3.5 Flash.
+ *
+ * @security Verified active JWT token required (isActive === true).
+ */
+export const generateDbsAttitude = onCall(async (request) => {
+  const rawAuth = request.auth as { uid: string; token: Record<string, unknown> } | undefined;
+
+  if (!rawAuth || rawAuth.token.isActive !== true) {
+    throw new HttpsError(
+      "unauthenticated",
+      "Autenticazione attiva richiesta per utilizzare AI Prompt Architect.",
+    );
+  }
+
+  const { workspaceId, userPrompt } = request.data as {
+    workspaceId: string;
+    userPrompt: string;
+  };
+
+  if (!workspaceId || !userPrompt || typeof userPrompt !== "string") {
+    throw new HttpsError("invalid-argument", "workspaceId e userPrompt sono campi obbligatori.");
+  }
+
+  logger.info("generateDbsAttitude triggered", { workspaceId, uid: rawAuth.uid });
+
+  const sanitized = sanitizePii(userPrompt);
+
+  try {
+    const llmResponse = await ai.generate({
+      model: "googleai/gemini-3.5-flash",
+      prompt: `${DBS_SYSTEM_PROMPT}\n\nDescrizione Workspace Utente:\n"${sanitized.sanitizedText}"`,
+      output: { schema: WorkspaceAttitudeSchema },
+    });
+
+    if (!llmResponse.output) {
+      throw new HttpsError("internal", "Generazione atteggiamento fallita o output vuoto.");
+    }
+
+    const attitude = llmResponse.output;
+
+    logger.info("generateDbsAttitude completed", {
+      workspaceId,
+      industryScope: attitude.industryScope,
+      skillsCount: attitude.skills.length,
+    });
+
+    return { success: true, attitude };
+  } catch (err) {
+    logger.error("generateDbsAttitude error", { workspaceId, err });
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError("internal", "Errore durante la generazione dell'atteggiamento IA.");
+  }
+}); // end generateDbsAttitude

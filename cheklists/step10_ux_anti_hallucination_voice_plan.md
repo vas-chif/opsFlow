@@ -3,7 +3,7 @@
 > **Progetto:** OpsFlow SaaS Platform  
 > **Autore:** Vasile Chifeac & AI Pair Architect  
 > **Data:** 17 Agosto 2026  
-> **Stato:** Planned / In Attesa di Autorizzazione Codice  
+> **Stato:** Completed / Implementato  
 > **Riferimenti AGENTS.md:** §0 (Explain-Before-Doing), §3 (GDPR & Security), §5 (Cloud Cost Optimization €0 Nativo), §14 (Agent Architecture)
 
 ---
@@ -95,7 +95,7 @@ Il motore DBS NON deve avere logiche `if/else` per settore. Ogni professione div
 > [!IMPORTANT]
 > Questa fase è un prerequisito bloccante per tutte le altre. Non procedere alle Fasi 2-5 senza aver completato questa.
 
-- [ ] **1.1** Creare la nuova interfaccia **`WorkspaceRules`** separata:
+- [x] **1.1** Creare la nuova interfaccia **`WorkspaceRules`** separata:
   ```typescript
   export interface WorkspaceRules {
     doList: string[]; // Regole vincolanti (es. "Cita articoli di legge", "Usa prezzi IVA inclusa")
@@ -103,7 +103,7 @@ Il motore DBS NON deve avere logiche `if/else` per settore. Ogni professione div
     outputFormat: "markdown" | "table" | "json" | "bullet_points";
   }
   ```
-- [ ] **1.2** Creare la nuova interfaccia **`WorkspaceAttitude`** separata:
+- [x] **1.2** Creare la nuova interfaccia **`WorkspaceAttitude`** separata:
   ```typescript
   export interface WorkspaceAttitude {
     industryScope: string; // Settore rilevato (stringa libera — NON enum fisso)
@@ -112,11 +112,11 @@ Il motore DBS NON deve avere logiche `if/else` per settore. Ogni professione div
     rules: WorkspaceRules;
   }
   ```
-- [ ] **1.3** Aggiungere il campo `attitude?: WorkspaceAttitude` all'interfaccia `Workspace`.
-- [ ] **1.4** Aggiungere `TaskPresetCategory` come tipo union: `'web_search' | 'sheet_sync' | 'gmail_draft' | 'pdf_analysis'`.
-- [ ] **1.5** ⚠️ Rimuovere da `WorkspaceLinkedResources` i campi duplicati (`doList`, `dontList`, `toneOfVoice`, `assignedAgents`) perché migrati in `WorkspaceAttitude` — con migrazione dati Firestore.
-- [ ] **1.6** ⚠️ Valutare il deprecamento di `systemPrompt?: string` in `Workspace`, da sostituire con la costruzione dinamica a runtime in `promptBuilder.ts`.
-- [ ] **1.7** 🔴 **Aggiornare `taskStore.ts` (Pinia) — CRITICO:** Adeguare lo store Pinia ai nuovi tipi TypeScript senza rompere la cache localStorage esistente:
+- [x] **1.3** Aggiungere il campo `attitude?: WorkspaceAttitude` all'interfaccia `Workspace`.
+- [x] **1.4** Aggiungere `TaskPresetCategory` come tipo union: `'web_search' | 'sheet_sync' | 'gmail_draft' | 'pdf_analysis'`.
+- [x] **1.5** ⚠️ Rimuovere da `WorkspaceLinkedResources` i campi duplicati (`doList`, `dontList`, `toneOfVoice`, `assignedAgents`) perché migrati in `WorkspaceAttitude` — con migrazione dati Firestore.
+- [x] **1.6** ⚠️ Valutare il deprecamento di `systemPrompt?: string` in `Workspace`, da sostituire con la costruzione dinamica a runtime in `promptBuilder.ts`.
+- [x] **1.7** 🔴 **Aggiornare `taskStore.ts` (Pinia) — CRITICO:** Adeguare lo store Pinia ai nuovi tipi TypeScript senza rompere la cache localStorage esistente:
   - Aggiungere `isGeneratingAttitude: boolean` allo `state` come flag reattivo condiviso tra modale DBS e header (previene double-submit).
   - Aggiungere action sincrona `setAttitude(workspaceId: string, attitude: WorkspaceAttitude)` che aggiorna `this.workspaces` in-memory e chiama `saveCachedWorkspaces()`.
   - Aggiungere funzione di **idratazione/migrazione** in `loadCachedWorkspaces()`: se un workspace in cache ha i vecchi campi `linkedResources.doList`/`dontList`/`toneOfVoice` ma `attitude` è assente, rimapparli provvisoriamente in `attitude`. Questo è il safety-net per la migrazione live senza downtime e senza corrompere il rendering.
@@ -126,11 +126,11 @@ Il motore DBS NON deve avere logiche `if/else` per settore. Ogni professione div
 
 ### 📌 Fase 2: Cloud Function DBS (`generateDbsAttitude`)
 
-- [ ] **2.1** Creare la Cloud Function Genkit `generateDbsAttitude` con modello **`gemini-3.5-flash`** (non `flash-lite`).
-- [ ] **2.2** Definire il `DBS_SYSTEM_PROMPT` rigorosamente agnostico: nessun settore cablato, risposta esclusivamente in JSON strutturato conforme a `WorkspaceAttitude`.
-- [ ] **2.3** Validare l'output con schema Zod corrispondente a `WorkspaceAttitude` prima di scrivere su Firestore.
-- [ ] **2.4** Verificare il JWT Custom Claim (`isActive: true`) prima di eseguire la generazione.
-- [ ] **2.5** 🔴 **Vertical Slice Step A — Action Pinia FE-BE:** Creare l'action asincrona `generateDbsAttitude(workspaceId: string, userPrompt: string)` dentro `taskStore.ts`:
+- [x] **2.1** Creare la Cloud Function Genkit `generateDbsAttitude` con modello **`gemini-3.5-flash`** (non `flash-lite`).
+- [x] **2.2** Definire il `DBS_SYSTEM_PROMPT` rigorosamente agnostico: nessun settore cablato, risposta esclusivamente in JSON strutturato conforme a `WorkspaceAttitude`.
+- [x] **2.3** Validare l'output con schema Zod corrispondente a `WorkspaceAttitude` prima di scrivere su Firestore.
+- [x] **2.4** Verificare il JWT Custom Claim (`isActive: true`) prima di eseguire la generazione.
+- [x] **2.5** 🔴 **Vertical Slice Step A — Action Pinia FE-BE:** Creare l'action asincrona `generateDbsAttitude(workspaceId: string, userPrompt: string)` dentro `taskStore.ts`:
   - Imposta `isGeneratingAttitude = true` per bloccare double-submit.
   - Chiama la Cloud Function `generateDbsAttitude` tramite **Firebase Functions SDK** (`getFunctions` + `httpsCallable`) — non `fetch` diretto (anti-pattern per AGENTS.md §3 HTTP Stack).
   - In caso di **successo**: chiama `setAttitude()` per aggiornare lo store localmente → poi `updateWorkspaceAttitude()` per persistere su Firestore (pattern Write-Firestore-First di §5).
@@ -138,50 +138,50 @@ Il motore DBS NON deve avere logiche `if/else` per settore. Ogni professione div
 
 ### 📌 Fase 3: UI Header & Modale `AIPromptArchitectModal.vue`
 
-- [ ] **3.1** Inserire il pulsante `[✨ AI Prompt Architect]` nell'header del Workspace in `src/pages/index.vue`.
-- [ ] **3.2** Creare `src/components/AIPromptArchitectModal.vue` con: campo input testo libero + spinner durante la generazione DBS + sezione preview del `WorkspaceAttitude` generato + pulsante `[🚀 Applica all'Atteggiamento IA]`.
-- [ ] **3.3** Aggiornare `WorkspaceAttitudeModal.vue`:
+- [x] **3.1** Inserire il pulsante `[✨ AI Prompt Architect]` nell'header del Workspace in `src/pages/index.vue`.
+- [x] **3.2** Creare `src/components/AIPromptArchitectModal.vue` con: campo input testo libero + spinner durante la generazione DBS + sezione preview del `WorkspaceAttitude` generato + pulsante `[🚀 Applica all'Atteggiamento IA]`.
+- [x] **3.3** Aggiornare `WorkspaceAttitudeModal.vue`:
   - Sostituire l'enum `toneOfVoice` con campo `q-input` stringa libera.
   - Aggiungere **Skill Matrix Tag Input** via `q-select` con `use-chips`, `multiple`, `new-value-mode="add-unique"`.
-- [ ] **3.4** Aggiornare `CreateTaskModal.vue` con la tendina Preset universale (`📊 Dati & Tabelle`, `✉️ Comunicazione`, `🔍 Ricerca`, `📄 Analisi PDF`).
+- [x] **3.4** Aggiornare `CreateTaskModal.vue` con la tendina Preset universale (`📊 Dati & Tabelle`, `✉️ Comunicazione`, `🔍 Ricerca`, `📄 Analisi PDF`).
 
 ### 📌 Fase 3.5 — 🧪 E2E Smoke Test: Vertical Slice (Gate Obbligatorio Prima di Fase 4)
 
 > [!IMPORTANT]
 > Questa fase è un **gate di qualità bloccante**. Non procedere a Fase 4 e Fase 5 senza aver superato tutti e 3 gli Step. Sviluppare Fase 4 su uno store non ancora sincronizzato con il backend genera bug silenti difficili da tracciare.
 
-- [ ] **3.5.A** ✅ **Round-trip DBS (Vertical Slice Step A):** Inserire testo libero nella modale `AIPromptArchitectModal.vue` e verificare:
+- [x] **3.5.A** ✅ **Round-trip DBS (Vertical Slice Step A):** Inserire testo libero nella modale `AIPromptArchitectModal.vue` e verificare:
   - Lo spinner è visibile durante la chiamata CF e `isGeneratingAttitude === true`.
   - La risposta JSON contiene `industryScope`, `tone`, `skills[]`, `rules.doList[]`, `rules.dontList[]` conformi al tipo `WorkspaceAttitude`.
   - Il flag `isGeneratingAttitude` torna `false` dopo il completamento (successo o errore).
-- [ ] **3.5.B** ✅ **Salvataggio & Reattività Pinia (Vertical Slice Step B):** Premere `[🚀 Applica]` e verificare:
+- [x] **3.5.B** ✅ **Salvataggio & Reattività Pinia (Vertical Slice Step B):** Premere `[🚀 Applica]` e verificare:
   - Il documento Firestore `tenants/{tenantId}/workspaces/{workspaceId}` contiene il campo `attitude` popolato (verificabile da Firebase Console).
   - Il tab "Atteggiamento" in `WorkspaceAttitudeModal.vue` mostra i dati aggiornati **senza reload di pagina** (reattività Pinia confermata).
   - La cache `localStorage` con chiave `opsflow_workspaces_cache` contiene il campo `attitude` aggiornato (ispezione da DevTools → Application → Local Storage).
-- [ ] **3.5.C** ✅ **Runtime Prompting End-to-End (Vertical Slice Step C):** Inviare un messaggio nella chat del task e verificare:
+- [x] **3.5.C** ✅ **Runtime Prompting End-to-End (Vertical Slice Step C):** Inviare un messaggio nella chat del task e verificare:
   - Nei log Firebase Functions (`chatWithAgent`) è presente la sezione `=== WORKSPACE CONSTITUTION ===` con `industryScope`, `tone` e `skills` iniettati.
   - La risposta dell'agente riflette il tono e i vincoli `doList`/`dontList` configurati nel workspace.
 
 ### 📌 Fase 4: Motore Stacking Prompt Anti-Allucinazione (`promptBuilder.ts`)
 
-- [ ] **4.1** Aggiornare `PromptStackOptions` per accettare il nuovo oggetto `WorkspaceAttitude` strutturato (non solo la stringa `workspacePrompt`).
-- [ ] **4.2** Iniettare nel Level 2 la sezione `=== WORKSPACE CONSTITUTION ===` con:
+- [x] **4.1** Aggiornare `PromptStackOptions` per accettare il nuovo oggetto `WorkspaceAttitude` strutturato (non solo la stringa `workspacePrompt`).
+- [x] **4.2** Iniettare nel Level 2 la sezione `=== WORKSPACE CONSTITUTION ===` con:
   - `SETTORE: {industryScope}` — vincola il dominio di competenza.
   - `TONO: {tone}` — definisce lo stile di risposta.
   - `RUOLI ATTIVI: [{skills.join(', ')}]` — inietta la Skill Matrix.
   - `DEVI (DO): {doList}` — regole vincolanti formattate come lista numerata.
   - `NON DEVI MAI (DON'T): {dontList}` — divieti tassativi formattati.
-- [ ] **4.3** Aggiungere alla fine del prompt il marcatore di ancoraggio: `=== FINE COSTITUZIONE WORKSPACE — RISPETTA RIGOROSAMENTE ===`.
+- [x] **4.3** Aggiungere alla fine del prompt il marcatore di ancoraggio: `=== FINE COSTITUZIONE WORKSPACE — RISPETTA RIGOROSAMENTE ===`.
 
 ### 📌 Fase 5: Voice Experience (TTS/STT Nativo) & Upload PDF in `TaskChatWindow.vue`
 
-- [ ] **5.1** Creare `src/composables/useWebSpeech.ts` con:
+- [x] **5.1** Creare `src/composables/useWebSpeech.ts` con:
   - **TTS:** `window.speechSynthesis` con selezione voce in italiano (`lang = 'it-IT'`).
   - **STT:** `webkitSpeechRecognition` con gestione errori (no Groq — fallback a input testuale).
-- [ ] **5.2** Aggiungere il pulsante microfono 🎙️ nel footer di `TaskChatWindow.vue` con feedback visivo (animazione pulse).
-- [ ] **5.3** Aggiungere l'icona altoparlante 🔊 su ogni fumetto risposta Agente AI.
-- [ ] **5.4** Aggiungere il pulsante allegato 📎 per l'upload PDF con invio del buffer base64 al backend Gemini Multimodal.
-- [ ] **5.5** Verificare compatibilità browser: `SpeechRecognition` supportata su Chrome/Edge/Safari ma NON su Firefox Desktop (mostrare avviso `q-banner` in caso di browser non supportato).
+- [x] **5.2** Aggiungere il pulsante microfono 🎙️ nel footer di `TaskChatWindow.vue` con feedback visivo (animazione pulse).
+- [x] **5.3** Aggiungere l'icona altoparlante 🔊 su ogni fumetto risposta Agente AI.
+- [x] **5.4** Aggiungere il pulsante allegato 📎 per l'upload PDF con invio del buffer base64 al backend Gemini Multimodal.
+- [x] **5.5** Verificare compatibilità browser: `SpeechRecognition` supportata su Chrome/Edge/Safari ma NON su Firefox Desktop (mostrare avviso `q-banner` in caso di browser non supportato).
 
 ---
 

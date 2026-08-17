@@ -25,6 +25,21 @@ export const ChatInputSchema = z.object({
   taskId: z.string().optional().describe("Active task context ID"),
   workspacePrompt: z.string().optional().describe("Dynamic Workspace System Prompt from Firestore"),
   workspaceName: z.string().optional().describe("Active workspace name"),
+  attitude: z
+    .object({
+      industryScope: z.string().optional(),
+      tone: z.string().optional(),
+      skills: z.array(z.string()).optional(),
+      rules: z
+        .object({
+          doList: z.array(z.string()).optional(),
+          dontList: z.array(z.string()).optional(),
+          outputFormat: z.string().optional(),
+        })
+        .optional(),
+    })
+    .optional()
+    .describe("Universal DBS Workspace Attitude constitution"),
   linkedResources: z
     .object({
       googleEmail: z.string().optional(),
@@ -50,7 +65,7 @@ export const chatWithAgentFlow = ai.defineFlow(
       toolsUsed: z.array(z.string()),
     }),
   },
-  async ({ message, workspacePrompt, workspaceName, taskId, linkedResources }) => {
+  async ({ message, workspacePrompt, workspaceName, taskId, attitude, linkedResources }) => {
     // 1. Sanitize user message for PII protection (GDPR Compliance)
     const sanitized = sanitizePii(message);
 
@@ -60,6 +75,7 @@ export const chatWithAgentFlow = ai.defineFlow(
       workspacePrompt,
       workspaceName,
       taskTitle: taskId,
+      attitude,
       linkedResources,
     });
 

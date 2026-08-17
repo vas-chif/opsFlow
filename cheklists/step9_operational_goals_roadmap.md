@@ -3,7 +3,7 @@
 > **Progetto:** OpsFlow SaaS Platform  
 > **Autore:** Vasile Chifeac & AI Pair Architect  
 > **Data:** 16 Agosto 2026  
-> **Stato:** Planned / Approvato per l'Esecuzione  
+> **Stato:** Completed / Implementato  
 > **Riferimenti AGENTS.md:** §0 (Explain-Before-Doing), §3 (GDPR & Security 3 Layer), §5 (Cloud Cost Optimization), §14 (Agent Architecture & Genkit)
 
 ---
@@ -77,21 +77,21 @@ flowchart TD
 
 ### 📌 Step 1: Esecuzione RBAC & Ruoli JWT (Ref. `step8_rbac_roles_implementation_plan.md`)
 
-- [ ] Protezione ruoli SuperAdmin (tenant management), Admin (workspace manager) e User (collaboratore).
-- [ ] Impostazione Custom Claims via Cloud Function `setUserRole`.
-- [ ] Filtraggio dinamico UI e Firestore Security Rules senza query al DB.
+- [x] Protezione ruoli SuperAdmin (tenant management), Admin (workspace manager) e User (collaboratore).
+- [x] Impostazione Custom Claims via Cloud Function `setUserRole`.
+- [x] Filtraggio dinamico UI e Firestore Security Rules senza query al DB.
 
 ### 📌 Step 2: Attivazione Document Understanding (Upload PDF & File in Task Chat)
 
-- [ ] Aggiunta del pulsante di upload file/PDF nella modale `TaskChatWindow.vue`.
-- [ ] Invio del buffer base64 o riferimento Storage al backend Genkit Gemini Multimodal.
-- [ ] Estrazione automatica di tabelle, dati chiave e sintesi del documento.
+- [x] Aggiunta del pulsante di upload file/PDF nella modale `TaskChatWindow.vue`.
+- [x] Invio del buffer base64 o riferimento Storage al backend Genkit Gemini Multimodal.
+- [x] Estrazione automatica di tabelle, dati chiave e sintesi del documento.
 
 ### 📌 Step 3: Collaudo Tool Reali & Human-in-the-Loop (`<ApprovalCard.vue>`)
 
-- [ ] Test end-to-end del flusso: Ricerca Web → Sintesi Lead → Generazione Bozza Gmail / Tabella Google Sheets.
-- [ ] Verifica della card di approvazione visiva prima di ogni azione di scrittura finale.
-- [ ] Audit finale di sicurezza GDPR e validazione costi.
+- [x] Test end-to-end del flusso: Ricerca Web → Sintesi Lead → Generazione Bozza Gmail / Tabella Google Sheets.
+- [x] Verifica della card di approvazione visiva prima di ogni azione di scrittura finale.
+- [x] Audit finale di sicurezza GDPR e validazione costi.
 
 ---
 

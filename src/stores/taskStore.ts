@@ -24,15 +24,17 @@
 import { defineStore, acceptHMRUpdate } from "pinia";
 
 // ── Firebase ─────────────────────────────────────────────────────────────────
-// (useFirestore handles all Firebase interactions)
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { app } from "@/boot/firebase";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 import type {
   Task,
-  TaskStatus,
-  CreateTaskPayload,
   TaskAIMetadata,
+  TaskStatus,
   Workspace,
+  WorkspaceAttitude,
+  CreateTaskPayload,
   CreateWorkspacePayload,
 } from "@/types/models";
 
@@ -46,13 +48,14 @@ import { useFirestore } from "@/composables/useFirestore";
 // (none)
 
 /**
- * Task store state interface.
+ * Task store internal state interface.
  */
 interface TaskState {
   tasks: Task[];
   workspaces: Workspace[];
   activeWorkspaceId: string | null;
   isLoading: boolean;
+  isGeneratingAttitude: boolean;
   error: string | null;
 } /*end TaskState*/
 
@@ -85,12 +88,34 @@ function buildAIMetadata(metadata?: Partial<TaskAIMetadata>): TaskAIMetadata {
 
 const WORKSPACES_CACHE_KEY = "opsflow_workspaces_cache";
 
+/**
+ * Hydrate/migrate legacy workspace linkedResources to WorkspaceAttitude (Step 10 Fase 1.7).
+ */
+function hydrateWorkspaceAttitude(ws: Workspace): Workspace {
+  if (!ws.attitude && ws.linkedResources) {
+    const lr = ws.linkedResources;
+    if (lr.doList || lr.dontList || lr.toneOfVoice) {
+      ws.attitude = {
+        industryScope: ws.category || "Generale",
+        tone: lr.toneOfVoice || "operational",
+        skills: lr.assignedAgents || [],
+        rules: {
+          doList: lr.doList || [],
+          dontList: lr.dontList || [],
+          outputFormat: "markdown",
+        },
+      };
+    }
+  }
+  return ws;
+} /*end hydrateWorkspaceAttitude*/
+
 function loadCachedWorkspaces(): Workspace[] {
   try {
     const raw = localStorage.getItem(WORKSPACES_CACHE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as Workspace[];
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? parsed.map(hydrateWorkspaceAttitude) : [];
   } catch {
     return [];
   }
@@ -110,6 +135,7 @@ export const useTaskStore = defineStore("tasks", {
     workspaces: loadCachedWorkspaces(),
     activeWorkspaceId: null,
     isLoading: false,
+    isGeneratingAttitude: false,
     error: null,
   }),
 
@@ -125,6 +151,16 @@ export const useTaskStore = defineStore("tasks", {
         state.workspaces[0] ||
         null
       );
+    },
+
+    /**
+     * Active workspace DBS attitude constitution (Step 10).
+     */
+    activeWorkspaceAttitude: (state): WorkspaceAttitude | null => {
+      if (state.workspaces.length === 0) return null;
+      const active =
+        state.workspaces.find((w) => w.id === state.activeWorkspaceId) || state.workspaces[0];
+      return active?.attitude || null;
     },
 
     /**
@@ -378,6 +414,69 @@ export const useTaskStore = defineStore("tasks", {
     } /*end moveTask*/,
 
     /**
+     * Set attitude in-memory for a workspace and persist to localStorage cache (Step 10 Fase 1.7).
+     */
+    setAttitude(workspaceId: string, attitude: WorkspaceAttitude): void {
+      const ws = this.workspaces.find((w) => w.id === workspaceId);
+      if (ws) {
+        ws.attitude = attitude;
+        ws.updatedAt = new Date();
+      }
+      saveCachedWorkspaces(this.workspaces);
+    } /*end setAttitude*/,
+
+    /**
+     * Update Workspace Attitude in Firestore and local state/cache (Step 10 Fase 1.7).
+     */
+    async updateWorkspaceAttitude(workspaceId: string, attitude: WorkspaceAttitude): Promise<void> {
+      const firestore = useFirestore();
+
+      this.isLoading = true;
+      this.error = null;
+
+      try {
+        await firestore.updateTenantDoc(firestore.COLLECTIONS.WORKSPACES, workspaceId, {
+          attitude,
+        });
+        this.setAttitude(workspaceId, attitude);
+      } catch (err) {
+        this.error = err instanceof Error ? err.message : "Failed to update workspace attitude";
+        throw err;
+      } finally {
+        this.isLoading = false;
+      }
+    } /*end updateWorkspaceAttitude*/,
+
+    /**
+     * Call generateDbsAttitude Cloud Function via Firebase SDK (Vertical Slice Step A - Step 10 Fase 2.5).
+     */
+    async generateDbsAttitude(workspaceId: string, userPrompt: string): Promise<WorkspaceAttitude> {
+      this.isGeneratingAttitude = true;
+      this.error = null;
+
+      try {
+        const functions = getFunctions(app, "us-central1");
+        const callable = httpsCallable<
+          { workspaceId: string; userPrompt: string },
+          { success: boolean; attitude: WorkspaceAttitude }
+        >(functions, "generateDbsAttitude");
+
+        const res = await callable({ workspaceId, userPrompt });
+        if (res.data && res.data.attitude) {
+          this.setAttitude(workspaceId, res.data.attitude);
+          return res.data.attitude;
+        }
+        throw new Error("Invalid response from generateDbsAttitude");
+      } catch (err) {
+        this.error = err instanceof Error ? err.message : "Failed to generate DBS attitude";
+        throw err;
+      } finally {
+        this.isGeneratingAttitude = false;
+      }
+    } /*end generateDbsAttitude*/,
+
+    /**
+     * @deprecated Use updateWorkspaceAttitude instead (Step 10 Fase 1.7).
      * Update the dynamic system prompt (AI attitude) of a Workspace.
      */
     async updateWorkspacePrompt(workspaceId: string, systemPrompt: string): Promise<void> {

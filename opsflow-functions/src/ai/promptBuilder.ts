@@ -15,6 +15,20 @@ export interface PromptStackOptions {
   workspacePrompt?: string | undefined;
   workspaceName?: string | undefined;
   taskTitle?: string | undefined;
+  attitude?:
+    | {
+        industryScope?: string | undefined;
+        tone?: string | undefined;
+        skills?: string[] | undefined;
+        rules?:
+          | {
+              doList?: string[] | undefined;
+              dontList?: string[] | undefined;
+              outputFormat?: string | undefined;
+            }
+          | undefined;
+      }
+    | undefined;
   linkedResources?:
     | {
         googleEmail?: string | undefined;
@@ -31,7 +45,8 @@ export interface PromptStackOptions {
  * @return {string} Formatted 3-level stacked prompt string
  */
 export function buildStackedPrompt(options: PromptStackOptions): string {
-  const { userPrompt, workspacePrompt, workspaceName, taskTitle, linkedResources } = options;
+  const { userPrompt, workspacePrompt, workspaceName, taskTitle, attitude, linkedResources } =
+    options;
 
   const level1Base =
     "=== LEVEL 1: OPSFLOW BASE RULES & SECURITY ===\n" +
@@ -46,34 +61,50 @@ export function buildStackedPrompt(options: PromptStackOptions): string {
     "Per cercare informazioni reali sul web usa searchWebAndPlatformsTool e jinaReaderTool.\n" +
     "Per profilare prospetti usa leadSynthesisTool.\n";
 
-  let defaultAttitude = "Agisci con precisione operativa e massima attenzione al ROI.";
+  let level2Constitution = "\n=== LEVEL 2: WORKSPACE CONSTITUTION & LINKED RESOURCES ===\n";
+
   if (workspaceName) {
-    defaultAttitude = `Agisci secondo la logica del Workspace "${workspaceName}".`;
+    level2Constitution += `WORKSPACE NAME: "${workspaceName}"\n`;
   }
 
-  let attitudeText = defaultAttitude;
-  if (workspacePrompt && workspacePrompt.trim()) {
-    attitudeText = workspacePrompt.trim();
+  if (attitude) {
+    if (attitude.industryScope) {
+      level2Constitution += `SETTORE: ${attitude.industryScope}\n`;
+    }
+    if (attitude.tone) {
+      level2Constitution += `TONO DI VOCE: ${attitude.tone}\n`;
+    }
+    if (attitude.skills && attitude.skills.length > 0) {
+      level2Constitution += `RUOLI E SKILL ATTIVI: [${attitude.skills.join(", ")}]\n`;
+    }
+    if (attitude.rules?.doList && attitude.rules.doList.length > 0) {
+      level2Constitution += `REGOLE VINCOLANTI (DO):\n${attitude.rules.doList.map((r, i) => `  ${i + 1}. ${r}`).join("\n")}\n`;
+    }
+    if (attitude.rules?.dontList && attitude.rules.dontList.length > 0) {
+      level2Constitution += `DIVIETI TASSATIVI (DON'T):\n${attitude.rules.dontList.map((r, i) => `  ${i + 1}. ${r}`).join("\n")}\n`;
+    }
+  } else if (workspacePrompt && workspacePrompt.trim()) {
+    level2Constitution += `SYSTEM PROMPT: ${workspacePrompt.trim()}\n`;
+  } else {
+    level2Constitution +=
+      "ATTEGGIAMENTO: Agisci con precisione operativa e massima attenzione al ROI.\n";
   }
 
-  let linkedStr = "";
   if (linkedResources) {
     if (linkedResources.linkedEmails && linkedResources.linkedEmails.length > 0) {
-      linkedStr += `\n- Account Gmail Autorizzati: [${linkedResources.linkedEmails.join(", ")}]`;
+      level2Constitution += `- Account Gmail Autorizzati: [${linkedResources.linkedEmails.join(", ")}]\n`;
     } else if (linkedResources.googleEmail) {
-      linkedStr += `\n- Account Gmail Autorizzato: "${linkedResources.googleEmail}"`;
+      level2Constitution += `- Account Gmail Autorizzato: "${linkedResources.googleEmail}"\n`;
     }
     if (linkedResources.defaultSheetId) {
-      linkedStr += `\n- Google Sheet Predefinito ID: "${linkedResources.defaultSheetId}"`;
+      level2Constitution += `- Google Sheet Predefinito ID: "${linkedResources.defaultSheetId}"\n`;
     }
     if (linkedResources.defaultDriveFolderId) {
-      linkedStr += `\n- Cartella Google Drive ID: "${linkedResources.defaultDriveFolderId}"`;
+      level2Constitution += `- Cartella Google Drive ID: "${linkedResources.defaultDriveFolderId}"\n`;
     }
   }
 
-  const level2Workspace =
-    "\n=== LEVEL 2: WORKSPACE OPERATIONAL ATTITUDE & LINKED RESOURCES ===\n" +
-    `${attitudeText}${linkedStr}\n`;
+  level2Constitution += "=== FINE COSTITUZIONE WORKSPACE — RISPETTA RIGOROSAMENTE ===\n";
 
   let taskContextStr = "";
   if (taskTitle) {
@@ -84,5 +115,5 @@ export function buildStackedPrompt(options: PromptStackOptions): string {
     "\n=== LEVEL 3: TASK CONTEXT & INSTRUCTION ===\n" +
     `Richiesta Utente${taskContextStr}: "${userPrompt}"`;
 
-  return `${level1Base}${level2Workspace}${level3Task}`;
-} /* end buildStackedPrompt */
+  return `${level1Base}${level2Constitution}${level3Task}`;
+} // end buildStackedPrompt

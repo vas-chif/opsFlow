@@ -36,6 +36,7 @@ import type { Task, Workspace, TaskStatus } from "@/types/models";
 // ── Components ───────────────────────────────────────────────────────────────
 import TaskChatWindow from "@/components/TaskChatWindow.vue";
 import WorkspaceAttitudeModal from "@/components/WorkspaceAttitudeModal.vue";
+import AIPromptArchitectModal from "@/components/AIPromptArchitectModal.vue";
 
 // ── State ────────────────────────────────────────────────────────────────────
 const q = useQuasar();
@@ -48,6 +49,7 @@ const selectedTask = inject<Ref<Task | null>>("selectedTask", ref(null));
 // Modal states for Task-as-a-Chat & Workspace Attitude
 const showTaskChatModal = ref(false);
 const showAttitudeModal = ref(false);
+const showPromptArchitectModal = ref(false);
 
 // Modal states for Prompt-Driven Task Creation
 const showCreateTaskModal = ref(false);
@@ -294,6 +296,22 @@ onMounted(async () => {
             </div>
           </div>
           <div class="row items-center q-gutter-sm">
+            <q-btn
+              unelevated
+              icon="auto_awesome"
+              label="✨ AI Prompt Architect"
+              no-caps
+              color="primary"
+              class="create-task-btn"
+              :disabled="!selectedWorkspace"
+              @click="showPromptArchitectModal = true"
+            >
+              <q-tooltip
+                >Configuratore No-Code per generare automaticamente Atteggiamento &amp; Skill Matrix
+                (DBS)</q-tooltip
+              >
+            </q-btn>
+
             <q-btn
               outline
               icon="psychology"
@@ -753,6 +771,13 @@ onMounted(async () => {
         v-model="showAttitudeModal"
         :workspace="selectedWorkspace"
         @saved="taskStore.fetchWorkspaces()"
+      />
+
+      <!-- AI Prompt Architect Modal (Step 10 Fase 3) -->
+      <AIPromptArchitectModal
+        v-if="selectedWorkspace"
+        v-model="showPromptArchitectModal"
+        :workspace-id="selectedWorkspace.id"
       />
     </q-page>
   </MainLayout>
