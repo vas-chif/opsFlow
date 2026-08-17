@@ -56,7 +56,7 @@ setGlobalOptions({ maxInstances: 10 });
  *
  * @param {object | undefined} auth - The auth context from an onCall handler.
  * @param {Array<string>} allowedRoles - At least one of these roles must match the token claim.
- * @returns {void}
+ * @return {void}
  */
 function requireRole(
   auth: { uid: string; token: Record<string, unknown> } | undefined,
