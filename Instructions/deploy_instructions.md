@@ -24,17 +24,24 @@ Per distribuire o aggiornare le Cloud Functions (es. `chatWithAgent`, `generateD
 ### 📜 Comandi da Eseguire
 
 ```bash
-cd opsflow-functions && npm run build && cd .. && npx firebase-tools deploy --only functions
+cd opsflow-functions && yarn build && cd .. && npx firebase-tools deploy --only functions
 ```
 
 ### 🔍 Spiegazione Dettagliata Passo-Passo
 
-| Comando                                      | Cosa Fa (Spiegazione Tecnica)                                                                      | Perché è Necessario / Impatto                                                                                                                                                              |
-| :------------------------------------------- | :------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cd opsflow-functions`                       | Entra nella cartella radice del codice backend delle Cloud Functions.                              | Consente di accedere al file `package.json` e alla configurazione del compilatore TypeScript del backend.                                                                                  |
-| `npm run build`                              | Esegue il comando `tsc` (TypeScript Compiler) compilando il codice da `src/` alla cartella `lib/`. | Firebase Cloud Functions esegue codice JavaScript per Node.js 22. Senza questo passaggio le modifiche `.ts` non verrebbero incluse.                                                        |
-| `cd ..`                                      | Torna nella cartella principale del progetto OpsFlow (`/home/chif-vas/projects/opsflow`).          | **CRUCIALE:** Firebase CLI richiede di essere lanciato dove si trovano i file `firebase.json` e `.firebaserc`. Lanciarlo dentro `opsflow-functions` causa l'errore `cloudresourcemanager`. |
-| `npx firebase-tools deploy --only functions` | Invia il pacchetto compilato ai server Google Cloud Firebase (`us-central1` / `europe-west1`).     | Crea o aggiorna le funzioni serverless attive in produzione con zero downtime.                                                                                                             |
+| Comando                                      | Cosa Fa (Spiegazione Tecnica)                                                                                                  | Perché è Necessario / Impatto                                                                                                                                                              |
+| :------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cd opsflow-functions`                       | Entra nella cartella radice del codice backend delle Cloud Functions.                                                          | Consente di accedere al file `package.json` ed alla configurazione del compilatore TypeScript del backend.                                                                                 |
+| `yarn build`                                 | Esegue il comando `tsc` (TypeScript Compiler) definito in `package.json`, compilando il codice da `src/` alla cartella `lib/`. | Rispetta la direttiva **AGENTS.md §2** (Usa esclusivamente `yarn` come package manager principale). Compila i file `.ts` per Node.js 22.                                                   |
+| `cd ..`                                      | Torna nella cartella principale del progetto OpsFlow (`/home/chif-vas/projects/opsflow`).                                      | **CRUCIALE:** Firebase CLI richiede di essere lanciato dove si trovano i file `firebase.json` e `.firebaserc`. Lanciarlo dentro `opsflow-functions` causa l'errore `cloudresourcemanager`. |
+| `npx firebase-tools deploy --only functions` | Invia il pacchetto compilato ai server Google Cloud Firebase (`us-central1` / `europe-west1`).                                 | Crea o aggiorna le funzioni serverless attive in produzione con zero downtime.                                                                                                             |
+
+> [!TIP]
+> **Comando Singolo Rapido (dalla radice):**
+>
+> ```bash
+> yarn --prefix opsflow-functions build && npx firebase-tools deploy --only functions
+> ```
 
 ---
 
@@ -80,7 +87,7 @@ npx firebase-tools deploy --only firestore:rules
 Per distribuire **contemporaneamente** Backend, Frontend e Regole di Sicurezza in un'unica operazione:
 
 ```bash
-npm --prefix opsflow-functions run build && yarn build && npx firebase-tools deploy
+yarn --prefix opsflow-functions build && yarn build && npx firebase-tools deploy
 ```
 
 ---
