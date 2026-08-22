@@ -93,7 +93,9 @@ export const chatWithAgentFlow = ai.defineFlow(
       const cleanHistory = recentTurns
         .map((h) => `${h.sender === "user" ? "Utente" : "Agente"}: ${h.text.slice(0, 1000)}`)
         .join("\n");
-      historyContext = `\n\n--- CRONOLOGIA RECENTE (Sliding Window ultimi 5 turni) ---\n${cleanHistory}\n--- FINE CRONOLOGIA ---`;
+      historyContext =
+        "\n\n--- CRONOLOGIA RECENTE (Sliding Window ultimi 5 turni) ---\n" +
+        `${cleanHistory}\n--- FINE CRONOLOGIA ---`;
     }
 
     // 3. Build 3-Level Dynamic Stacked Prompt
