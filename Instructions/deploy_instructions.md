@@ -19,29 +19,26 @@ In OpsFlow, l'applicazione è suddivisa in tre componenti principali distribuiti
 
 ## 🛠️ 1. Deploy delle Cloud Functions (Backend IA)
 
-Per distribuire o aggiornare le Cloud Functions (es. `chatWithAgent`, `generateDbsAttitude`, `setUserRole`, `onTaskCreated`, `onTaskUpdated`), lancia i comandi **dalla radice del progetto OpsFlow** (`/home/chif-vas/projects/opsflow`).
+> [!CAUTION]
+> **ATTENZIONE ALLA CARTELLA DEL TERMINALE:**  
+> MAI fare `cd functions/` (la cartella attiva del backend è `opsflow-functions`).  
+> Prima di qualsiasi deploy, assicurati di trovarti nella radice `/home/chif-vas/projects/opsflow` oppure usa il comando a percorso assoluto indicato qui sotto.
 
-### 📜 Comandi da Eseguire
+Per distribuire o aggiornare le Cloud Functions (es. `chatWithAgent`, `generateDbsAttitude`, `setUserRole`, `onTaskCreated`, `onTaskUpdated`):
+
+### 📜 Comando Singolo Sicuro (Funziona da qualsiasi cartella)
 
 ```bash
-cd opsflow-functions && yarn build && cd .. && npx firebase-tools deploy --only functions
+cd /home/chif-vas/projects/opsflow && yarn --prefix opsflow-functions build && npx firebase-tools deploy --only functions
 ```
 
 ### 🔍 Spiegazione Dettagliata Passo-Passo
 
-| Comando                                      | Cosa Fa (Spiegazione Tecnica)                                                                                                  | Perché è Necessario / Impatto                                                                                                                                                              |
-| :------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cd opsflow-functions`                       | Entra nella cartella radice del codice backend delle Cloud Functions.                                                          | Consente di accedere al file `package.json` ed alla configurazione del compilatore TypeScript del backend.                                                                                 |
-| `yarn build`                                 | Esegue il comando `tsc` (TypeScript Compiler) definito in `package.json`, compilando il codice da `src/` alla cartella `lib/`. | Rispetta la direttiva **AGENTS.md §2** (Usa esclusivamente `yarn` come package manager principale). Compila i file `.ts` per Node.js 22.                                                   |
-| `cd ..`                                      | Torna nella cartella principale del progetto OpsFlow (`/home/chif-vas/projects/opsflow`).                                      | **CRUCIALE:** Firebase CLI richiede di essere lanciato dove si trovano i file `firebase.json` e `.firebaserc`. Lanciarlo dentro `opsflow-functions` causa l'errore `cloudresourcemanager`. |
-| `npx firebase-tools deploy --only functions` | Invia il pacchetto compilato ai server Google Cloud Firebase (`us-central1` / `europe-west1`).                                 | Crea o aggiorna le funzioni serverless attive in produzione con zero downtime.                                                                                                             |
-
-> [!TIP]
-> **Comando Singolo Rapido (dalla radice):**
->
-> ```bash
-> yarn --prefix opsflow-functions build && npx firebase-tools deploy --only functions
-> ```
+| Comando                                      | Cosa Fa (Spiegazione Tecnica)                                                                  | Perché è Necessario / Impatto                                                                                                                                                    |
+| :------------------------------------------- | :--------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cd /home/chif-vas/projects/opsflow`         | Torna alla cartella radice principale del progetto OpsFlow.                                    | **FONDAMENTALE:** Risolve l'errore `No such file or directory` e previene l'errore `cloudresourcemanager` assicurando che i file `firebase.json` e `.firebaserc` siano presenti. |
+| `yarn --prefix opsflow-functions build`      | Esegue il compilatore TypeScript (`tsc`) all'interno di `opsflow-functions/`.                  | Rispetta la direttiva **AGENTS.md §2** (Usa esclusivamente `yarn`). Compila il codice `.ts` generandolo in `lib/` senza dover cambiare cartella.                                 |
+| `npx firebase-tools deploy --only functions` | Invia il pacchetto compilato ai server Google Cloud Firebase (`us-central1` / `europe-west1`). | Crea o aggiorna le funzioni serverless attive in produzione con zero downtime.                                                                                                   |
 
 ---
 
