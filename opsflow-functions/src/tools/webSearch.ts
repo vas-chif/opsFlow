@@ -192,32 +192,41 @@ export const jinaReaderTool = ai.defineTool(
   async ({ url }) => {
     const jinaUrl = `https://r.jina.ai/${url}`;
 
-    const response = await fetch(jinaUrl, {
-      signal: AbortSignal.timeout(8000),
-      headers: {
-        Accept: "text/markdown",
-        "X-Return-Format": "markdown",
-      },
-    });
+    try {
+      const response = await fetch(jinaUrl, {
+        signal: AbortSignal.timeout(8000),
+        headers: {
+          Accept: "text/markdown",
+          "X-Return-Format": "markdown",
+        },
+      });
 
-    if (!response.ok) {
+      if (!response.ok) {
+        return {
+          success: false,
+          url,
+          markdown: `[JinaReader] Failed to extract content from ${url}. Status: ${response.status}`,
+          extractedAt: new Date().toISOString(),
+        };
+      }
+
+      const markdown = await response.text();
+      // Trim to 8000 chars to stay within Gemini context limits
+      const trimmed = markdown.slice(0, 8000);
+
+      return {
+        success: true,
+        url,
+        markdown: trimmed,
+        extractedAt: new Date().toISOString(),
+      };
+    } catch {
       return {
         success: false,
         url,
-        markdown: `[JinaReader] Failed to extract content from ${url}. Status: ${response.status}`,
+        markdown: `[JinaReader] Network timeout/error extracting content from ${url}.`,
         extractedAt: new Date().toISOString(),
       };
     }
-
-    const markdown = await response.text();
-    // Trim to 8000 chars to stay within Gemini context limits
-    const trimmed = markdown.slice(0, 8000);
-
-    return {
-      success: true,
-      url,
-      markdown: trimmed,
-      extractedAt: new Date().toISOString(),
-    };
   },
 ); /* end jinaReaderTool */

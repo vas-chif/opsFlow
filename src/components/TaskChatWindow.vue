@@ -258,7 +258,7 @@ const handleSendChatMessage = async (): Promise<void> => {
   try {
     const res = await fetch("https://us-central1-opsflow-88of.cloudfunctions.net/chatWithAgent", {
       method: "POST",
-      signal: AbortSignal.timeout(120000),
+      signal: AbortSignal.timeout(180000),
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message: userText,

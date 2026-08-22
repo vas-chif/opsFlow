@@ -80,40 +80,56 @@ export const chatWithAgentFlow = ai.defineFlow(
     });
 
     // 3. Generate response with tool calling support
-    const llmResponse = await ai.generate({
-      model: "googleai/gemini-3.5-flash",
-      prompt: systemInstruction,
-      tools: [
-        createGmailDraftTool,
-        manageGoogleSheetTool,
-        searchWebAndPlatformsTool,
-        leadSynthesisTool,
-        jinaReaderTool,
-        contentMarketingTool,
-      ],
-    });
+    try {
+      const llmResponse = await ai.generate({
+        model: "googleai/gemini-3.5-flash",
+        prompt: systemInstruction,
+        tools: [
+          createGmailDraftTool,
+          manageGoogleSheetTool,
+          searchWebAndPlatformsTool,
+          leadSynthesisTool,
+          jinaReaderTool,
+          contentMarketingTool,
+        ],
+      });
 
-    const replyText =
-      llmResponse.text || "Operazione completata con successo dall'Agente IA OpsFlow.";
+      const replyText =
+        llmResponse.text || "Operazione completata con successo dall'Agente IA OpsFlow.";
 
-    const toolsUsed: string[] = [];
-    if (llmResponse.messages) {
-      for (const msg of llmResponse.messages) {
-        if (msg.content) {
-          for (const part of msg.content) {
-            if (part.toolRequest) {
-              toolsUsed.push(part.toolRequest.name);
+      const toolsUsed: string[] = [];
+      if (llmResponse.messages) {
+        for (const msg of llmResponse.messages) {
+          if (msg.content) {
+            for (const part of msg.content) {
+              if (part.toolRequest) {
+                toolsUsed.push(part.toolRequest.name);
+              }
             }
           }
         }
       }
-    }
 
-    return {
-      reply: replyText,
-      agentName: "Agente AI Assistant",
-      toolsUsed:
-        toolsUsed.length > 0 ? Array.from(new Set(toolsUsed)) : ["searchWebAndPlatformsTool"],
-    };
+      return {
+        reply: replyText,
+        agentName: "Agente AI Assistant",
+        toolsUsed:
+          toolsUsed.length > 0 ? Array.from(new Set(toolsUsed)) : ["searchWebAndPlatformsTool"],
+      };
+    } catch {
+      // Fallback: Generate direct response without external tool calling if network/tools fail
+      const fallbackResponse = await ai.generate({
+        model: "googleai/gemini-3.5-flash",
+        prompt: systemInstruction,
+      });
+
+      return {
+        reply:
+          fallbackResponse.text ||
+          "Operazione completata in modalità diretta dall'Agente IA OpsFlow.",
+        agentName: "Agente AI Assistant (Diretto)",
+        toolsUsed: [],
+      };
+    }
   },
 ); /* end chatWithAgentFlow */
