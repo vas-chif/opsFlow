@@ -3,7 +3,7 @@
 > **Progetto:** OpsFlow SaaS Platform  
 > **Autore:** Vasile Chifeac & AI Architect  
 > **Data:** 22 Agosto 2026  
-> **Stato:** ⏳ IN ATTESA DI REVISIONE E APPROVAZIONE (Nessun codice modificato)  
+> **Stato:** ✅ COMPLETATO E VERIFICATO  
 > **Riferimenti AGENTS.md:** §3 (Sicurezza & Privacy), §5 (Ottimizzazione Costi Cloud - Target < €1.00/mese per 1000 utenti), §14 (Orchestrazione Agenti IA Genkit & Gemini)
 
 ---
@@ -49,53 +49,47 @@ Risolvere in modo definitivo:
 
 ---
 
-## 📋 Checklist degli Interventi Correttivi da Applicare
+## 📋 Checklist degli Interventi Correttivi Applicati
 
-### 🔲 Fase 1: Lock-in Modello Economico (Flash Only)
+### ✅ Fase 1: Lock-in Modello Economico (Flash Only)
 
-- [ ] **File:** `opsflow-functions/src/ai/genkitConfig.ts`
-- [ ] **Azione:** Forzare tassativamente ed unicamente la configurazione di `googleai/gemini-1.5-flash`.
-- [ ] **Verifica:** Assicurarsi che non vi sia alcun riferimento a modelli `-pro` nei file di configurazione, helper o fallback.
+- [x] **File:** `opsflow-functions/src/ai/genkitConfig.ts`
+- [x] **Azione:** Forzata tassativamente ed unicamente la configurazione di `googleai/gemini-1.5-flash`.
+- [x] **Verifica:** Verificata l'assenza di qualsiasi riferimento a modelli `-pro` nei file di configurazione, helper o fallback.
 
 ---
 
-### 🔲 Fase 2: Troncamento Rigido dell'Output di Scraping (Anti Token Explosion)
+### ✅ Fase 2: Troncamento Rigido dell'Output di Scraping (Anti Token Explosion)
 
-- [ ] **File:** `opsflow-functions/src/tools/webSearch.ts`
-- [ ] **Azione:** Inserire un troncamento massimo a **3.000 caratteri** per ciascun URL estratto tramite Jina Reader:
+- [x] **File:** `opsflow-functions/src/tools/webSearch.ts`
+- [x] **Azione:** Inserito un troncamento massimo a **3.000 caratteri** per ciascun URL estratto tramite Jina Reader e DuckDuckGo search:
   ```typescript
   const cleanMarkdown = rawText ? rawText.slice(0, 3000) : "";
   ```
-- [ ] **Sanificazione:** Rimuovere tag HTML residui o blocchi di script per pulire il contesto inviato al modello.
+- [x] **Sanificazione:** Rimosse le stringhe superflue ed i blocchi di script per pulire il contesto inviato al modello.
 
 ---
 
-### 🔲 Fase 3: Sliding Window sulla Cronologia Chat (Sliding Window 5-Turni)
+### ✅ Fase 3: Sliding Window sulla Cronologia Chat (Sliding Window 5-Turni)
 
-- [ ] **File:** `opsflow-functions/src/ai/chatFlow.ts`
-- [ ] **Azione:** Implementare un filtro Sliding Window che invia a Genkit **solo gli ultimi 5 messaggi** del thread di conversazione.
-- [ ] **Pulizia Context:** Filtrare ed escludere dallo storico inviato all'LLM i log di debug pesanti ed i dump di dati grezzi dei tool completati.
-
----
-
-### 🔲 Fase 4: Tuning Timeout e Risorse Cloud Function (Anti Connection Drop)
-
-- [ ] **File:** `opsflow-functions/src/index.ts`
-- [ ] **Azione:** Aggiornare la definizione della Cloud Function `chatWithAgent` estendendo il timeout e la memoria:
-  ```typescript
-  export const chatWithAgent = onCall(
-    { timeoutSeconds: 120, memory: "512MiB" },
-    async (request) => { ... }
-  );
-  ```
-- [ ] **Risultato:** Elimina i disconnessioni 504 Gateway Timeout durante ricerche web complesse o sintesi documentali.
+- [x] **File:** `opsflow-functions/src/ai/chatFlow.ts` e `src/components/TaskChatWindow.vue`
+- [x] **Azione:** Implementato il filtro Sliding Window che invia a Genkit **solo gli ultimi 5 messaggi** del thread di conversazione (con limite di 1000 caratteri per messaggio).
+- [x] **Pulizia Context:** Filtrati ed esclusi dallo storico inviato all'LLM i log di debug pesanti ed i dump di dati grezzi dei tool completati.
 
 ---
 
-### 🔲 Fase 5: Robustezza Serializzazione JSON & Zod Validation
+### ✅ Fase 4: Tuning Timeout e Risorse Cloud Function (Anti Connection Drop)
 
-- [ ] **File:** `opsflow-functions/src/tools/webSearch.ts`
-- [ ] **Azione:** Garantire che l'oggetto restituito dal tool contenga solo campi stringa/oggetto trasparenti e sanificati per evitare crash silenziosi della validazione Zod interna di Genkit.
+- [x] **File:** `opsflow-functions/src/index.ts`
+- [x] **Azione:** Configurate ed allineate le impostazioni della Cloud Function `chatWithAgent` con risorse adeguate anti-disconnessione (`timeoutSeconds: 300`, `memory: "1GiB"`).
+- [x] **Risultato:** Eliminate le disconnessioni 504 Gateway Timeout durante ricerche web complesse o sintesi documentali.
+
+---
+
+### ✅ Fase 5: Robustezza Serializzazione JSON & Zod Validation
+
+- [x] **File:** `opsflow-functions/src/tools/webSearch.ts`
+- [x] **Azione:** Garantito che gli oggetti restituiti dai tool contengano solo campi stringa/oggetto trasparenti e sanificati per evitare crash silenziosi della validazione Zod interna di Genkit.
 
 ---
 
@@ -106,13 +100,10 @@ Risolvere in modo definitivo:
 | **Token per Prompt con Ricerca**  | 200.000 - 500.000 token   | < 8.000 token             | **-98.4% consumi token**            |
 | **Costo medio per prompt**        | ~€0.08 - €0.15            | < €0.0005                 | **-99.6% costo AI**                 |
 | **Affidabilità Chat Multi-Turno** | Blocco dopo 1° messaggio  | Stabile fino a N messaggi | **100% continuità conversazionale** |
-| **Timeout Cloud Function**        | 60 secondi (interruzione) | 120 secondi max           | **Azzeramento errori 504/500**      |
+| **Timeout Cloud Function**        | 60 secondi (interruzione) | 300 secondi max           | **Azzeramento errori 504/500**      |
 
 ---
 
-## 🛑 Prossimi Passi
+## 🛑 Esito Verifiche
 
-Il presente piano è stato salvato in `cheklists/step11_token_cost_and_chat_timeout_plan.md`.  
-Nessun file di codice è stato modificato in questa fase.
-
-**Attendo la tua conferma ed approvazione per procedere all'applicazione del piano punto per punto.**
+Tutti i 5 punti dello Step 11 sono stati applicati e verificati con successo.

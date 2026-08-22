@@ -202,7 +202,7 @@ export const onTaskCreated = onDocumentCreated(
         "Assegna un punteggio di complessità da 1 (banale) a 10 (complesso) ed una categoria pertinente.";
 
       const llmResponse = await ai.generate({
-        model: "googleai/gemini-3.5-flash",
+        model: "googleai/gemini-1.5-flash",
         prompt: plannerPrompt,
         output: { schema: TaskBreakdownSchema },
       });
@@ -298,6 +298,7 @@ export const chatWithAgent = onRequest(
         taskId,
         workspacePrompt,
         workspaceName,
+        history,
         attitude,
         linkedResources,
       } = req.body || {};
@@ -312,6 +313,7 @@ export const chatWithAgent = onRequest(
         taskId,
         workspacePrompt,
         workspaceName,
+        history,
         attitude,
         linkedResources,
       });
@@ -553,7 +555,7 @@ export const generateDbsAttitude = onCall(async (request) => {
 
   try {
     const llmResponse = await ai.generate({
-      model: "googleai/gemini-3.5-flash",
+      model: "googleai/gemini-1.5-flash",
       prompt: `${DBS_SYSTEM_PROMPT}\n\nDescrizione Workspace Utente:\n"${sanitized.sanitizedText}"`,
       output: { schema: WorkspaceAttitudeSchema },
     });

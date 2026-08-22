@@ -266,6 +266,10 @@ const handleSendChatMessage = async (): Promise<void> => {
         taskId: task.value.id,
         workspacePrompt: workspace.value?.systemPrompt,
         workspaceName: workspace.value?.name,
+        history: activeSession.value.messages.slice(-6, -1).map((m) => ({
+          sender: m.sender,
+          text: m.text.slice(0, 1000),
+        })),
         attitude: workspace.value?.attitude,
         linkedResources: workspace.value?.linkedResources,
       }),

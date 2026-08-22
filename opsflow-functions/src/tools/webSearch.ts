@@ -88,7 +88,7 @@ export const searchWebAndPlatformsTool = ai.defineTool(
       });
 
       const rawMarkdown = response.ok ? await response.text() : "";
-      const trimmed = rawMarkdown.slice(0, 6000);
+      const trimmed = rawMarkdown.slice(0, 3000);
 
       // Parse the first 5 result blocks from the markdown
       const lines = trimmed.split("\n").filter((l) => l.trim().length > 0);
@@ -211,8 +211,8 @@ export const jinaReaderTool = ai.defineTool(
       }
 
       const markdown = await response.text();
-      // Trim to 8000 chars to stay within Gemini context limits
-      const trimmed = markdown.slice(0, 8000);
+      // Trim to 3000 chars to enforce strict token budget control (<800 tokens)
+      const trimmed = markdown.slice(0, 3000);
 
       return {
         success: true,

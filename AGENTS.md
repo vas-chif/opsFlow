@@ -361,6 +361,16 @@ OpsFlow utilizza una struttura ad **Agenti IA Specializzati** (Orchestrazione Ag
   - **Scopo:** Monitora la conformità delle azioni dell'utente e degli altri agenti rispetto alle regole aziendali ed al file `AGENTS.md`.
   - **System Prompt:** _"Sei AgenteSupervisore, il custode della compliance e della sicurezza di OpsFlow. Verifichi che le azioni eseguite nel workspace non violino le regole aziendali, le politiche GDPR o i vincoli di sicurezza."_
 
+- **AgenteAiEngineer (AI Infrastructure & Model Tiering):**
+  - **Scopo:** Gestisce l'orchestrazione Genkit, il tiering dei modelli (Gemini 1.5 Flash), il controllo del token budget, l'ottimizzazione del memory loop e la resilienza ai timeout.
+  - **Skill File:** `SKILL/ai-engineer/SKILL.md`
+  - **System Prompt:** _"Sei AgenteAiEngineer, lo specialista dell'architettura Genkit e del controllo dei costi AI in OpsFlow. Il tuo compito è ottimizzare le pipeline agentiche, garantire il lock-in sui modelli Flash ed eliminare sprechi di token e timeout."_
+
+- **AgentePromptEngineer (DBS Framework & Zero-Hallucination):**
+  - **Scopo:** Progetta costituzioni aziendali, 3-level stacked prompt, regole vincolanti DO/DON'T e schemi di output Zod trasparenti.
+  - **Skill File:** `SKILL/prompt-engineer/SKILL.md`
+  - **System Prompt:** _"Sei AgentePromptEngineer, il maestro del framework DBS di OpsFlow. Garantisci che ogni prompt sia strutturato su 3 livelli, privo di allucinazioni ed allineato alle regole DO e DON'T del Workspace."_
+
 ### 2. Protocollo di Comunicazione tra Agenti
 
 La comunicazione avviene mediante il modello **Event-Driven via Firestore**:

@@ -25,6 +25,15 @@ export const ChatInputSchema = z.object({
   taskId: z.string().optional().describe("Active task context ID"),
   workspacePrompt: z.string().optional().describe("Dynamic Workspace System Prompt from Firestore"),
   workspaceName: z.string().optional().describe("Active workspace name"),
+  history: z
+    .array(
+      z.object({
+        sender: z.string(),
+        text: z.string(),
+      }),
+    )
+    .optional()
+    .describe("Recent conversation history (last 5 turns) for sliding window context"),
   attitude: z
     .object({
       industryScope: z.string().optional(),
@@ -65,24 +74,43 @@ export const chatWithAgentFlow = ai.defineFlow(
       toolsUsed: z.array(z.string()),
     }),
   },
-  async ({ message, workspacePrompt, workspaceName, taskId, attitude, linkedResources }) => {
+  async ({
+    message,
+    workspacePrompt,
+    workspaceName,
+    taskId,
+    history,
+    attitude,
+    linkedResources,
+  }) => {
     // 1. Sanitize user message for PII protection (GDPR Compliance)
     const sanitized = sanitizePii(message);
 
-    // 2. Build 3-Level Dynamic Stacked Prompt
-    const systemInstruction = buildStackedPrompt({
-      userPrompt: sanitized.sanitizedText,
-      workspacePrompt,
-      workspaceName,
-      taskTitle: taskId,
-      attitude,
-      linkedResources,
-    });
+    // 2. Format Sliding Window History (Last 5 messages max, 1000 chars per msg max)
+    let historyContext = "";
+    if (history && history.length > 0) {
+      const recentTurns = history.slice(-5);
+      const cleanHistory = recentTurns
+        .map((h) => `${h.sender === "user" ? "Utente" : "Agente"}: ${h.text.slice(0, 1000)}`)
+        .join("\n");
+      historyContext = `\n\n--- CRONOLOGIA RECENTE (Sliding Window ultimi 5 turni) ---\n${cleanHistory}\n--- FINE CRONOLOGIA ---`;
+    }
 
-    // 3. Generate response with tool calling support
+    // 3. Build 3-Level Dynamic Stacked Prompt
+    const systemInstruction =
+      buildStackedPrompt({
+        userPrompt: sanitized.sanitizedText,
+        workspacePrompt,
+        workspaceName,
+        taskTitle: taskId,
+        attitude,
+        linkedResources,
+      }) + historyContext;
+
+    // 4. Generate response with tool calling support via Gemini 1.5 Flash
     try {
       const llmResponse = await ai.generate({
-        model: "googleai/gemini-3.5-flash",
+        model: "googleai/gemini-1.5-flash",
         prompt: systemInstruction,
         tools: [
           createGmailDraftTool,
@@ -119,7 +147,7 @@ export const chatWithAgentFlow = ai.defineFlow(
     } catch {
       // Fallback: Generate direct response without external tool calling if network/tools fail
       const fallbackResponse = await ai.generate({
-        model: "googleai/gemini-3.5-flash",
+        model: "googleai/gemini-1.5-flash",
         prompt: systemInstruction,
       });
 
