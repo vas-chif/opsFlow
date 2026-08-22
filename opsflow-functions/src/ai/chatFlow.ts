@@ -82,7 +82,7 @@ export const chatWithAgentFlow = ai.defineFlow(
     // 3. Generate response with tool calling support
     try {
       const llmResponse = await ai.generate({
-        model: "googleai/gemini-3.5-flash",
+        model: "googleai/gemini-1.5-flash",
         prompt: systemInstruction,
         tools: [
           createGmailDraftTool,
@@ -119,7 +119,7 @@ export const chatWithAgentFlow = ai.defineFlow(
     } catch {
       // Fallback: Generate direct response without external tool calling if network/tools fail
       const fallbackResponse = await ai.generate({
-        model: "googleai/gemini-3.5-flash",
+        model: "googleai/gemini-1.5-flash",
         prompt: systemInstruction,
       });
 
