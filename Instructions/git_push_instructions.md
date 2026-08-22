@@ -37,12 +37,31 @@ git push origin feature/nome-branch-corrente
 
 ## 🔍 Spiegazione Dettagliata di Ogni Comando Git
 
-| Comando                    | Cosa Fa (Spiegazione Tecnica)                                                                                                 | Perché è Necessario / Impatto                                                                                                                                                                                                                              |
-| :------------------------- | :---------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `git status`               | Mostra il branch corrente, i file modificati, i file nuovi (untracked) e quelli pronti per il commit (staged).                | Permette di verificare esattamente quali file stiamo per includere nel commit, evitando di aggiungere per errore file temporanei o chiavi d'ambiente (`.env`).                                                                                             |
-| `git add .`                | Sposta tutti i file modificati e creati dalla working directory alla **Staging Area**.                                        | Prepara i file per il congelamento nel commit successivo. Se si vogliono aggiungere solo file specifici, si usa `git add src/percorso/file.ts`.                                                                                                            |
-| `git commit -m "..."`      | Crea un nuovo **commit snapshot** salvando lo stato dei file staged nel registro storico di Git con un messaggio descrittivo. | **IMPORTANTE:** Durante questo comando si attivano gli **Husky Pre-Commit Hooks** che eseguono automaticamente `oxfmt --check`, `oxlint`, `vue-tsc` e `commitlint`. Se ci sono errori di sintassi o formattazione, il commit viene bloccato per sicurezza. |
-| `git push origin <branch>` | Invia i nuovi commit locali al server remoto (es. GitHub/GitLab) sul branch specificato.                                      | Sincronizza il lavoro locale con il repository centrale, permettendo la creazione di PR o la collaborazione in team.                                                                                                                                       |
+### 1. `git status`
+
+- **Cosa Fa (Spiegazione Tecnica):** Mostra il branch corrente, i file modificati, i file nuovi (untracked) e quelli pronti per il commit (staged).
+- **Perché è Necessario / Impatto:** Permette di verificare esattamente quali file stiamo per includere nel commit, evitando di aggiungere per errore file temporanei o chiavi d'ambiente (`.env`).
+
+---
+
+### 2. `git add .`
+
+- **Cosa Fa (Spiegazione Tecnica):** Sposta tutti i file modificati e creati dalla working directory alla **Staging Area**.
+- **Perché è Necessario / Impatto:** Prepara i file per il congelamento nel commit successivo. Se si vogliono aggiungere solo file specifici, si usa `git add src/percorso/file.ts`.
+
+---
+
+### 3. `git commit -m "..."`
+
+- **Cosa Fa (Spiegazione Tecnica):** Crea un nuovo **commit snapshot** salvando lo stato dei file staged nel registro storico di Git con un messaggio descrittivo.
+- **Perché è Necessario / Impatto:** **IMPORTANTE:** Durante questo comando si attivano gli **Husky Pre-Commit Hooks** che eseguono automaticamente `oxfmt --check`, `oxlint`, `vue-tsc` e `commitlint`. Se ci sono errori di sintassi o formattazione, il commit viene bloccato per sicurezza.
+
+---
+
+### 4. `git push origin <branch>`
+
+- **Cosa Fa (Spiegazione Tecnica):** Invia i nuovi commit locali al server remoto (es. GitHub/GitLab) sul branch specificato.
+- **Perché è Necessario / Impatto:** Sincronizza il lavoro locale con il repository centrale, permettendo la creazione di PR o la collaborazione in team.
 
 ---
 
@@ -53,13 +72,16 @@ I messaggi di commit DEVONO seguire la struttura standard:
 
 ### Esempi Validi
 
-| Tipo       | Esempio Reale                                      | Quando Usarlo                                   |
-| :--------- | :------------------------------------------------- | :---------------------------------------------- |
-| `feat`     | `feat(ai): add dbs prompt architect modal`         | Nuova funzionalità per l'utente                 |
-| `fix`      | `fix(chat): solve HTTP 500 error and add fallback` | Risoluzione di un bug                           |
-| `chore`    | `chore(router): update typed-router ignore rules`  | Manutenzione script, dipendenze o linter        |
-| `style`    | `style(css): adjust glasscard blur and padding`    | Modifiche estetiche/CSS senza impatto su logica |
-| `refactor` | `refactor(store): simplify taskStore actions`      | Refactoring codice senza cambiare comportamento |
+- **`feat`** (Nuova funzionalità):  
+  `feat(ai): add dbs prompt architect modal`
+- **`fix`** (Risoluzione bug):  
+  `fix(chat): solve HTTP 500 error and add fallback`
+- **`chore`** (Manutenzione/Script):  
+  `chore(router): update typed-router ignore rules`
+- **`style`** (Modifiche estetiche/CSS):  
+  `style(css): adjust glasscard blur and padding`
+- **`refactor`** (Refactoring codice):  
+  `refactor(store): simplify taskStore actions`
 
 > [!WARNING]
 > **Regola Commitlint:** Il messaggio **non deve superare i 100 caratteri di lunghezza** e l'oggetto deve essere scritto interamente in **lettere minuscole**.

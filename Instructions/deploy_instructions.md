@@ -34,11 +34,24 @@ cd /home/chif-vas/projects/opsflow && yarn --prefix opsflow-functions build && n
 
 ### 🔍 Spiegazione Dettagliata Passo-Passo
 
-| Comando                                      | Cosa Fa (Spiegazione Tecnica)                                                                  | Perché è Necessario / Impatto                                                                                                                                                    |
-| :------------------------------------------- | :--------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cd /home/chif-vas/projects/opsflow`         | Torna alla cartella radice principale del progetto OpsFlow.                                    | **FONDAMENTALE:** Risolve l'errore `No such file or directory` e previene l'errore `cloudresourcemanager` assicurando che i file `firebase.json` e `.firebaserc` siano presenti. |
-| `yarn --prefix opsflow-functions build`      | Esegue il compilatore TypeScript (`tsc`) all'interno di `opsflow-functions/`.                  | Rispetta la direttiva **AGENTS.md §2** (Usa esclusivamente `yarn`). Compila il codice `.ts` generandolo in `lib/` senza dover cambiare cartella.                                 |
-| `npx firebase-tools deploy --only functions` | Invia il pacchetto compilato ai server Google Cloud Firebase (`us-central1` / `europe-west1`). | Crea o aggiorna le funzioni serverless attive in produzione con zero downtime.                                                                                                   |
+#### 1. `cd /home/chif-vas/projects/opsflow`
+
+- **Cosa Fa (Spiegazione Tecnica):** Torna alla cartella radice principale del progetto OpsFlow.
+- **Perché è Necessario / Impatto:** **FONDAMENTALE:** Risolve l'errore `No such file or directory` e previene l'errore `cloudresourcemanager` assicurando che i file `firebase.json` e `.firebaserc` siano presenti nella cartella corrente.
+
+---
+
+#### 2. `yarn --prefix opsflow-functions build`
+
+- **Cosa Fa (Spiegazione Tecnica):** Esegue il compilatore TypeScript (`tsc`) all'interno della cartella `opsflow-functions/`, generando i file compilati JavaScript in `opsflow-functions/lib/`.
+- **Perché è Necessario / Impatto:** Rispetta la direttiva **AGENTS.md §2** (_Usa esclusivamente yarn_). Firebase Cloud Functions esegue codice JavaScript compilato per Node.js 22.
+
+---
+
+#### 3. `npx firebase-tools deploy --only functions`
+
+- **Cosa Fa (Spiegazione Tecnica):** Invia il pacchetto compilato di `opsflow-functions` ai server Google Cloud Firebase (`us-central1` / `europe-west1`).
+- **Perché è Necessario / Impatto:** Crea o aggiorna le funzioni serverless attive in produzione con zero downtime per gli utenti.
 
 ---
 
@@ -49,15 +62,22 @@ Per distribuire l'applicazione web reattiva a tutti gli utenti:
 ### 📜 Comandi da Eseguire
 
 ```bash
-yarn build && npx firebase-tools deploy --only hosting
+cd /home/chif-vas/projects/opsflow && yarn build && npx firebase-tools deploy --only hosting
 ```
 
 ### 🔍 Spiegazione Dettagliata Passo-Passo
 
-| Comando                                    | Cosa Fa (Spiegazione Tecnica)                                                                                            | Perché è Necessario / Impatto                                                                                                         |
-| :----------------------------------------- | :----------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------ |
-| `yarn build`                               | Esegue `quasar build`. Genera il bundle ottimizzato dell'applicazione Single Page Application nella cartella `dist/spa`. | Minifica il codice HTML, CSS, JavaScript, compila i componenti Vue 3 ed ottimizza le asset per massima velocità (Lighthouse 100/100). |
-| `npx firebase-tools deploy --only hosting` | Carica la cartella `dist/spa` sui server CDN globali di Firebase Hosting.                                                | Rende le modifiche visibili immediatamente agli utenti che accedono all'URL di OpsFlow.                                               |
+#### 1. `yarn build`
+
+- **Cosa Fa (Spiegazione Tecnica):** Esegue `quasar build`. Genera il bundle ottimizzato dell'applicazione Single Page Application nella cartella `dist/spa`.
+- **Perché è Necessario / Impatto:** Minifica il codice HTML, CSS, JavaScript, compila i componenti Vue 3 ed ottimizza le asset per massima velocità (Lighthouse 100/100).
+
+---
+
+#### 2. `npx firebase-tools deploy --only hosting`
+
+- **Cosa Fa (Spiegazione Tecnica):** Carica la cartella `dist/spa` sui server CDN globali di Firebase Hosting.
+- **Perché è Necessario / Impatto:** Rende le modifiche visibili immediatamente agli utenti che accedono all'URL di OpsFlow.
 
 ---
 
@@ -68,14 +88,15 @@ Per aggiornare le regole di sicurezza e isolamento multi-tenant di Firestore sen
 ### 📜 Comandi da Eseguire
 
 ```bash
-npx firebase-tools deploy --only firestore:rules
+cd /home/chif-vas/projects/opsflow && npx firebase-tools deploy --only firestore:rules
 ```
 
 ### 🔍 Spiegazione Dettagliata Passo-Passo
 
-| Comando                                            | Cosa Fa (Spiegazione Tecnica)                                                         | Perché è Necessario / Impatto                                                                                                                   |
-| :------------------------------------------------- | :------------------------------------------------------------------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npx firebase-tools deploy --only firestore:rules` | Invia il file `firestore.rules` al database Firestore (`(default)` / `europe-west1`). | Applica istantaneamente il Layer 2 di sicurezza GDPR Art. 32 ed RBAC (SuperAdmin, Admin, User) bloccando accessi non autorizzati lato database. |
+#### `npx firebase-tools deploy --only firestore:rules`
+
+- **Cosa Fa (Spiegazione Tecnica):** Invia il file `firestore.rules` al database Firestore (`(default)` / `europe-west1`).
+- **Perché è Necessario / Impatto:** Applica istantaneamente il Layer 2 di sicurezza GDPR Art. 32 ed RBAC (SuperAdmin, Admin, User) bloccando accessi non autorizzati lato database.
 
 ---
 
@@ -84,7 +105,7 @@ npx firebase-tools deploy --only firestore:rules
 Per distribuire **contemporaneamente** Backend, Frontend e Regole di Sicurezza in un'unica operazione:
 
 ```bash
-yarn --prefix opsflow-functions build && yarn build && npx firebase-tools deploy
+cd /home/chif-vas/projects/opsflow && yarn --prefix opsflow-functions build && yarn build && npx firebase-tools deploy
 ```
 
 ---
@@ -93,8 +114,8 @@ yarn --prefix opsflow-functions build && yarn build && npx firebase-tools deploy
 
 > [!WARNING]
 > **Errore:** `Error: Failed to make request to https://cloudresourcemanager.googleapis.com/v1/projects/opsflow-88of`  
-> **Causa:** Il comando `firebase deploy` è stato lanciato all'interno della cartella `opsflow-functions/` invece della radice di OpsFlow.  
-> **Risoluzione:** Esegui sempre `cd ..` prima di lanciare `npx firebase-tools deploy`.
+> **Causa:** Il comando `firebase deploy` è stato lanciato all'interno di una sottocartella (es. `functions/` o `opsflow-functions/`) invece che dalla radice.  
+> **Risoluzione:** Esegui sempre `cd /home/chif-vas/projects/opsflow` prima di lanciare il deploy.
 
 > [!NOTE]
 > **Errore Sessione Scaduta:** `Error: HTTP Error: 401, Unauthorized`  
