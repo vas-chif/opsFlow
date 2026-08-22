@@ -29,7 +29,7 @@ Per distribuire o aggiornare le Cloud Functions (es. `chatWithAgent`, `generateD
 ### 📜 Comando Singolo Sicuro (Funziona da qualsiasi cartella)
 
 ```bash
-cd /home/chif-vas/projects/opsflow && yarn --prefix opsflow-functions build && npx firebase-tools deploy --only functions
+cd /home/chif-vas/projects/opsflow && yarn --prefix opsflow-functions build && npx firebase-tools deploy --only functions,hosting
 ```
 
 ### 🔍 Spiegazione Dettagliata Passo-Passo
