@@ -80,6 +80,10 @@ interface SearchResultItem {
 /**
  * Performs a fetch with an AbortController-based hard timeout.
  * Returns null (never throws) on timeout or network errors.
+ * @param {string} url - The URL to fetch.
+ * @param {RequestInit} options - Optional fetch init options (method, headers, body).
+ * @param {number} timeoutMs - Hard timeout in milliseconds before aborting.
+ * @returns {Promise<Response | null>} The fetch Response, or null on timeout/error.
  */
 async function fetchWithHardTimeout(
   url: string,
@@ -104,6 +108,9 @@ async function fetchWithHardTimeout(
  * Queries Tavily AI Search API.
  * Free tier: 1.000 requests/month — no credit card required.
  * Returns null on any failure (caller handles fallback).
+ * @param {string} query - The search query string.
+ * @param {string} apiKey - Tavily AI API key from process.env.TAVILY_API_KEY.
+ * @returns {Promise<SearchResultItem[] | null>} Structured results, or null on failure.
  */
 async function searchTavily(query: string, apiKey: string): Promise<SearchResultItem[] | null> {
   const res = await fetchWithHardTimeout("https://api.tavily.com/search", {
@@ -135,6 +142,9 @@ async function searchTavily(query: string, apiKey: string): Promise<SearchResult
  * Queries Exa.ai Neural Search API.
  * Free tier: ~1.400 requests/month credit — no credit card required.
  * Returns null on any failure (caller handles fallback).
+ * @param {string} query - The search query string.
+ * @param {string} apiKey - Exa.ai API key from process.env.EXA_API_KEY.
+ * @returns {Promise<SearchResultItem[] | null>} Structured results, or null on failure.
  */
 async function searchExa(query: string, apiKey: string): Promise<SearchResultItem[] | null> {
   const res = await fetchWithHardTimeout("https://api.exa.ai/search", {
@@ -166,6 +176,8 @@ async function searchExa(query: string, apiKey: string): Promise<SearchResultIte
  * Queries Jina Search API (official s.jina.ai endpoint).
  * Free tier: 1M tokens — no credit card required.
  * Returns null on any failure (caller handles fallback).
+ * @param {string} query - The search query string.
+ * @returns {Promise<SearchResultItem[] | null>} Structured results parsed from Markdown, or null on failure.
  */
 async function searchJina(query: string): Promise<SearchResultItem[] | null> {
   const jinaUrl = `https://s.jina.ai/${encodeURIComponent(query)}`;
