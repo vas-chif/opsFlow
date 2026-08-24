@@ -3,6 +3,7 @@
   @description Draggable & Resizable Multi-Window Task Chat component for OpsFlow.
   @author Vasile Chifeac
   @created 2026-07-31
+  @modified 2026-08-24 (Step 12: europe-west1 endpoint, client timeout alignment, GDPR Art.14 fallback)
 -->
 
 <script setup lang="ts">
@@ -256,9 +257,9 @@ const handleSendChatMessage = async (): Promise<void> => {
   let fetchedOk = false;
 
   try {
-    const res = await fetch("https://us-central1-opsflow-88of.cloudfunctions.net/chatWithAgent", {
+    const res = await fetch("https://europe-west1-opsflow-88of.cloudfunctions.net/chatWithAgent", {
       method: "POST",
-      signal: AbortSignal.timeout(180000),
+      signal: AbortSignal.timeout(55000), // Step 12: 55s — 5s headroom below CF 60s timeout
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message: userText,

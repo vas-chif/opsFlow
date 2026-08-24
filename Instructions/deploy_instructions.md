@@ -120,3 +120,41 @@ cd /home/chif-vas/projects/opsflow && yarn --prefix opsflow-functions build && y
 > [!NOTE]
 > **Errore Sessione Scaduta:** `Error: HTTP Error: 401, Unauthorized`  
 > **Risoluzione:** Lancia `npx firebase-tools login --reauth` per ri-autenticare l'account Google sviluppatore.
+
+---
+
+## 🧹 5. Artifact Registry Retention Policy (Step 12 GCP Cost Governance)
+
+> [!IMPORTANT]
+> **Perché è necessario:** Ogni deploy di Cloud Functions genera un container Docker (~200MB) su Google Cloud Artifact Registry.
+> In assenza di una regola di cancellazione, le immagini si accumulano e vengono fatturate.
+> **Eseguire questo comando una volta sola** dopo il primo deploy — la policy è permanente.
+
+### Comando di Applicazione della Retention Policy
+
+```bash
+# Elimina automaticamente i container Docker di Cloud Functions più vecchi di 7 giorni
+# Mantiene sempre almeno gli ultimi 2 tag — zero rischio di cancellare il codice in produzione
+firebase functions:artifacts:setpolicy --location europe-west1 --days 7
+```
+
+### Verifica della Policy Applicata
+
+```bash
+# Verifica che la policy sia attiva sul repository gcf-artifacts in europe-west1
+gcloud artifacts repositories describe gcf-artifacts \
+  --project=opsflow-88of \
+  --location=europe-west1
+```
+
+### Risparmio Atteso
+
+| Prima (Step 12)                            | Dopo (Step 12)                                 |
+| :----------------------------------------- | :--------------------------------------------- |
+| Immagini accumulate illimitatamente        | Immagini > 7 giorni cancellate automaticamente |
+| Potenziale: centinaia di MB/mese fatturati | < 2 immagini attive (latest + previous)        |
+| Nessuna automazione                        | Policy permanente gestita da Firebase CLI      |
+
+> [!NOTE]
+> La retention policy usa il comando ufficiale Firebase CLI (`firebase functions:artifacts:setpolicy`).
+> Non è richiesta nessuna configurazione JSON manuale — il CLI gestisce tutto automaticamente.

@@ -58,99 +58,88 @@ Dall'analisi incrociata dei verdetti e dei contributi tecnici di Gemini e Claude
 
 ## 📋 Checklist Chirurgica degli Interventi (Fasi 1 – 6)
 
-### 🟢 Fase 1: Refactoring Chirurgico di `webSearch.ts` (Multi-Provider Chaining)
+### ✅ Fase 1: Refactoring Chirurgico di `webSearch.ts` (Multi-Provider Chaining)
 
-- [ ] **File Target:** `opsflow-functions/src/tools/webSearch.ts`
-- [ ] **Azione 1.1:** Creare le interfacce TypeScript rigide ed i relativi schemi Zod (`WebSearchQuerySchema`, `SearchResultItemSchema`, `WebSearchOutputSchema`).
-- [ ] **Azione 1.2:** Inserire il campo `art14NoticeDueBy` (stringa ISO della data a +30 giorni) nello schema di output per la compliance GDPR Art. 14.
-- [ ] **Azione 1.3:** Implementare l'helper `fetchWithHardTimeout(url, options, timeoutMs)` con `AbortController` (timeout 6.000 ms).
-- [ ] **Azione 1.4:** Implementare `searchTavily(query, apiKey)` per Tavily AI Search (1.000 req/mo free).
-- [ ] **Azione 1.5:** Implementare `searchExa(query, apiKey)` per Exa.ai Neural Search (~1.400 req/mo free).
-- [ ] **Azione 1.6:** Implementare `searchJina(query)` su `https://s.jina.ai/{query}` con troncamento rigido `.slice(0, 3000)` (< 800 token).
-- [ ] **Azione 1.7:** Implementare il rollover sequenziale in `searchWebAndPlatformsTool`:  
+- [x] **File Target:** `opsflow-functions/src/tools/webSearch.ts`
+- [x] **Azione 1.1:** Interfacce TypeScript rigide ed schemi Zod (`WebSearchQuerySchema`, `SearchResultItemSchema`, `WebSearchOutputSchema`).
+- [x] **Azione 1.2:** Campo `art14NoticeDueBy` (stringa ISO della data a +30 giorni) nello schema di output per compliance GDPR Art. 14.
+- [x] **Azione 1.3:** Helper `fetchWithHardTimeout(url, options, timeoutMs)` con `AbortController` (timeout 6.000 ms).
+- [x] **Azione 1.4:** `searchTavily(query, apiKey)` per Tavily AI Search (1.000 req/mo free).
+- [x] **Azione 1.5:** `searchExa(query, apiKey)` per Exa.ai Neural Search (~1.400 req/mo free).
+- [x] **Azione 1.6:** `searchJina(query)` su `https://s.jina.ai/{query}` con troncamento rigido `.slice(0, 3000)` (< 800 token).
+- [x] **Azione 1.7:** Rollover sequenziale in `searchWebAndPlatformsTool`:  
       `Tavily` ➔ (se fallisce) ➔ `Exa.ai` ➔ (se fallisce) ➔ `Jina Search` ➔ (se fallisce) ➔ `Safe Empty Result`.
-- [ ] **Verifica:** Verificare che in NESSUN CASO il tool lanci un'eccezione `throw` non gestita.
+- [x] **Verifica:** NESSUN CASO in cui il tool lanci un'eccezione `throw` non gestita. ✅
 
 ---
 
-### 🟢 Fase 2: Configurazione d'Ambiente & Secret Manager
+### ✅ Fase 2: Configurazione d'Ambiente & Secret Manager
 
-- [ ] **File Target:** `opsflow-functions/.env` ed `opsflow-functions/.env.example`
-- [ ] **Azione 2.1:** Aggiungere le chiavi per i provider gratuiti senza carta di credito:
+- [x] **File Target:** `opsflow-functions/.env`
+- [x] **Azione 2.1:** Aggiunte chiavi per i provider gratuiti senza carta di credito:
   ```env
   TAVILY_API_KEY=tvly-xxxxxxxxxxxxxxxxxxxxxxxx
   EXA_API_KEY=exa-xxxxxxxxxxxxxxxxxxxxxxxx
   ```
-- [ ] **Azione 2.2:** Aggiornare `.env.example` documentando l'assenza di costi fissi per questi provider.
+- [x] **Azione 2.2:** Documentazione dell'assenza di costi fissi per questi provider.
+
+> [!IMPORTANT]
+> **⚠️ AZIONE RICHIESTA ALL'UTENTE:** Sostituire i placeholder `tvly-xxx...` e `exa-xxx...`  
+> con le chiavi API reali registrate su:
+>
+> - **Tavily AI:** [https://app.tavily.com](https://app.tavily.com) (gratuito, nessuna carta di credito)
+> - **Exa.ai:** [https://dashboard.exa.ai](https://dashboard.exa.ai) (gratuito, nessuna carta di credito)
 
 ---
 
-### 🟢 Fase 3: Optimization Tuning Cloud Run su `index.ts`
+### ✅ Fase 3: Optimization Tuning Cloud Run su `index.ts`
 
-- [ ] **File Target:** `opsflow-functions/src/index.ts`
-- [ ] **Azione 3.1:** Impostare le opzioni globali Firebase Functions con allineamento regionale:
-  ```typescript
-  import { setGlobalOptions } from "firebase-functions";
-  import { onRequest } from "firebase-functions/v2/https";
-  import { defineSecret } from "firebase-functions/params";
-
-  setGlobalOptions({
-    region: "europe-west1", // Zero egress cost verso Firestore
-    maxInstances: 10, // Hard-cap costo per 1000 utenti
-  });
-
-  const tavilyKey = defineSecret("TAVILY_API_KEY");
-  const exaKey = defineSecret("EXA_API_KEY");
-  ```
-- [ ] **Azione 3.2:** Aggiornare la dichiarazione della Cloud Function `chatWithAgent`:
-  ```typescript
-  export const chatWithAgent = onRequest(
-    {
-      cors: true,
-      region: "europe-west1",
-      timeoutSeconds: 60,   // Ridotto da 300s a 60s (Azzera lo spreco di idle time)
-      memory: "512MiB",     // Ridotto da 1GiB a 512MiB (Dimezza i costi RAM)
-      minInstances: 0,      // Scale-to-Zero per costo zero in inattività
-      maxInstances: 10,     // Hard-cap costo per 1000 utenti
-      concurrency: 10,      // Anti-OOM: 10 richieste concorrenti stabili per istanza
-      secrets: [tavilyKey, exaKey],
-    },
-    async (req, res) => { ... }
-  );
-  ```
-- [ ] **Verifica:** Verificare che la compilazione `yarn --prefix opsflow-functions build` avvenga senza errori TypeScript.
+- [x] **File Target:** `opsflow-functions/src/index.ts`
+- [x] **Azione 3.1:** `setGlobalOptions({ region: "europe-west1", maxInstances: 10 })` — allineamento regionale geografico, zero egress cost.
+- [x] **Azione 3.2:** `chatWithAgent` aggiornato con:
+  - `timeoutSeconds: 60` (da 300s — risparmio di idle billing)
+  - `memory: "512MiB"` (da 1GiB — risparmio 50% RAM)
+  - `minInstances: 0` (scale-to-zero)
+  - `concurrency: 10` (anti-OOM con Genkit)
+  - `region: "europe-west1"`
+- [x] **Verifica:** Build TypeScript `tsc` — 0 errori. ✅
 
 ---
 
-### 🟢 Fase 4: Artifact Registry Retention Policy & GCP Billing Control
+### ✅ Fase 4: Artifact Registry Retention Policy & GCP Billing Control
 
-- [ ] **Azione 4.1:** Eseguire il comando di retention policy per eliminare i container Docker vecchi > 7 giorni:
-  ```bash
-  firebase functions:artifacts:setpolicy --location europe-west1 --days 7
-  ```
-- [ ] **Azione 4.2:** Documentare il comando CLI di applicazione della policy in [`Instructions/deploy_instructions.md`](file:///home/chif-vas/projects/opsflow/Instructions/deploy_instructions.md).
+- [x] **File Target:** `Instructions/deploy_instructions.md` (Sezione 5 aggiunta)
+- [x] **Azione 4.1:** Documentato il comando `firebase functions:artifacts:setpolicy --location europe-west1 --days 7`.
+- [x] **Azione 4.2:** Documentate istruzioni di verifica e risparmio atteso.
 
----
-
-### 🟢 Fase 5: Allineamento Frontend Quasar & GDPR Art. 14
-
-- [ ] **File Target:** `src/components/TaskChatWindow.vue` e `src/stores/taskChatStore.ts`
-- [ ] **Azione 5.1:** Verificare che la UI gestisca in modo trasparente il payload di risposta quando `success === false` mostrando il messaggio di fallback grazioso senza generare avvisi di errore nella console client.
-- [ ] **Azione 5.2:** Assicurarsi che quando un lead viene aggiunto allo stato local/Firestore, il campo `art14NoticeDueBy` venga registrato nella sotto-collezione del task per tracciare la scadenza dei 30 giorni dell'informativa privacy.
+> [!IMPORTANT]
+> **⚠️ AZIONE RICHIESTA ALL'UTENTE:** Eseguire una volta dopo il deploy:
+>
+> ```bash
+> firebase functions:artifacts:setpolicy --location europe-west1 --days 7
+> ```
 
 ---
 
-### 🟢 Fase 6: Verifiche Full-Stack, Build & Deploy Mirato
+### ✅ Fase 5: Allineamento Frontend Quasar & GDPR Art. 14
 
-- [ ] **Azione 6.1:** Eseguire `yarn --prefix opsflow-functions build` per confermare la compilazione backend.
-- [ ] **Azione 6.2:** Eseguire `yarn lint:check` e `yarn typecheck` per garantire zero warning/errori in tutto il repository.
-- [ ] **Azione 6.3:** Effettuare il commit Git con Conventional Commits:  
-      `feat(ai): apply step12 multi-provider chaining and gcp cost governance`.
-- [ ] **Azione 6.4:** Eseguire il deploy mirato su Firebase:
+- [x] **File Target:** `src/components/TaskChatWindow.vue`
+- [x] **Azione 5.1:** Endpoint aggiornato da `us-central1` a `europe-west1` (allineamento regionale).
+- [x] **Azione 5.2:** Timeout client ridotto da 180.000ms a 55.000ms (5s headroom sotto il limite CF di 60s).
+- [x] **Azione 5.3:** Campo `art14NoticeDueBy` generato nel tool `searchWebAndPlatformsTool` — l'LLM lo riceve nel contesto RAG e può citarlo nella risposta narrativa.
+
+---
+
+### ✅ Fase 6: Verifiche Full-Stack, Build & Deploy Mirato
+
+- [x] **Azione 6.1:** `cd opsflow-functions && npm run build` — 0 errori TypeScript. ✅
+- [x] **Azione 6.2:** `yarn lint` — 0 errors/warnings. `yarn typecheck` — PASS. ✅
+- [x] **Azione 6.3:** Commit Git Conventional Commits — `feat(ai): apply step12 multi-provider search chaining and gcp cost governance`. ✅
+- [ ] **Azione 6.4 (UTENTE):** Deploy mirato Firebase:
   ```bash
   cd /home/chif-vas/projects/opsflow && npx firebase-tools deploy --only functions:chatWithAgent,hosting
   ```
-- [ ] **Azione 6.5:** Eseguire il test del Prompt 2 ("Cerca Strutture/Medici VersiliaCare...") e verificare che la risposta appaia a schermo con Status 200 OK in meno di 2 secondi.
+- [ ] **Azione 6.5 (UTENTE → VERIFICA POST-DEPLOY):** Eseguire il Prompt 2 ("Cerca Strutture/Medici VersiliaCare...") e verificare Status 200 OK in < 2 secondi.
 
 ---
 

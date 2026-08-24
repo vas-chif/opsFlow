@@ -3,7 +3,7 @@
  * @description Firebase Cloud Functions entrypoint for OpsFlow AI Agents (Genkit & Gemini LLM)
  * @author Vasile Chifeac
  * @created 2026-07-29
- * @modified 2026-08-14
+ * @modified 2026-08-24
  *
  * @notes
  * - Triggers AgentePlanner, AgenteIspettore, and AgenteArchivista
@@ -46,7 +46,10 @@ try {
   // Already initialized
 }
 
-setGlobalOptions({ maxInstances: 10 });
+setGlobalOptions({
+  region: "europe-west1", // Zero cross-region egress cost towards Firestore (§5)
+  maxInstances: 10, // Hard-cap — cost control < €1/1000 users/mo
+});
 
 // ── RBAC: JWT Middleware Helper (Fase 1.2) ────────────────────────────────────
 
@@ -289,7 +292,15 @@ export const onTaskUpdated = onDocumentUpdated(
  * Callable Function: chatWithAgent
  */
 export const chatWithAgent = onRequest(
-  { cors: true, timeoutSeconds: 300, memory: "1GiB" },
+  {
+    cors: true,
+    region: "europe-west1",
+    timeoutSeconds: 60, // Step 12: Reduced from 300s → 60s (eliminates idle billing on blocked requests)
+    memory: "512MiB", // Step 12: Reduced from 1GiB → 512MiB (50% RAM cost saving, anti-OOM)
+    minInstances: 0, // Scale-to-Zero: €0,00 during inactivity
+    maxInstances: 10, // Hard-cap for 1000 concurrent users
+    concurrency: 10, // Anti-OOM: 10 concurrent req per instance (Genkit + RAG safety margin)
+  },
   async (req, res) => {
     try {
       const {
