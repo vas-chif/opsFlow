@@ -1,0 +1,20 @@
+# Provider di Ricerca Ufficiali a Costo Zero (Zero Carte di Credito Richieste)
+TAVILY_API_KEY=tvly-xxxxxxxxxxxxxxxxxxxxxxxx
+EXA_API_KEY=exa-xxxxxxxxxxxxxxxxxxxxxxxx
+
+
+📋 4. Checklist di Esecuzione Definitiva per AntiGravity[ ] Step 1 (Web Search Tool): Sostituire il codice in opsflow-functions/src/tools/webSearch.ts con il modulo perfezionato sopra[cite: 42].[ ] Step 2 (Tuning Cloud Run): Configurare opsflow-functions/src/index.ts con memory: "512MiB", timeoutSeconds: 60, concurrency: 10, region: "europe-west1".  [ ] Step 3 (API Keys): Inserire le chiavi gratuite di Tavily ed Exa nel file opsflow-functions/.env[cite: 39, 42].[ ] Step 4 (Artifact Registry): Eseguire il comando di retention policy per eliminare i 
+
+firebase functions:artifacts:setpolicy --location europe-west1 --days 7
+
+
+
+[cite: 21, 23]
+
+[ ] Step 5 (Build & Typecheck): Eseguire yarn --prefix opsflow-functions build e yarn typecheck per certificare 0 errori[cite: 42].
+
+[ ] Step 6 (Deploy Mirato):
+
+npx firebase-tools deploy --only functions:chatWithAgent
+
+[cite: 42][ ] Step 7 (Test del Prompt 2): Eseguire il Prompt 2 ("Cerca Strutture/Medici VersiliaCare...") e verificare che la risposta appaia a schermo con Status 200 OK in meno di 2 secondi.  
