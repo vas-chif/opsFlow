@@ -296,7 +296,7 @@ export const chatWithAgent = onRequest(
     cors: true,
     region: "europe-west1",
     timeoutSeconds: 60, // Step 12: Reduced from 300s → 60s (eliminates idle billing on blocked requests)
-    memory: "512MiB", // Step 12: Reduced from 1GiB → 512MiB (50% RAM cost saving, anti-OOM)
+    memory: "1GiB", // Step 12: 1GiB RAM grants 1 full vCPU to Cloud Run (fixes container healthcheck boot timeout)
     minInstances: 0, // Scale-to-Zero: €0,00 during inactivity
     maxInstances: 10, // Hard-cap for 1000 concurrent users
     concurrency: 10, // Anti-OOM: 10 concurrent req per instance (Genkit + RAG safety margin)

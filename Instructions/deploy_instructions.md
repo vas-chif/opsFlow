@@ -2,8 +2,44 @@
 
 > **Progetto:** OpsFlow SaaS Platform  
 > **Autore:** Vasile Chifeac & AI Architect  
-> **Data:** 22 Agosto 2026  
+> **Data:** 30 Agosto 2026  
 > **Riferimenti AGENTS.md:** §1 (Git & Branch Management), §2 (Comandi Progetto), §3 (Sicurezza & Firebase SDK)
+
+---
+
+## ⚡ GUIDA RAPIDA PASSO-PASSO (Sequenza Corretta)
+
+Per evitare qualsiasi errore di deploy o mancata compilazione, eseguire sempre questa sequenza di comandi dalla cartella radice del progetto `/home/chif-vas/projects/opsflow`:
+
+### 1️⃣ Risposta al Deploy (Cosa fare al prompt Firebase)
+
+Quando lanci il deploy, Firebase ti farà questa domanda:
+
+```
+The following functions are found in your project but do not exist in your local source code:
+        chatWithAgent(us-central1)
+✔ Would you like to proceed with deletion?
+```
+
+👉 **Rispondi `Y` (Yes) oppure invia Invio**: Questo elimina la vecchia funzione registrata nella region `us-central1` e completa il rilascio della nuova funzione ottimizzata nella region **`europe-west1`**.
+
+---
+
+### 2️⃣ Comando di Deploy Mirato Backend + Frontend (Consigliato)
+
+```bash
+cd /home/chif-vas/projects/opsflow && yarn --prefix opsflow-functions build && yarn build && npx firebase-tools deploy --only functions:chatWithAgent,hosting
+```
+
+---
+
+### 3️⃣ Spiegazione dei Comandi di Build: DOVE e QUANDO eseguirli?
+
+| Comando                                 | Dove eseguirlo                                 | Cosa fa                                                            | È obbligatorio prima del deploy?                                  |
+| :-------------------------------------- | :--------------------------------------------- | :----------------------------------------------------------------- | :---------------------------------------------------------------- |
+| `yarn --prefix opsflow-functions build` | Dalla radice `/home/chif-vas/projects/opsflow` | Compila TypeScript del Backend in `opsflow-functions/lib/index.js` | **SÌ** (altrimenti le Cloud Functions usano vecchio codice)       |
+| `yarn build`                            | Dalla radice `/home/chif-vas/projects/opsflow` | Compila l'applicazione Quasar Vue 3 SPA in `dist/spa`              | **SÌ** (altrimenti Firebase Hosting distribuisce vecchia grafica) |
+| `npx firebase-tools deploy`             | Dalla radice `/home/chif-vas/projects/opsflow` | Invia codice compilato ed asset su Google Cloud / Firebase         | **SÌ**                                                            |
 
 ---
 
