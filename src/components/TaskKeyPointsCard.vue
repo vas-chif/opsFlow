@@ -1,0 +1,286 @@
+<script setup lang="ts">
+/**
+ * @file TaskKeyPointsCard.vue
+ * @description Glassmorphic panel displaying AI-extracted key points for a Task.
+ *   Shows structured insight cards (leads, requirements, actions, warnings, GDPR notices)
+ *   extracted from the agent conversation — no raw JSON exposed to the user.
+ * @author Vasile Chifeac
+ * @created 2026-08-30
+ *
+ * @notes
+ * - Design System "Elite": Royal Navy #0a2342, Gold #c5a065, Off-White #f9f7f2.
+ * - Reads reactively from taskChatStore.getKeyPoints(taskId).
+ * - Uses Quasar q-card, q-chip, q-expansion-item.
+ * - UI-only: zero Firestore reads (pure Pinia reactive state).
+ *
+ * @dependencies
+ * - taskChatStore (keyPointsMap)
+ * - src/types/models.ts (TaskKeyPoint, KeyPointCategory)
+ *
+ * @performance
+ * - Zero Firestore reads — data comes from in-memory Pinia store only.
+ * - Reactive to store changes without watchers.
+ */
+
+// ── Vue & Framework ──────────────────────────────────────────────────────────
+import { computed } from "vue";
+
+// ── Types ────────────────────────────────────────────────────────────────────
+import type { TaskKeyPoint, KeyPointCategory } from "../types/models";
+
+// ── Stores ───────────────────────────────────────────────────────────────────
+import { useTaskChatStore } from "../stores/taskChatStore";
+
+// ── Props ────────────────────────────────────────────────────────────────────
+const props = defineProps<{
+  taskId: string;
+}>();
+
+const chatStore = useTaskChatStore();
+
+const keyPoints = computed<TaskKeyPoint[]>(() => chatStore.getKeyPoints(props.taskId));
+const hasKeyPoints = computed(() => keyPoints.value.length > 0);
+
+/** Map category → Quasar color token */
+function categoryColor(cat: KeyPointCategory): string {
+  const map: Record<KeyPointCategory, string> = {
+    lead: "positive",
+    requirement: "primary",
+    action: "warning",
+    insight: "info",
+    warning: "negative",
+    gdpr: "deep-orange",
+  };
+  return map[cat] ?? "grey";
+} /*end categoryColor*/
+
+/** Map category → Material icon name */
+function categoryIcon(cat: KeyPointCategory): string {
+  const map: Record<KeyPointCategory, string> = {
+    lead: "person_add",
+    requirement: "checklist",
+    action: "bolt",
+    insight: "lightbulb",
+    warning: "warning_amber",
+    gdpr: "gpp_good",
+  };
+  return map[cat] ?? "info";
+} /*end categoryIcon*/
+
+/** Human-readable label for the category chip. */
+function categoryLabel(cat: KeyPointCategory): string {
+  const map: Record<KeyPointCategory, string> = {
+    lead: "Lead",
+    requirement: "Requisito",
+    action: "Azione",
+    insight: "Insight",
+    warning: "Attenzione",
+    gdpr: "GDPR Art. 14",
+  };
+  return map[cat] ?? cat;
+} /*end categoryLabel*/
+</script>
+
+<template>
+  <div class="task-key-points">
+    <!-- Empty state -->
+    <transition name="fade">
+      <div v-if="!hasKeyPoints" class="task-key-points__empty">
+        <q-icon name="tips_and_updates" size="28px" class="task-key-points__empty-icon" />
+        <span class="task-key-points__empty-text">
+          I punti chiave del task appariranno qui durante la conversazione con l'Agente
+        </span>
+      </div>
+    </transition>
+
+    <!-- Key Points List -->
+    <transition-group name="kp-list" tag="div" class="task-key-points__list">
+      <div
+        v-for="point in keyPoints"
+        :key="point.id"
+        class="task-key-points__item"
+        :class="`task-key-points__item--${point.category}`"
+      >
+        <!-- Category indicator strip -->
+        <div class="task-key-points__strip" :class="`bg-${categoryColor(point.category)}`" />
+
+        <!-- Card content -->
+        <div class="task-key-points__content">
+          <div class="task-key-points__header">
+            <q-icon
+              :name="categoryIcon(point.category)"
+              :color="categoryColor(point.category)"
+              size="18px"
+              class="task-key-points__icon"
+            />
+            <span class="task-key-points__title">{{ point.title }}</span>
+            <q-chip
+              dense
+              :color="categoryColor(point.category)"
+              text-color="white"
+              :label="categoryLabel(point.category)"
+              class="task-key-points__chip"
+            />
+          </div>
+          <p class="task-key-points__detail">{{ point.detail }}</p>
+          <span class="task-key-points__timestamp">{{ point.timestamp }}</span>
+        </div>
+      </div>
+    </transition-group>
+  </div>
+</template>
+
+<style scoped lang="scss">
+// ── Design System Tokens ────────────────────────────────────────────────────
+$navy: #0a2342;
+$gold: #c5a065;
+$off-white: #f9f7f2;
+$glass-bg: rgba(255, 255, 255, 0.05);
+$glass-border: rgba(197, 160, 101, 0.2);
+$radius: 10px;
+
+.task-key-points {
+  width: 100%;
+  min-height: 48px;
+
+  &__empty {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: $radius;
+    background: $glass-bg;
+    border: 1px dashed $glass-border;
+  }
+
+  &__empty-icon {
+    color: $gold;
+    opacity: 0.7;
+    flex-shrink: 0;
+  }
+
+  &__empty-text {
+    font-family: "Mulish", sans-serif;
+    font-size: 12px;
+    color: rgba($off-white, 0.55);
+    line-height: 1.45;
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  &__item {
+    display: flex;
+    border-radius: $radius;
+    background: $glass-bg;
+    border: 1px solid $glass-border;
+    backdrop-filter: blur(8px);
+    overflow: hidden;
+    transition:
+      transform 0.18s ease,
+      box-shadow 0.18s ease;
+
+    &:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    }
+  }
+
+  &__strip {
+    width: 4px;
+    flex-shrink: 0;
+    border-radius: $radius 0 0 $radius;
+    opacity: 0.9;
+  }
+
+  &__content {
+    flex: 1;
+    padding: 10px 14px;
+    min-width: 0;
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+    flex-wrap: nowrap;
+  }
+
+  &__icon {
+    flex-shrink: 0;
+  }
+
+  &__title {
+    font-family: "Playfair Display", serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: $off-white;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+
+  &__chip {
+    flex-shrink: 0;
+    font-size: 9px !important;
+    height: 18px !important;
+  }
+
+  &__detail {
+    font-family: "Mulish", sans-serif;
+    font-size: 12px;
+    color: rgba($off-white, 0.75);
+    margin: 0 0 4px 0;
+    line-height: 1.5;
+  }
+
+  &__timestamp {
+    font-family: "Mulish", sans-serif;
+    font-size: 10px;
+    color: rgba($gold, 0.6);
+    letter-spacing: 0.4px;
+  }
+}
+
+// ── Transitions ──────────────────────────────────────────────────────────────
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.kp-list-enter-active {
+  animation: kp-slide-in 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.kp-list-leave-active {
+  animation: kp-slide-in 0.2s ease reverse both;
+}
+
+.kp-list-move {
+  transition: transform 0.22s ease;
+}
+
+@keyframes kp-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+</style>

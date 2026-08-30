@@ -3,7 +3,7 @@
   @description Draggable & Resizable Multi-Window Task Chat component for OpsFlow.
   @author Vasile Chifeac
   @created 2026-07-31
-  @modified 2026-08-24 (Step 12: europe-west1 endpoint, client timeout alignment, GDPR Art.14 fallback)
+  @modified 2026-08-30 (Step 12 Fase 3: TaskKeyPointsCard.vue integration, rolling key points parser, europe-west1 endpoint)
 -->
 
 <script setup lang="ts">
@@ -13,7 +13,10 @@ import { useTaskStore } from "../stores/taskStore";
 import { useTaskChatStore, type FloatingWindow } from "../stores/taskChatStore";
 import { useSecureLogger } from "../composables/useSecureLogger";
 import { useWebSpeech } from "../composables/useWebSpeech";
-import type { TaskStatus } from "../types/models";
+import type { TaskStatus, TaskKeyPoint, KeyPointCategory } from "../types/models";
+
+// ── Components ───────────────────────────────────────────────────────────────
+import TaskKeyPointsCard from "./TaskKeyPointsCard.vue";
 
 const props = defineProps<{
   windowState: FloatingWindow;
@@ -296,6 +299,8 @@ const handleSendChatMessage = async (): Promise<void> => {
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         toolsUsed: finalTools,
       });
+      // Extract key points from agent reply for the TaskKeyPointsCard panel
+      parseKeyPointsFromReply(taskId, finalReply);
       fetchedOk = true;
       scrollToBottom();
     }
@@ -326,6 +331,76 @@ const handleSendChatMessage = async (): Promise<void> => {
   chatStore.setAgentTyping(taskId, false);
   scrollToBottom();
 }; /*end handleSendChatMessage*/
+
+/**
+ * Lightweight parser that extracts structured key points from an agent reply.
+ * Identifies bold markers like **Lead:, **Requisito:, **Azione:, **GDPR:, etc.
+ * No external dependencies — pure regex on the reply text.
+ * @param {string} taskId - Target task ID for storing extracted points
+ * @param {string} text - Agent reply text to parse
+ */
+function parseKeyPointsFromReply(taskId: string, text: string): void {
+  const categoryKeywords: {
+    pattern: RegExp;
+    category: KeyPointCategory;
+    icon: string;
+    color: string;
+  }[] = [
+    { pattern: /\*\*Lead[:\s]/i, category: "lead", icon: "person_add", color: "positive" },
+    { pattern: /\*\*Prospect[:\s]/i, category: "lead", icon: "person_add", color: "positive" },
+    {
+      pattern: /\*\*Requisito[:\s]/i,
+      category: "requirement",
+      icon: "checklist",
+      color: "primary",
+    },
+    {
+      pattern: /\*\*Obiettivo[:\s]/i,
+      category: "requirement",
+      icon: "checklist",
+      color: "primary",
+    },
+    { pattern: /\*\*Azione[:\s]/i, category: "action", icon: "bolt", color: "warning" },
+    { pattern: /\*\*Step[:\s]/i, category: "action", icon: "bolt", color: "warning" },
+    { pattern: /\*\*Insight[:\s]/i, category: "insight", icon: "lightbulb", color: "info" },
+    { pattern: /\*\*Nota[:\s]/i, category: "insight", icon: "lightbulb", color: "info" },
+    {
+      pattern: /\*\*Attenzione[:\s]/i,
+      category: "warning",
+      icon: "warning_amber",
+      color: "negative",
+    },
+    { pattern: /\*\*GDPR[:\s]/i, category: "gdpr", icon: "gpp_good", color: "deep-orange" },
+  ];
+
+  const lines = text.split("\n").filter((l) => l.trim().startsWith("**"));
+  const timestamp = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+  for (const line of lines) {
+    for (const { pattern, category, icon, color } of categoryKeywords) {
+      if (pattern.test(line)) {
+        const cleanTitle = line
+          .replace(/\*\*/g, "")
+          .replace(/^[^:]+:\s*/, "")
+          .slice(0, 80)
+          .trim();
+        if (cleanTitle.length > 5) {
+          chatStore.addKeyPoint(taskId, {
+            id: `kp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            taskId,
+            title: cleanTitle,
+            detail: line.replace(/\*\*/g, "").trim().slice(0, 200),
+            category,
+            icon,
+            color,
+            timestamp,
+          } satisfies TaskKeyPoint);
+        }
+        break;
+      }
+    }
+  }
+} /*end parseKeyPointsFromReply*/
 
 const handleSendCustomPrompt = async (customText: string): Promise<void> => {
   if (isSending.value) return;
@@ -436,6 +511,20 @@ const handleExecuteTaskAI = async (): Promise<void> => {
           <div class="text-caption text-grey-9 q-mb-sm bg-grey-2 q-pa-xs rounded-borders">
             {{ task.description || "Nessuna descrizione." }}
           </div>
+
+          <!-- Task Key Points Panel (Working Memory Rolling Summary) -->
+          <q-expansion-item
+            dense
+            icon="tips_and_updates"
+            label="Punti Chiave del Task"
+            header-class="text-caption text-weight-bold text-secondary q-pa-xs"
+            class="q-mb-sm task-kp-expansion"
+            default-opened
+          >
+            <div class="q-px-xs q-pb-xs">
+              <TaskKeyPointsCard :task-id="task.id" />
+            </div>
+          </q-expansion-item>
 
           <!-- Direct AI Execution & Shortcuts -->
           <div class="q-mb-sm">

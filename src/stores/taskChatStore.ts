@@ -12,7 +12,7 @@
 
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
-import type { Task, TaskChatMessage, ApprovalRecord } from "../types/models";
+import type { Task, TaskChatMessage, ApprovalRecord, TaskKeyPoint } from "../types/models";
 
 export interface ChatSession {
   taskId: string;
@@ -53,6 +53,9 @@ export const useTaskChatStore = defineStore("taskChat", () => {
   // Array of open draggable/resizable floating windows
   const floatingWindows = ref<FloatingWindow[]>([]);
   const highestZIndex = ref(1000);
+
+  // Map of key points per taskId (UI Working Memory — Rolling Summary)
+  const keyPointsMap = ref<Map<string, TaskKeyPoint[]>>(new Map());
 
   const primarySession = computed(() => {
     if (!primarySessionId.value) return null;
@@ -293,6 +296,45 @@ export const useTaskChatStore = defineStore("taskChat", () => {
     }
   } /*end setSessionOAuthError*/
 
+  /**
+   * Replaces all key points for a task (full set from agent response).
+   * @param {string} taskId - Target task ID
+   * @param {TaskKeyPoint[]} points - Array of extracted key points
+   */
+  function setKeyPoints(taskId: string, points: TaskKeyPoint[]): void {
+    keyPointsMap.value.set(taskId, [...points]);
+  } /*end setKeyPoints*/
+
+  /**
+   * Appends a single key point to the task key points list.
+   * Avoids duplicates by ID.
+   * @param {string} taskId - Target task ID
+   * @param {TaskKeyPoint} point - Key point to append
+   */
+  function addKeyPoint(taskId: string, point: TaskKeyPoint): void {
+    const existing = keyPointsMap.value.get(taskId) ?? [];
+    if (!existing.find((p) => p.id === point.id)) {
+      keyPointsMap.value.set(taskId, [...existing, point]);
+    }
+  } /*end addKeyPoint*/
+
+  /**
+   * Clears all key points for a task (e.g. on session reset).
+   * @param {string} taskId - Target task ID
+   */
+  function clearKeyPoints(taskId: string): void {
+    keyPointsMap.value.delete(taskId);
+  } /*end clearKeyPoints*/
+
+  /**
+   * Returns the reactive key points array for a given task.
+   * @param {string} taskId - Target task ID
+   * @return {TaskKeyPoint[]} Array of key points or empty array
+   */
+  function getKeyPoints(taskId: string): TaskKeyPoint[] {
+    return keyPointsMap.value.get(taskId) ?? [];
+  } /*end getKeyPoints*/
+
   return {
     sessions,
     primarySessionId,
@@ -300,6 +342,7 @@ export const useTaskChatStore = defineStore("taskChat", () => {
     floatingWindows,
     highestZIndex,
     primarySession,
+    keyPointsMap,
     openSession,
     closeSession,
     appendMessage,
@@ -315,5 +358,9 @@ export const useTaskChatStore = defineStore("taskChat", () => {
     updateWindowPosition,
     updateWindowSize,
     toggleMinimizeWindow,
+    setKeyPoints,
+    addKeyPoint,
+    clearKeyPoints,
+    getKeyPoints,
   };
 });

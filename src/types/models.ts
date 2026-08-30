@@ -305,3 +305,27 @@ export interface CreateKnowledgeBasePayload {
   confidence?: number;
   source?: "user_input" | "ai_derived" | "system_default";
 } /*end CreateKnowledgeBasePayload*/
+
+// ── UI-Only: Task Key Points (Working Memory Summary) ─────────────────────────
+
+/**
+ * Category label for a Task Key Point card.
+ * UI-only — not Firestore data.
+ */
+export type KeyPointCategory = "lead" | "requirement" | "action" | "insight" | "warning" | "gdpr";
+
+/**
+ * Represents a single extracted key point from the AI conversation.
+ * Used by TaskKeyPointsCard.vue to display a visual summary without raw JSON.
+ * UI-only — not Firestore data.
+ */
+export interface TaskKeyPoint {
+  id: string;
+  taskId: string;
+  title: string;
+  detail: string;
+  category: KeyPointCategory;
+  icon: string;
+  color: string;
+  timestamp: string;
+} /*end TaskKeyPoint*/
