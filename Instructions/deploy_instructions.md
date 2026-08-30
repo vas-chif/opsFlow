@@ -97,7 +97,7 @@ cd opsflow-functions && npm run build && cd ..
 Utilizzare questo comando quando si apportano modifiche ai tool o alla logica delle funzioni backend:
 
 ```bash
-cd /home/chif-vas/projects/opsflow && yarn --prefix opsflow-functions build && npx firebase-tools deploy --only functions:chatWithAgent,functions:setUserRole
+cd /home/chif-vas/projects/opsflow && nvm use 22 && yarn --prefix opsflow-functions build && npx firebase-tools deploy --only functions:chatWithAgent,functions:setUserRole
 ```
 
 #### B. Deploy Mirato del Frontend Web (Quasar SPA)
@@ -105,7 +105,7 @@ cd /home/chif-vas/projects/opsflow && yarn --prefix opsflow-functions build && n
 Utilizzare questo comando quando si apportano modifiche ai componenti Vue o alla grafica:
 
 ```bash
-cd /home/chif-vas/projects/opsflow && yarn build && npx firebase-tools deploy --only hosting
+cd /home/chif-vas/projects/opsflow && nvm use 22 && yarn build && npx firebase-tools deploy --only hosting
 ```
 
 #### C. Deploy Mirato delle Regole Firestore (Security Rules)
@@ -113,7 +113,7 @@ cd /home/chif-vas/projects/opsflow && yarn build && npx firebase-tools deploy --
 Utilizzare questo comando quando si aggiorna `firestore.rules`:
 
 ```bash
-cd /home/chif-vas/projects/opsflow && npx firebase-tools deploy --only firestore:rules
+cd /home/chif-vas/projects/opsflow && nvm use 22 && npx firebase-tools deploy --only firestore:rules
 ```
 
 ---
@@ -123,7 +123,7 @@ cd /home/chif-vas/projects/opsflow && npx firebase-tools deploy --only firestore
 Per rilasciare contemporaneamente Backend, Frontend e Regole di Sicurezza:
 
 ```bash
-cd /home/chif-vas/projects/opsflow && yarn --prefix opsflow-functions build && yarn build && npx firebase-tools deploy
+cd /home/chif-vas/projects/opsflow && nvm use 22 && yarn --prefix opsflow-functions build && yarn build && npx firebase-tools deploy
 ```
 
 ---
