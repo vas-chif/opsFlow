@@ -17,6 +17,13 @@
 
 import "dotenv/config";
 import { setGlobalOptions } from "firebase-functions";
+
+// Configure global options BEFORE importing any triggers or HTTPS handlers
+setGlobalOptions({
+  region: "europe-west1", // Zero cross-region egress cost towards Firestore (§5)
+  maxInstances: 10, // Hard-cap — cost control < €1/1000 users/mo
+});
+
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
@@ -25,20 +32,6 @@ import { getAuth } from "firebase-admin/auth";
 import { initializeApp } from "firebase-admin/app";
 import { google } from "googleapis";
 
-// ── AI & Sanitizer ───────────────────────────────────────────────────────────
-import { sanitizePii } from "./ai/piiSanitizer";
-import { ai, TaskBreakdownSchema, WorkspaceAttitudeSchema } from "./ai/genkitConfig";
-
-// ── OAuth Token Vault ─────────────────────────────────────────────────────────
-import {
-  getAuthenticatedOAuth2Client,
-  saveOAuthToken,
-  OAuthVaultError,
-} from "./tools/googleOAuthHandler";
-
-// ── Chat Flow ─────────────────────────────────────────────────────────────────
-import { chatWithAgentFlow } from "./ai/chatFlow";
-
 // Initialize Firebase Admin SDK (idempotent)
 try {
   initializeApp();
@@ -46,10 +39,13 @@ try {
   // Already initialized
 }
 
-setGlobalOptions({
-  region: "europe-west1", // Zero cross-region egress cost towards Firestore (§5)
-  maxInstances: 10, // Hard-cap — cost control < €1/1000 users/mo
-});
+// ── Sanitizer & OAuth Vault ───────────────────────────────────────────────────
+import { sanitizePii } from "./ai/piiSanitizer";
+import {
+  getAuthenticatedOAuth2Client,
+  saveOAuthToken,
+  OAuthVaultError,
+} from "./tools/googleOAuthHandler";
 
 // ── RBAC: JWT Middleware Helper (Fase 1.2) ────────────────────────────────────
 
@@ -198,7 +194,8 @@ export const onTaskCreated = onDocumentCreated(
     ];
 
     try {
-      // Dynamic AI Task Breakdown via Genkit & Gemini 3.5 Flash
+      // Dynamic AI Task Breakdown via Genkit & Gemini Flash (Lazy loaded)
+      const { ai, TaskBreakdownSchema } = await import("./ai/genkitConfig.js");
       const plannerPrompt =
         "Sei AgentePlanner, l'esperto di decomposizione strategica dei task di OpsFlow.\n" +
         "Analizza il titolo e la descrizione del seguente task:\n" +
@@ -217,12 +214,14 @@ export const onTaskCreated = onDocumentCreated(
         complexityScore = Math.min(10, Math.max(1, llmResponse.output.complexityScore));
         suggestedCategory = llmResponse.output.suggestedCategory || "operational";
         if (Array.isArray(llmResponse.output.subtasks) && llmResponse.output.subtasks.length > 0) {
-          generatedSubtasks = llmResponse.output.subtasks.map((st, idx) => ({
-            order: st.order || idx + 1,
-            title: st.title,
-            description: st.description,
-            completed: false,
-          }));
+          generatedSubtasks = llmResponse.output.subtasks.map(
+            (st: { order?: number; title: string; description: string }, idx: number) => ({
+              order: st.order || idx + 1,
+              title: st.title,
+              description: st.description,
+              completed: false,
+            }),
+          );
         }
       }
     } catch (err) {
@@ -323,6 +322,7 @@ export const chatWithAgent = onRequest(
         return;
       }
 
+      const { chatWithAgentFlow } = await import("./ai/chatFlow.js");
       const result = await chatWithAgentFlow({
         message,
         workspaceId,
@@ -578,6 +578,7 @@ export const generateDbsAttitude = onCall({ region: "europe-west1" }, async (req
   const sanitized = sanitizePii(userPrompt);
 
   try {
+    const { ai, WorkspaceAttitudeSchema } = await import("./ai/genkitConfig.js");
     const llmResponse = await ai.generate({
       model: "googleai/gemini-1.5-flash",
       prompt: `${DBS_SYSTEM_PROMPT}\n\nDescrizione Workspace Utente:\n"${sanitized.sanitizedText}"`,
