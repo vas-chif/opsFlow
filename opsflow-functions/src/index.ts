@@ -92,7 +92,7 @@ function requireRole(
  * @security JWT-only authz (§5) — no Firestore read for permission check.
  * @gdpr Logs operation to audit trail for GDPR Art. 30 compliance.
  */
-export const setUserRole = onCall(async (request) => {
+export const setUserRole = onCall({ region: "europe-west1" }, async (request) => {
   const rawAuth = request.auth as { uid: string; token: Record<string, unknown> } | undefined;
 
   // Fase 1.2: validate caller role via JWT middleware — throws if unauthenticated or missing role
@@ -154,7 +154,10 @@ export const setUserRole = onCall(async (request) => {
  * Trigger: AgentePlanner
  */
 export const onTaskCreated = onDocumentCreated(
-  "tenants/{tenantId}/workspaces/{workspaceId}/tasks/{taskId}",
+  {
+    document: "tenants/{tenantId}/workspaces/{workspaceId}/tasks/{taskId}",
+    region: "europe-west1",
+  },
   async (event) => {
     const snap = event.data;
     if (!snap) return;
@@ -252,7 +255,10 @@ export const onTaskCreated = onDocumentCreated(
  * Trigger: AgenteIspettore
  */
 export const onTaskUpdated = onDocumentUpdated(
-  "tenants/{tenantId}/workspaces/{workspaceId}/tasks/{taskId}",
+  {
+    document: "tenants/{tenantId}/workspaces/{workspaceId}/tasks/{taskId}",
+    region: "europe-west1",
+  },
   async (event) => {
     const snap = event.data;
     if (!snap) return;
@@ -299,7 +305,6 @@ export const chatWithAgent = onRequest(
     memory: "1GiB", // Step 12: 1GiB RAM grants 1 full vCPU to Cloud Run (fixes container healthcheck boot timeout)
     minInstances: 0, // Scale-to-Zero: €0,00 during inactivity
     maxInstances: 10, // Hard-cap for 1000 concurrent users
-    concurrency: 10, // Anti-OOM: 10 concurrent req per instance (Genkit + RAG safety margin)
   },
   async (req, res) => {
     try {
@@ -357,120 +362,123 @@ interface ResolveApprovalBody {
  * Human-in-the-Loop gate. Executes Gmail/Sheets write ONLY after user approval.
  * Path listened: tenants/{tenantId}/workspaces/{wsId}/tasks/{taskId}/approvals/{approvalId}
  */
-export const resolveApproval = onRequest({ cors: true }, async (req, res) => {
-  const { tenantId, workspaceId, taskId, approvalId, userId, decision } =
-    req.body as ResolveApprovalBody;
+export const resolveApproval = onRequest(
+  { cors: true, region: "europe-west1" },
+  async (req, res) => {
+    const { tenantId, workspaceId, taskId, approvalId, userId, decision } =
+      req.body as ResolveApprovalBody;
 
-  if (!tenantId || !workspaceId || !taskId || !approvalId || !userId || !decision) {
-    res.status(400).json({ error: "Missing required fields." });
-    return;
-  }
-
-  const db = getFirestore();
-  const approvalRef = db.doc(
-    `tenants/${tenantId}/workspaces/${workspaceId}/tasks/${taskId}/approvals/${approvalId}`,
-  );
-
-  const snap = await approvalRef.get();
-  if (!snap.exists) {
-    res.status(404).json({ error: "Approval record not found." });
-    return;
-  }
-
-  const approval = snap.data() as {
-    status: string;
-    actionType: string;
-    previewData: Record<string, unknown>;
-  };
-
-  if (approval.status !== "pending") {
-    res.status(409).json({ error: "Approval already resolved.", status: approval.status });
-    return;
-  }
-
-  if (decision === "rejected") {
-    await approvalRef.update({
-      status: "rejected",
-      resolvedAt: new Date().toISOString(),
-      resolvedBy: userId,
-    });
-    res.status(200).json({ success: true, status: "rejected" });
-    return;
-  }
-
-  try {
-    if (approval.actionType === "gmail_draft") {
-      const preview = approval.previewData as { to: string; subject: string; body: string };
-      const oAuth2Client = await getAuthenticatedOAuth2Client(tenantId, userId, [
-        "https://www.googleapis.com/auth/gmail.compose",
-      ]);
-
-      const rawEmail = [
-        `To: ${preview.to}`,
-        `Subject: ${preview.subject}`,
-        "Content-Type: text/plain; charset=utf-8",
-        "MIME-Version: 1.0",
-        "",
-        preview.body,
-      ].join("\r\n");
-
-      const encodedMessage = Buffer.from(rawEmail)
-        .toString("base64")
-        .replace(/\+/g, "-")
-        .replace(/\//g, "_")
-        .replace(/=+$/, "");
-
-      const gmail = google.gmail({ version: "v1", auth: oAuth2Client });
-      await gmail.users.drafts.create({
-        userId: "me",
-        requestBody: { message: { raw: encodedMessage } },
-      });
-
-      logger.info("resolveApproval: Gmail draft created", { tenantId, taskId, approvalId });
-    } else if (approval.actionType === "sheet_append") {
-      const preview = approval.previewData as {
-        spreadsheetId: string;
-        range: string;
-        previewRows: string[][];
-      };
-
-      const oAuth2Client = await getAuthenticatedOAuth2Client(tenantId, userId, [
-        "https://www.googleapis.com/auth/spreadsheets",
-      ]);
-
-      const sheets = google.sheets({ version: "v4", auth: oAuth2Client });
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: preview.spreadsheetId,
-        range: preview.range,
-        valueInputOption: "USER_ENTERED",
-        requestBody: { values: preview.previewRows },
-      });
-
-      logger.info("resolveApproval: Sheets rows appended", { tenantId, taskId, approvalId });
+    if (!tenantId || !workspaceId || !taskId || !approvalId || !userId || !decision) {
+      res.status(400).json({ error: "Missing required fields." });
+      return;
     }
 
-    await approvalRef.update({
-      status: "approved",
-      resolvedAt: new Date().toISOString(),
-      resolvedBy: userId,
-    });
+    const db = getFirestore();
+    const approvalRef = db.doc(
+      `tenants/${tenantId}/workspaces/${workspaceId}/tasks/${taskId}/approvals/${approvalId}`,
+    );
 
-    res.status(200).json({ success: true, status: "approved" });
-  } catch (err) {
-    if (err instanceof OAuthVaultError) {
-      logger.warn("resolveApproval: OAuth error", { code: err.code, tenantId, userId });
-      res.status(401).json({
-        error: "oauth_error",
-        code: err.code,
-        message: err.message,
-        requiredScopes: err.requiredScopes,
-      });
-    } else {
-      logger.error("resolveApproval: execution failed", { tenantId, taskId, approvalId, err });
-      res.status(500).json({ error: "Internal error during approval execution." });
+    const snap = await approvalRef.get();
+    if (!snap.exists) {
+      res.status(404).json({ error: "Approval record not found." });
+      return;
     }
-  }
-}); /* end resolveApproval */
+
+    const approval = snap.data() as {
+      status: string;
+      actionType: string;
+      previewData: Record<string, unknown>;
+    };
+
+    if (approval.status !== "pending") {
+      res.status(409).json({ error: "Approval already resolved.", status: approval.status });
+      return;
+    }
+
+    if (decision === "rejected") {
+      await approvalRef.update({
+        status: "rejected",
+        resolvedAt: new Date().toISOString(),
+        resolvedBy: userId,
+      });
+      res.status(200).json({ success: true, status: "rejected" });
+      return;
+    }
+
+    try {
+      if (approval.actionType === "gmail_draft") {
+        const preview = approval.previewData as { to: string; subject: string; body: string };
+        const oAuth2Client = await getAuthenticatedOAuth2Client(tenantId, userId, [
+          "https://www.googleapis.com/auth/gmail.compose",
+        ]);
+
+        const rawEmail = [
+          `To: ${preview.to}`,
+          `Subject: ${preview.subject}`,
+          "Content-Type: text/plain; charset=utf-8",
+          "MIME-Version: 1.0",
+          "",
+          preview.body,
+        ].join("\r\n");
+
+        const encodedMessage = Buffer.from(rawEmail)
+          .toString("base64")
+          .replace(/\+/g, "-")
+          .replace(/\//g, "_")
+          .replace(/=+$/, "");
+
+        const gmail = google.gmail({ version: "v1", auth: oAuth2Client });
+        await gmail.users.drafts.create({
+          userId: "me",
+          requestBody: { message: { raw: encodedMessage } },
+        });
+
+        logger.info("resolveApproval: Gmail draft created", { tenantId, taskId, approvalId });
+      } else if (approval.actionType === "sheet_append") {
+        const preview = approval.previewData as {
+          spreadsheetId: string;
+          range: string;
+          previewRows: string[][];
+        };
+
+        const oAuth2Client = await getAuthenticatedOAuth2Client(tenantId, userId, [
+          "https://www.googleapis.com/auth/spreadsheets",
+        ]);
+
+        const sheets = google.sheets({ version: "v4", auth: oAuth2Client });
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: preview.spreadsheetId,
+          range: preview.range,
+          valueInputOption: "USER_ENTERED",
+          requestBody: { values: preview.previewRows },
+        });
+
+        logger.info("resolveApproval: Sheets rows appended", { tenantId, taskId, approvalId });
+      }
+
+      await approvalRef.update({
+        status: "approved",
+        resolvedAt: new Date().toISOString(),
+        resolvedBy: userId,
+      });
+
+      res.status(200).json({ success: true, status: "approved" });
+    } catch (err) {
+      if (err instanceof OAuthVaultError) {
+        logger.warn("resolveApproval: OAuth error", { code: err.code, tenantId, userId });
+        res.status(401).json({
+          error: "oauth_error",
+          code: err.code,
+          message: err.message,
+          requiredScopes: err.requiredScopes,
+        });
+      } else {
+        logger.error("resolveApproval: execution failed", { tenantId, taskId, approvalId, err });
+        res.status(500).json({ error: "Internal error during approval execution." });
+      }
+    }
+  },
+); /* end resolveApproval */
 
 // ── GOOGLE OAUTH CALLBACK ─────────────────────────────────────────────────────
 
@@ -478,48 +486,53 @@ export const resolveApproval = onRequest({ cors: true }, async (req, res) => {
  * Callable Function: googleOAuthCallback
  * Stores encrypted OAuth tokens in Firestore Vault after consent flow.
  */
-export const googleOAuthCallback = onRequest({ cors: true }, async (req, res) => {
-  const { code, tenantId, userId, scopes } = req.body as {
-    code: string;
-    tenantId: string;
-    userId: string;
-    scopes: string[];
-  };
+export const googleOAuthCallback = onRequest(
+  { cors: true, region: "europe-west1" },
+  async (req, res) => {
+    const { code, tenantId, userId, scopes } = req.body as {
+      code: string;
+      tenantId: string;
+      userId: string;
+      scopes: string[];
+    };
 
-  if (!code || !tenantId || !userId) {
-    res.status(400).json({ error: "Missing code, tenantId or userId." });
-    return;
-  }
-
-  try {
-    const { OAuth2 } = google.auth;
-    const oAuth2Client = new OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI,
-    );
-
-    const { tokens } = await oAuth2Client.getToken(code);
-
-    if (!tokens.refresh_token) {
-      res.status(400).json({ error: "No refresh_token received. Ensure prompt: consent was set." });
+    if (!code || !tenantId || !userId) {
+      res.status(400).json({ error: "Missing code, tenantId or userId." });
       return;
     }
 
-    await saveOAuthToken(tenantId, userId, {
-      refreshToken: tokens.refresh_token,
-      accessToken: tokens.access_token ?? "",
-      scopes: scopes ?? [],
-      expiresAt: tokens.expiry_date ?? Date.now() + 3600_000,
-    });
+    try {
+      const { OAuth2 } = google.auth;
+      const oAuth2Client = new OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        process.env.GOOGLE_REDIRECT_URI,
+      );
 
-    logger.info("googleOAuthCallback: token saved to vault", { tenantId, userId });
-    res.status(200).json({ success: true });
-  } catch (err) {
-    logger.error("googleOAuthCallback: failed", { err });
-    res.status(500).json({ error: "OAuth token exchange failed." });
-  }
-}); // end googleOAuthCallback
+      const { tokens } = await oAuth2Client.getToken(code);
+
+      if (!tokens.refresh_token) {
+        res
+          .status(400)
+          .json({ error: "No refresh_token received. Ensure prompt: consent was set." });
+        return;
+      }
+
+      await saveOAuthToken(tenantId, userId, {
+        refreshToken: tokens.refresh_token,
+        accessToken: tokens.access_token ?? "",
+        scopes: scopes ?? [],
+        expiresAt: tokens.expiry_date ?? Date.now() + 3600_000,
+      });
+
+      logger.info("googleOAuthCallback: token saved to vault", { tenantId, userId });
+      res.status(200).json({ success: true });
+    } catch (err) {
+      logger.error("googleOAuthCallback: failed", { err });
+      res.status(500).json({ error: "OAuth token exchange failed." });
+    }
+  },
+); // end googleOAuthCallback
 
 // ── AI PROMPT ARCHITECT: generateDbsAttitude (Step 10 Fase 2) ─────────────────
 
@@ -541,7 +554,7 @@ const DBS_SYSTEM_PROMPT =
  *
  * @security Verified active JWT token required (isActive === true).
  */
-export const generateDbsAttitude = onCall(async (request) => {
+export const generateDbsAttitude = onCall({ region: "europe-west1" }, async (request) => {
   const rawAuth = request.auth as { uid: string; token: Record<string, unknown> } | undefined;
 
   if (!rawAuth || rawAuth.token.isActive !== true) {
