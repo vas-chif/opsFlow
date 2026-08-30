@@ -1,144 +1,126 @@
-# 🚀 Guida Operativa al Deploy di OpsFlow su Firebase
+# 🚀 OpsFlow — Guida Completa al Deploy & Inventario Cloud Functions
 
-> **Progetto:** OpsFlow SaaS Platform  
-> **Autore:** Vasile Chifeac & AI Architect  
+> **Progetto:** OpsFlow SaaS Platform (`opsflow-88of`)  
 > **Data:** 30 Agosto 2026  
-> **Riferimenti AGENTS.md:** §1 (Git & Branch Management), §2 (Comandi Progetto), §3 (Sicurezza & Firebase SDK)
+> **Versione Manuale:** 2.0.0 (Full-Stack Alignment)  
+> **Architettura Cloud:** Firebase Gen 2 (Cloud Run), Node.js 22 | **Regione Cloud:** `europe-west1`  
+> **Riferimenti AGENTS.md:** §1 (Git & Branch Management), §2 (Comandi Progetto), §3 (Sicurezza & Privacy), §5 (Cost Governance < €1.00/mese per 1.000 utenti), §14 (Orchestrazione Agenti IA Genkit)
 
 ---
 
-## ⚡ GUIDA RAPIDA PASSO-PASSO (Sequenza Corretta)
-
-Per evitare qualsiasi errore di deploy o mancata compilazione, eseguire sempre questa sequenza di comandi dalla cartella radice del progetto `/home/chif-vas/projects/opsflow`:
-
-### 1️⃣ Risposta al Deploy (Cosa fare al prompt Firebase)
-
-Quando lanci il deploy, Firebase ti farà questa domanda:
+## 📁 1. Struttura del Progetto & Mappatura Compilazione
 
 ```
-The following functions are found in your project but do not exist in your local source code:
-        chatWithAgent(us-central1)
-✔ Would you like to proceed with deletion?
+/home/chif-vas/projects/opsflow/
+│
+├── 📂 opsflow-functions/                     ← BACKEND IA & CLOUD FUNCTIONS (Node.js 22)
+│   ├── 📄 package.json                       ← Config: "main": "lib/index.js", Node: "22"
+│   ├── 📄 tsconfig.json                      ← Config: "outDir": "lib"
+│   ├── 📄 .env                               ← Variables locale (TAVILY_API_KEY, EXA_API_KEY, ecc.)
+│   ├── 📂 src/                               ← CODICE SORGENTE TypeScript
+│   │   ├── 📄 index.ts                       ← ⭐ ENTRYPOINT (Export di tutte le Cloud Functions)
+│   │   ├── 📂 ai/                            ← Orchestrazione Genkit & Gemini
+│   │   │   ├── 📄 genkitConfig.ts            ← Inizializzazione Genkit & Gemini 1.5 Flash
+│   │   │   ├── 📄 chatFlow.ts                ← Live Chat Flow con tool calling & sliding window
+│   │   │   ├── 📄 piiSanitizer.ts            ← Middleware di anonimizzazione PII (GDPR Art. 32)
+│   │   │   └── 📄 promptBuilder.ts           ← 3-Level Stacked Prompt Builder (DBS)
+│   │   └── 📂 tools/                         ← Tool Calling per Agenti IA
+│   │       ├── 📄 webSearch.ts               ← Multi-Provider Chaining (Tavily → Exa → Jina)
+│   │       ├── 📄 googleWorkspace.ts         ← Tools Gmail Draft & Google Sheets Append
+│   │       ├── 📄 contentMarketing.ts        ← Tool estrazione piano editoriale
+│   │       └── 📄 googleOAuthHandler.ts      ← OAuth2 Token Vault & Refresh Logic
+│   └── 📂 lib/                               ← CODICE COMPILATO (Generato da `tsc`)
+│       └── 📄 index.js                       ← 🎯 FILE ESEGUITO DA FIREBASE IN PRODUZIONE!
+│
+├── 📂 src/                                   ← FRONTEND CLIENT (Quasar 2 / Vue 3 / Pinia)
+│   ├── 📂 components/                        ← Componenti UI (es. TaskKeyPointsCard.vue, TaskChatWindow.vue)
+│   ├── 📂 stores/                            ← Store Pinia (es. taskStore.ts, taskChatStore.ts)
+│   └── 📂 pages/                             ← File-based routing (Hash mode /#/)
+│
+├── 📂 dist/spa/                              ← BUNDLE FRONTEND COMPILATO (Generato da `yarn build`)
+├── 📄 firestore.rules                        ← Layer 2 Security Rules (Firestore DB)
+├── 📄 firebase.json                          ← Configurazione globale Firebase (Hosting & Functions)
+└── 📄 .firebaserc                            ← Target di progetto Firebase (`opsflow-88of`)
 ```
-
-👉 **Rispondi `Y` (Yes) oppure invia Invio**: Questo elimina la vecchia funzione registrata nella region `us-central1` e completa il rilascio della nuova funzione ottimizzata nella region **`europe-west1`**.
-
----
-
-### 2️⃣ Comando di Deploy Mirato Backend + Frontend (Consigliato)
-
-```bash
-cd /home/chif-vas/projects/opsflow && yarn --prefix opsflow-functions build && yarn build && npx firebase-tools deploy --only functions:chatWithAgent,hosting
-```
-
----
-
-### 3️⃣ Spiegazione dei Comandi di Build: DOVE e QUANDO eseguirli?
-
-| Comando                                 | Dove eseguirlo                                 | Cosa fa                                                            | È obbligatorio prima del deploy?                                  |
-| :-------------------------------------- | :--------------------------------------------- | :----------------------------------------------------------------- | :---------------------------------------------------------------- |
-| `yarn --prefix opsflow-functions build` | Dalla radice `/home/chif-vas/projects/opsflow` | Compila TypeScript del Backend in `opsflow-functions/lib/index.js` | **SÌ** (altrimenti le Cloud Functions usano vecchio codice)       |
-| `yarn build`                            | Dalla radice `/home/chif-vas/projects/opsflow` | Compila l'applicazione Quasar Vue 3 SPA in `dist/spa`              | **SÌ** (altrimenti Firebase Hosting distribuisce vecchia grafica) |
-| `npx firebase-tools deploy`             | Dalla radice `/home/chif-vas/projects/opsflow` | Invia codice compilato ed asset su Google Cloud / Firebase         | **SÌ**                                                            |
-
----
-
-## 📌 Panoramica dell'Architettura di Deploy
-
-In OpsFlow, l'applicazione è suddivisa in tre componenti principali distribuiti su Google Cloud / Firebase:
-
-1. **Backend Serverless (Genkit / Node.js 22):** Distribuito tramite **Firebase Cloud Functions** (`opsflow-functions`).
-2. **Frontend Web (Quasar 2 / Vue 3 SPA):** Distribuito tramite **Firebase Hosting** (`dist/spa`).
-3. **Firestore Security Rules:** Distribuito tramite **Firestore Rules Engine** (`firestore.rules`).
-
----
-
-## 🛠️ 1. Deploy delle Cloud Functions (Backend IA)
 
 > [!CAUTION]
-> **ATTENZIONE ALLA CARTELLA DEL TERMINALE:**  
-> MAI fare `cd functions/` (la cartella attiva del backend è `opsflow-functions`).  
-> Prima di qualsiasi deploy, assicurati di trovarti nella radice `/home/chif-vas/projects/opsflow` oppure usa il comando a percorso assoluto indicato qui sotto.
+> **REGOLE FONDAMENTALI SULLA STRUTTURA:**
+>
+> 1. **MAI** creare o lasciare file `.js` all'interno di `opsflow-functions/src/` (TypeScript non sovrascrive file JS preesistenti con lo stesso nome).
+> 2. **MAI** eseguire i comandi di deploy da dentro `opsflow-functions/` — **lanciare SEMPRE i comandi dalla radice `/home/chif-vas/projects/opsflow`**.
+> 3. Il file `opsflow-functions/package.json` deve avere `"main": "lib/index.js"`.
 
-Per distribuire o aggiornare le Cloud Functions (es. `chatWithAgent`, `generateDbsAttitude`, `setUserRole`, `onTaskCreated`, `onTaskUpdated`):
+---
 
-### 📜 Comando Singolo Sicuro (Funziona da qualsiasi cartella)
+## ☁️ 2. Inventario Completo delle Cloud Functions
+
+Tutte le Cloud Functions di OpsFlow sono attive nella region **`europe-west1`** per garantire zero costi di egress verso Firestore.
+
+| Nome Esportato        | File Sorgente  | Tipo / Trigger      | Memoria / Timeout | Concurrency | Scopo & Ruolo Security / GDPR                                                            |
+| :-------------------- | :------------- | :------------------ | :---------------- | :---------- | :--------------------------------------------------------------------------------------- |
+| `chatWithAgent`       | `src/index.ts` | `onRequest` (HTTPS) | `1GiB` / `60s`    | `10`        | Live Chat Flow Genkit con Gemini Flash. PII Sanitized.                                   |
+| `setUserRole`         | `src/index.ts` | `onCall` (Callable) | Default / `60s`   | Auto        | Assegnazione Custom Claims JWT (`role`, `tenantId`, `isActive`). Audit Log GDPR Art. 30. |
+| `onTaskCreated`       | `src/index.ts` | `onDocumentCreated` | Default / `60s`   | Auto        | Trigger AgentePlanner: scomposizione task automatica in sotto-task.                      |
+| `onTaskUpdated`       | `src/index.ts` | `onDocumentUpdated` | Default / `60s`   | Auto        | Trigger AgenteIspettore: audit qualità e verifica avanzamento.                           |
+| `resolveApproval`     | `src/index.ts` | `onRequest` (HTTPS) | Default / `60s`   | Auto        | Gate Human-in-the-Loop per approvazione ed esecuzione bozze Gmail / Sheets.              |
+| `googleOAuthCallback` | `src/index.ts` | `onRequest` (HTTPS) | Default / `60s`   | Auto        | Callback OAuth2 per memorizzazione sicura dei refresh token Google Workspace.            |
+| `generateDbsAttitude` | `src/index.ts` | `onCall` (Callable) | Default / `60s`   | Auto        | Generatore costituzione d'ambiente DBS Workspace per AgentePromptEngineer.               |
+
+---
+
+## ⚡ 3. Guida Esecutiva al Deploy (Passo-Passo)
+
+### 3.1 Sequenza Pre-Deploy (Verifiche Obbligatorie)
+
+Prima di lanciare qualsiasi deploy in produzione, assicurati di eseguire e superare le verifiche di qualità dalla radice del progetto:
 
 ```bash
-cd /home/chif-vas/projects/opsflow && yarn --prefix opsflow-functions build && npx firebase-tools deploy --only functions,hosting
+# 1. Verifica dalla radice del progetto
+cd /home/chif-vas/projects/opsflow
+
+# 2. Controllo Formatting e Linting (Zero errori oxlint)
+yarn lint
+
+# 3. Controllo Tipi TypeScript Frontend (Zero errori vue-tsc)
+yarn typecheck
+
+# 4. Controllo Tipi TypeScript Backend
+cd opsflow-functions && npm run build && cd ..
 ```
 
-### 🔍 Spiegazione Dettagliata Passo-Passo
-
-#### 1. `cd /home/chif-vas/projects/opsflow`
-
-- **Cosa Fa (Spiegazione Tecnica):** Torna alla cartella radice principale del progetto OpsFlow.
-- **Perché è Necessario / Impatto:** **FONDAMENTALE:** Risolve l'errore `No such file or directory` e previene l'errore `cloudresourcemanager` assicurando che i file `firebase.json` e `.firebaserc` siano presenti nella cartella corrente.
-
 ---
 
-#### 2. `yarn --prefix opsflow-functions build`
+### 3.2 Comandi di Deploy Mirati (Consigliati)
 
-- **Cosa Fa (Spiegazione Tecnica):** Esegue il compilatore TypeScript (`tsc`) all'interno della cartella `opsflow-functions/`, generando i file compilati JavaScript in `opsflow-functions/lib/`.
-- **Perché è Necessario / Impatto:** Rispetta la direttiva **AGENTS.md §2** (_Usa esclusivamente yarn_). Firebase Cloud Functions esegue codice JavaScript compilato per Node.js 22.
+#### A. Deploy Mirato del Backend IA (Cloud Functions)
 
----
+Utilizzare questo comando quando si apportano modifiche ai tool o alla logica delle funzioni backend:
 
-#### 3. `npx firebase-tools deploy --only functions`
+```bash
+cd /home/chif-vas/projects/opsflow && yarn --prefix opsflow-functions build && npx firebase-tools deploy --only functions:chatWithAgent,functions:setUserRole
+```
 
-- **Cosa Fa (Spiegazione Tecnica):** Invia il pacchetto compilato di `opsflow-functions` ai server Google Cloud Firebase (`us-central1` / `europe-west1`).
-- **Perché è Necessario / Impatto:** Crea o aggiorna le funzioni serverless attive in produzione con zero downtime per gli utenti.
+#### B. Deploy Mirato del Frontend Web (Quasar SPA)
 
----
-
-## 🌐 2. Deploy del Frontend (Quasar 2 SPA su Firebase Hosting)
-
-Per distribuire l'applicazione web reattiva a tutti gli utenti:
-
-### 📜 Comandi da Eseguire
+Utilizzare questo comando quando si apportano modifiche ai componenti Vue o alla grafica:
 
 ```bash
 cd /home/chif-vas/projects/opsflow && yarn build && npx firebase-tools deploy --only hosting
 ```
 
-### 🔍 Spiegazione Dettagliata Passo-Passo
+#### C. Deploy Mirato delle Regole Firestore (Security Rules)
 
-#### 1. `yarn build`
-
-- **Cosa Fa (Spiegazione Tecnica):** Esegue `quasar build`. Genera il bundle ottimizzato dell'applicazione Single Page Application nella cartella `dist/spa`.
-- **Perché è Necessario / Impatto:** Minifica il codice HTML, CSS, JavaScript, compila i componenti Vue 3 ed ottimizza le asset per massima velocità (Lighthouse 100/100).
-
----
-
-#### 2. `npx firebase-tools deploy --only hosting`
-
-- **Cosa Fa (Spiegazione Tecnica):** Carica la cartella `dist/spa` sui server CDN globali di Firebase Hosting.
-- **Perché è Necessario / Impatto:** Rende le modifiche visibili immediatamente agli utenti che accedono all'URL di OpsFlow.
-
----
-
-## 🔒 3. Deploy delle Firestore Security Rules (Sicurezza DB)
-
-Per aggiornare le regole di sicurezza e isolamento multi-tenant di Firestore senza rifare il build dell'app:
-
-### 📜 Comandi da Eseguire
+Utilizzare questo comando quando si aggiorna `firestore.rules`:
 
 ```bash
 cd /home/chif-vas/projects/opsflow && npx firebase-tools deploy --only firestore:rules
 ```
 
-### 🔍 Spiegazione Dettagliata Passo-Passo
-
-#### `npx firebase-tools deploy --only firestore:rules`
-
-- **Cosa Fa (Spiegazione Tecnica):** Invia il file `firestore.rules` al database Firestore (`(default)` / `europe-west1`).
-- **Perché è Necessario / Impatto:** Applica istantaneamente il Layer 2 di sicurezza GDPR Art. 32 ed RBAC (SuperAdmin, Admin, User) bloccando accessi non autorizzati lato database.
-
 ---
 
-## 🌟 4. Deploy Completo "All-in-One" (Full-Stack)
+### 3.3 Deploy Completo "Full-Stack All-in-One"
 
-Per distribuire **contemporaneamente** Backend, Frontend e Regole di Sicurezza in un'unica operazione:
+Per rilasciare contemporaneamente Backend, Frontend e Regole di Sicurezza:
 
 ```bash
 cd /home/chif-vas/projects/opsflow && yarn --prefix opsflow-functions build && yarn build && npx firebase-tools deploy
@@ -146,51 +128,75 @@ cd /home/chif-vas/projects/opsflow && yarn --prefix opsflow-functions build && y
 
 ---
 
-## ⚠️ Troubleshooting Errori Comuni di Deploy
+## 💡 4. Gestione Prompt di Eliminazione & Cambio Region
 
-> [!WARNING]
-> **Errore:** `Error: Failed to make request to https://cloudresourcemanager.googleapis.com/v1/projects/opsflow-88of`  
-> **Causa:** Il comando `firebase deploy` è stato lanciato all'interno di una sottocartella (es. `functions/` o `opsflow-functions/`) invece che dalla radice.  
-> **Risoluzione:** Esegui sempre `cd /home/chif-vas/projects/opsflow` prima di lanciare il deploy.
+Quando si sposta una Cloud Function da una region all'altra (es. da `us-central1` a `europe-west1`), il CLI di Firebase mostrerà questo messaggio durante il deploy:
 
-> [!NOTE]
-> **Errore Sessione Scaduta:** `Error: HTTP Error: 401, Unauthorized`  
-> **Risoluzione:** Lancia `npx firebase-tools login --reauth` per ri-autenticare l'account Google sviluppatore.
+```text
+The following functions are found in your project but do not exist in your local source code:
+        chatWithAgent(us-central1)
+
+Would you like to proceed with deletion? Selecting no will continue the rest of the deployments.
+```
+
+- 👉 **Rispondi `Y` (Yes) oppure premi INVIO:** Questo elimina la vecchia istanza inattiva negli USA (`us-central1`) e completa il rilascio della funzione attiva nella region **`europe-west1`**.
 
 ---
 
-## 🧹 5. Artifact Registry Retention Policy (Step 12 GCP Cost Governance)
+## 🧹 5. Artifact Registry Retention Policy (GCP Cost Governance)
 
 > [!IMPORTANT]
 > **Perché è necessario:** Ogni deploy di Cloud Functions genera un container Docker (~200MB) su Google Cloud Artifact Registry.
-> In assenza di una regola di cancellazione, le immagini si accumulano e vengono fatturate.
-> **Eseguire questo comando una volta sola** dopo il primo deploy — la policy è permanente.
+> Senza una regola di cancellazione, le immagini si accumulano e vengono fatturate.
+> **Eseguire questo comando una sola volta** dopo il primo deploy — la policy è permanente.
 
-### Comando di Applicazione della Retention Policy
+### Comando di Applicazione della Retention Policy (7 Giorni)
 
 ```bash
-# Elimina automaticamente i container Docker di Cloud Functions più vecchi di 7 giorni
-# Mantiene sempre almeno gli ultimi 2 tag — zero rischio di cancellare il codice in produzione
 firebase functions:artifacts:setpolicy --location europe-west1 --days 7
 ```
 
 ### Verifica della Policy Applicata
 
 ```bash
-# Verifica che la policy sia attiva sul repository gcf-artifacts in europe-west1
 gcloud artifacts repositories describe gcf-artifacts \
   --project=opsflow-88of \
   --location=europe-west1
 ```
 
-### Risparmio Atteso
+### Tabella Risparmio Costi Atteso
 
-| Prima (Step 12)                            | Dopo (Step 12)                                 |
-| :----------------------------------------- | :--------------------------------------------- |
-| Immagini accumulate illimitatamente        | Immagini > 7 giorni cancellate automaticamente |
-| Potenziale: centinaia di MB/mese fatturati | < 2 immagini attive (latest + previous)        |
-| Nessuna automazione                        | Policy permanente gestita da Firebase CLI      |
+| Metrica                | Prima                       | Dopo                                        |
+| :--------------------- | :-------------------------- | :------------------------------------------ |
+| **Immagini Docker**    | Accumulo illimitato         | Cancellate automaticamente dopo 7 giorni    |
+| **Immagini Attive**    | Decine di immagini obsolete | Max 2 immagini (latest + precedente)        |
+| **Costo Mese Stimato** | Crescente nel tempo         | **< € 0.50 / mese per 1.000 utenti attivi** |
 
-> [!NOTE]
-> La retention policy usa il comando ufficiale Firebase CLI (`firebase functions:artifacts:setpolicy`).
-> Non è richiesta nessuna configurazione JSON manuale — il CLI gestisce tutto automaticamente.
+---
+
+## ⚠️ 6. Resolution Guide Errori Comuni (Troubleshooting)
+
+### 🔴 Errore 1: `Container Healthcheck failed` su Cloud Run
+
+- **Sintomo:** `Could not create or update Cloud Run service chatwithagent, Container Healthcheck failed.`
+- **Causa Radice:** RAM impostata a 512MiB o inferiore. Su GCP Cloud Run, 512MiB assegnano 0.5 vCPU; l'inizializzazione di Genkit in freddo va in timeout.
+- **Risoluzione:** Assicurarsi che in `opsflow-functions/src/index.ts` sia impostato `memory: "1GiB"`. Con 1GiB viene assegnata 1 vCPU intera ed il boot completa in <1.5s.
+
+### 🔴 Errore 2: `Failed to make request to cloudresourcemanager.googleapis.com`
+
+- **Sintomo:** Errore di permessi o file di configurazione non trovato durante `firebase deploy`.
+- **Causa Radice:** Il comando è stato lanciato da dentro la sottocartella `opsflow-functions/` anziché dalla radice.
+- **Risoluzione:** Eseguire sempre `cd /home/chif-vas/projects/opsflow` prima del deploy.
+
+### 🔴 Errore 3: `HTTP Error: 401, Unauthorized`
+
+- **Sintomo:** Sessione del CLI Firebase scaduta.
+- **Risoluzione:** Eseguire `npx firebase-tools login --reauth` ed effettuare nuovamente l'accesso nell'interfaccia browser.
+
+---
+
+## 🛡️ 7. Direttive di Sicurezza & GDPR Vincolanti (§AGENTS.md)
+
+1. **Gestione Secret & API Keys:** MAI committare file `.env` o chiavi in chiaro su Git. Usare `opsflow-functions/.env` per sviluppo locale e `defineSecret()` / Firebase Secret Manager per produzione.
+2. **GDPR Art. 32 (No Log PII):** Vietati i `console.log` con dati personali o sanitari in codice di produzione backend. Usare esclusivamente `firebase-functions/logger` con payload sanitizzati via `sanitizePii()`.
+3. **Zero-Exception Tool Boundary:** I tool Genkit (es. `webSearch.ts`) NON devono mai lanciare eccezioni `throw` non gestite che provochino crash `HTTP 500`. Utilizzare il wrapping `fetchWithHardTimeout` e ritornare strutture dati con `success: false`.
