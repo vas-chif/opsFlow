@@ -171,7 +171,8 @@ async function searchBrave(query: string, apiKey: string): Promise<SearchResultI
     return null;
   }
 
-  const endpoint = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${MAX_RESULTS_PER_QUERY}&text_decorations=false`;
+  const braveBase = "https://api.search.brave.com/res/v1/web/search";
+  const endpoint = `${braveBase}?q=${encodeURIComponent(query)}&count=${MAX_RESULTS_PER_QUERY}&text_decorations=false`;
 
   const res = await fetchWithHardTimeout(endpoint, {
     headers: {
