@@ -17,12 +17,17 @@
 
 import "dotenv/config";
 import { setGlobalOptions } from "firebase-functions";
+import { defineSecret } from "firebase-functions/params";
 
 // Configure global options BEFORE importing any triggers or HTTPS handlers
 setGlobalOptions({
   region: "europe-west1", // Zero cross-region egress cost towards Firestore (§5)
   maxInstances: 10, // Hard-cap — cost control < €1/1000 users/mo
 });
+
+// ── Secret Manager Declaration ──────────────────────────────────────────────────────
+// GCP Secret Manager registration (step 12: Tavily, Exa; step 13: Brave)
+const BRAVE_SEARCH_API_KEY = defineSecret("BRAVE_SEARCH_API_KEY");
 
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
@@ -304,6 +309,7 @@ export const chatWithAgent = onRequest(
     memory: "1GiB", // Step 12: 1GiB RAM grants 1 full vCPU to Cloud Run (fixes container healthcheck boot timeout)
     minInstances: 0, // Scale-to-Zero: €0,00 during inactivity
     maxInstances: 10, // Hard-cap for 1000 concurrent users
+    secrets: [BRAVE_SEARCH_API_KEY], // Step 13: Brave Search API key via GCP Secret Manager
   },
   async (req, res) => {
     try {

@@ -1,39 +1,55 @@
 /**
  * @file webSearch.ts
  * @description Genkit Tools for Web Research, Platform Discovery, and Lead Generation (AgenteRicerca).
- *   Multi-Provider Chaining: Tavily AI → Exa.ai → Jina Search API → Safe Empty Result.
+ *   Multi-Provider Chaining: Brave Search API → Tavily AI → Exa.ai → Jina Search API → Safe Empty Result.
+ *   Double Cost Guard: HTTP 402/429 interceptor + Firestore monthly counter capped at 950 (BRAVE_MONTHLY_HARD_CAP).
  *   Zero HTTP 500 guarantee — all exceptions are converted to structured data.
  * @author Vasile Chifeac
  * @created 2026-07-30
- * @modified 2026-08-24
+ * @modified 2026-09-02
  *
  * @notes
  * - searchWebAndPlatformsTool: Multi-provider chaining with AbortController (6s hard timeout per provider).
  * - leadSynthesisTool: Formats discovered prospects into standardized lead structures.
  * - jinaReaderTool: Extracts clean Markdown from any URL via r.jina.ai (zero server cost).
  * - art14NoticeDueBy: GDPR Art. 14 compliance — ISO timestamp +30 days from search.
+ * - Brave Cost Guard: HTTP 402/429 triggers immediate rollover. Firestore counter `system/searchUsage_{YYYY_MM}`
+ *   stops Brave calls at 950/month — well below $5 credit limit. Primary protection via dashboard Hard Limit $5.
  *
  * @dependencies
- * - process.env.TAVILY_API_KEY — Tavily AI Search (1.000 req/mo, no credit card)
- * - process.env.EXA_API_KEY   — Exa.ai Neural Search (~1.400 req/mo, no credit card)
- * - https://s.jina.ai/         — Jina Search API (1M token free tier)
+ * - process.env.BRAVE_SEARCH_API_KEY — Brave Search API ($5 credit/mo, requires card)
+ * - process.env.TAVILY_API_KEY       — Tavily AI Search (1.000 req/mo, no credit card)
+ * - process.env.EXA_API_KEY          — Exa.ai Neural Search (~1.400 req/mo, no credit card)
+ * - https://s.jina.ai/               — Jina Search API (1M token free tier)
+ * - firebase-admin/firestore          — Firestore monthly usage counter (FieldValue.increment)
  *
  * @performance
  * - Hard timeout per provider: 6.000 ms (AbortController)
  * - Token budget: slice to 3.000 chars per URL extract (<800 tokens)
  * - Graceful degradation: never throws, always returns { success: false, results: [] } on total failure
- * - GDPR Art. 32: No PII logged in production
+ * - GDPR Art. 32: No PII logged in production; sanitizePii() applied before all external API calls
  */
 
+// ── Vue & Framework ───────────────────────────────────────────────────────────
 import { ai } from "../ai/genkitConfig";
 import { z } from "genkit";
 import * as logger from "firebase-functions/logger";
+
+// ── Firebase ──────────────────────────────────────────────────────────────────
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const PROVIDER_TIMEOUT_MS = 6_000;
 const MAX_TEXT_CHARS = 3_000;
 const MAX_RESULTS_PER_QUERY = 5;
+
+/**
+ * Hard cap for Brave Search API calls per calendar month.
+ * Set to 950 (below the ~1.000 query/$5 credit threshold) as a preventive guard.
+ * Primary protection is the $5 Hard Limit set in the Brave Dashboard with Auto-Recharge OFF.
+ */
+const BRAVE_MONTHLY_HARD_CAP = 950;
 
 // ── Input Schemas ─────────────────────────────────────────────────────────────
 
@@ -101,6 +117,104 @@ async function fetchWithHardTimeout(
     clearTimeout(timer);
   }
 } /* end fetchWithHardTimeout */
+
+// ── Provider 0: Brave Search API (Tier 1 Primario) ────────────────────────────
+
+/**
+ * Reads or increments the monthly Brave Search usage counter in Firestore.
+ * Document: `system/searchUsage_{YYYY_MM}` — updated with atomic FieldValue.increment(1).
+ * Returns the current count BEFORE this call (to decide whether to proceed).
+ * @param {boolean} increment - If true, also increments the counter by 1 atomically.
+ * @return {Promise<number>} The monthly Brave usage count before this call.
+ */
+async function getBraveMonthlyUsage(increment: boolean): Promise<number> {
+  try {
+    const db = getFirestore();
+    const now = new Date();
+    const docId = `searchUsage_${now.getFullYear()}_${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const ref = db.collection("system").doc(docId);
+
+    if (increment) {
+      // Atomic increment — safe under concurrent Cloud Run instances
+      await ref.set(
+        { braveCount: FieldValue.increment(1), updatedAt: new Date().toISOString() },
+        { merge: true },
+      );
+    }
+
+    const snap = await ref.get();
+    const data = snap.data() as { braveCount?: number } | undefined;
+    return data?.braveCount ?? 0;
+  } catch {
+    // Firestore read failure is non-critical: fall back to allowing the call
+    return 0;
+  }
+} /* end getBraveMonthlyUsage */
+
+/**
+ * Queries Brave Search API with Double Cost Guard protection.
+ * Guard 1 (Hard Limit $5): Dashboard setting — API returns HTTP 402/429 when credit is exhausted.
+ * Guard 2 (Preventive Counter): Firestore monthly counter capped at BRAVE_MONTHLY_HARD_CAP (950).
+ * Returns null on quota exhaustion or any failure (caller handles immediate fallback to Tavily).
+ * @param {string} query - The sanitized search query string (no PII).
+ * @param {string} apiKey - Brave Search API key from process.env.BRAVE_SEARCH_API_KEY.
+ * @return {Promise<SearchResultItem[] | null>} Structured results, or null on failure/quota.
+ */
+async function searchBrave(query: string, apiKey: string): Promise<SearchResultItem[] | null> {
+  // Preventive Counter Guard: read current monthly count before calling API
+  const currentUsage = await getBraveMonthlyUsage(false);
+  if (currentUsage >= BRAVE_MONTHLY_HARD_CAP) {
+    logger.info("searchBrave: monthly hard cap reached, skipping to Tavily", {
+      currentUsage,
+      cap: BRAVE_MONTHLY_HARD_CAP,
+    });
+    return null;
+  }
+
+  const endpoint = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${MAX_RESULTS_PER_QUERY}&text_decorations=false`;
+
+  const res = await fetchWithHardTimeout(endpoint, {
+    headers: {
+      "X-Subscription-Token": apiKey,
+      Accept: "application/json",
+      "Accept-Encoding": "gzip",
+    },
+  });
+
+  if (!res) return null;
+
+  // ── DOUBLE COST GUARD: HTTP 402 (Payment Required) or 429 (Rate Limit Exceeded) ──
+  if (res.status === 402 || res.status === 429) {
+    logger.warn(
+      "searchBrave: credit exhausted or rate limited — immediate zero-cost rollover to Tavily",
+      {
+        httpStatus: res.status,
+      },
+    );
+    return null; // Triggers immediate fallback — no exception, no HTTP 500
+  }
+
+  if (!res.ok) return null;
+
+  try {
+    const data = (await res.json()) as {
+      web?: { results?: { title?: string; description?: string; url?: string }[] };
+    };
+    const items = data.web?.results;
+    if (!Array.isArray(items) || items.length === 0) return null;
+
+    // Increment Firestore counter only on successful result
+    void getBraveMonthlyUsage(true);
+
+    return items.map((r) => ({
+      title: r.title || query,
+      snippet: (r.description || "").slice(0, MAX_TEXT_CHARS),
+      url: r.url || "",
+    }));
+  } catch {
+    return null;
+  }
+} /* end searchBrave */
 
 // ── Provider 1: Tavily AI Search ──────────────────────────────────────────────
 
@@ -217,12 +331,16 @@ async function searchJina(query: string): Promise<SearchResultItem[] | null> {
  * Genkit Tool: searchWebAndPlatformsTool (AgenteRicerca)
  *
  * Multi-Provider Chaining with Zero HTTP 500 Guarantee:
- * Tavily AI → Exa.ai → Jina Search API → Safe Empty Result.
+ * Brave Search API → Tavily AI → Exa.ai → Jina Search API → Safe Empty Result.
+ *
+ * Double Cost Guard on Brave:
+ *   1. HTTP 402/429 Interceptor — immediate rollover to Tavily on credit exhaustion.
+ *   2. Firestore monthly counter — soft cap at 950 calls/month (below $5 threshold).
  *
  * GDPR Art. 14: Includes art14NoticeDueBy (+30 days) in every response.
  *
  * @security Never throws — all providers return null on failure, never propagate exceptions.
- * @performance Hard timeout 6s per provider. Total worst-case: ~18s (well within 60s CF timeout).
+ * @performance Hard timeout 6s per provider. Total worst-case: ~24s (well within 60s CF timeout).
  */
 export const searchWebAndPlatformsTool = ai.defineTool(
   {
@@ -248,8 +366,24 @@ export const searchWebAndPlatformsTool = ai.defineTool(
     // GDPR Art. 14: calculate +30-day notice expiry for any personal data extracted
     const art14NoticeDueBy = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
+    const braveKey = process.env.BRAVE_SEARCH_API_KEY || "";
     const tavilyKey = process.env.TAVILY_API_KEY || "";
     const exaKey = process.env.EXA_API_KEY || "";
+
+    // --- Tier 0: Brave Search API (Primary — $5 credit/mo, Double Cost Guard active) ---
+    if (braveKey) {
+      const braveResults = await searchBrave(query, braveKey);
+      if (braveResults && braveResults.length > 0) {
+        logger.info("searchWebAndPlatformsTool: Brave Search API success", { query, category });
+        return {
+          success: true,
+          results: braveResults,
+          summary: `Brave Search: ${braveResults.length} risultati per "${query}" (${category}).`,
+          providerUsed: "brave",
+          art14NoticeDueBy,
+        };
+      }
+    }
 
     // --- Tier 1: Tavily AI Search ---
     if (tavilyKey) {
