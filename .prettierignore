@@ -1,0 +1,6 @@
+opsflow-functions/**
+functions/**
+src/router/typed-router.d.ts
+sinkFolder/**
+dist/**
+.quasar/**

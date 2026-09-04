@@ -67,6 +67,17 @@ const handleLogin = async (): Promise<void> => {
   try {
     await authStore.login(email.value, password.value);
 
+    // Auto-provision initial tenant if verified user has no tenant assigned (Step 15)
+    if (authStore.needsProvisioning) {
+      q.notify({
+        type: "info",
+        message: "Inizializzazione dello spazio di lavoro in corso...",
+        position: "top",
+        timeout: 2500,
+      });
+      await authStore.provisionInitialTenant();
+    }
+
     const redirect = (route.query.redirect as string) || "/";
     await router.push(redirect);
 
@@ -133,6 +144,17 @@ const handleGoogleLogin = async (): Promise<void> => {
   isGoogleLoading.value = true;
   try {
     await authStore.loginWithGoogle();
+
+    // Auto-provision initial tenant if Google user has no tenant assigned (Step 15)
+    if (authStore.needsProvisioning) {
+      q.notify({
+        type: "info",
+        message: "Inizializzazione dello spazio di lavoro in corso...",
+        position: "top",
+        timeout: 2500,
+      });
+      await authStore.provisionInitialTenant();
+    }
 
     const redirect = (route.query.redirect as string) || "/";
     await router.push(redirect);

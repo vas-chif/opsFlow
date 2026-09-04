@@ -193,6 +193,17 @@ export const useAuthStore = defineStore("auth", {
       const r = state.user?.claims?.role;
       return r === "admin" || r === "owner" || r === "superadmin";
     },
+
+    /**
+     * True if the user is authenticated, verified, but has not yet provisioned a dedicated tenant (Step 15).
+     */
+    needsProvisioning: (state): boolean => {
+      return (
+        state.user !== null &&
+        state.user.emailVerified === true &&
+        (!state.user.claims || state.user.claims.tenantId === "default-tenant")
+      );
+    },
   },
 
   actions: {
@@ -444,6 +455,43 @@ export const useAuthStore = defineStore("auth", {
         this.isLoading = false;
       }
     } /*end purgeCompanyTenant*/,
+
+    /**
+     * Automatically provisions initial tenant, default workspace, and owner claims
+     * for newly registered users on first login (Step 15).
+     */
+    async provisionInitialTenant(organizationName?: string): Promise<string> {
+      this.isLoading = true;
+      this.error = null;
+
+      try {
+        const functions = getFunctions(app, "europe-west1");
+        const callable = httpsCallable<
+          { organizationName?: string },
+          { success: boolean; tenantId: string; workspaceId: string; alreadyExisted: boolean }
+        >(functions, "provisionInitialTenant");
+
+        const payload = organizationName ? { organizationName } : {};
+        const result = await callable(payload);
+        const data = result.data;
+
+        // Force-refresh the ID token to load the newly assigned claims
+        const firebaseUser = auth.currentUser;
+        if (firebaseUser) {
+          await firebaseUser.getIdToken(true);
+          this.user = await buildUserProfile(firebaseUser);
+          saveCachedUser(this.user);
+        }
+
+        return data.tenantId;
+      } catch (err: unknown) {
+        this.error =
+          err instanceof Error ? err.message : "Inizializzazione spazio di lavoro fallita";
+        throw err;
+      } finally {
+        this.isLoading = false;
+      }
+    } /*end provisionInitialTenant*/,
   },
 });
 

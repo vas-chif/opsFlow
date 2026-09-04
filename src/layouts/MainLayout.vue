@@ -84,6 +84,9 @@ const showDeleteAccountDialog = ref(false);
 
 onMounted(async () => {
   try {
+    if (authStore.needsProvisioning) {
+      await authStore.provisionInitialTenant();
+    }
     await taskStore.fetchWorkspaces();
     await taskStore.fetchTasks();
     if (!taskStore.activeWorkspaceId && taskStore.workspaces[0]) {

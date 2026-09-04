@@ -981,23 +981,23 @@ async function sendInvitationEmail(params: {
     subject: `Sei stato invitato a unirti a ${params.tenantName} su OpsFlow`,
     html: [
       "<div style=\"font-family:'Mulish',sans-serif;background:#0a2342;",
-      'color:#f9f7f2;padding:40px;border-radius:12px;max-width:580px;margin:auto">',
+      "color:#f9f7f2;padding:40px;border-radius:12px;max-width:580px;margin:auto\">",
       "<h1 style=\"color:#c5a065;font-family:'Playfair Display',serif;margin-bottom:8px\">",
       "Benvenuto in OpsFlow &#x1F44B;</h1>",
-      '<p style="margin-bottom:24px">',
+      "<p style=\"margin-bottom:24px\">",
       `Sei stato invitato a unirti all'organizzazione <strong>${params.tenantName}</strong>`,
       `con il ruolo <strong>${params.role}</strong>.</p>`,
       `<a href="${inviteUrl}"`,
-      'style="display:inline-block;background:#c5a065;color:#0a2342;',
-      'font-weight:700;padding:14px 32px;border-radius:8px;"',
-      'text-decoration:none;font-size:16px">',
+      "style=\"display:inline-block;background:#c5a065;color:#0a2342;",
+      "font-weight:700;padding:14px 32px;border-radius:8px;\"",
+      "text-decoration:none;font-size:16px\">",
       "&#x2705; Accetta invito &amp; unisciti al team</a>",
-      '<p style="margin-top:32px;font-size:13px;color:#9aacbe">',
+      "<p style=\"margin-top:32px;font-size:13px;color:#9aacbe\">",
       "Questo link scade in 7 giorni. ",
       "Se non riconosci questo invito puoi ignorare questa email.<br>",
-      'Per revocare: <a href="mailto:support@opsflow.app"',
-      'style="color:#c5a065">support@opsflow.app</a></p>',
-      '<p style="margin-top:16px;font-size:11px;color:#5a7a9b">',
+      "Per revocare: <a href=\"mailto:support@opsflow.app\"",
+      "style=\"color:#c5a065\">support@opsflow.app</a></p>",
+      "<p style=\"margin-top:16px;font-size:11px;color:#5a7a9b\">",
       "OpsFlow SaaS Platform &mdash; GDPR Art. 14 compliant.</p>",
       "</div>",
     ].join(""),
@@ -1327,3 +1327,168 @@ export const cleanupExpiredInvitations = onSchedule(
     });
   },
 ); // end cleanupExpiredInvitations
+
+// ── TENANT PROVISIONING: provisionInitialTenant (Step 15) ─────────────────────
+
+/**
+ * Callable Function: provisionInitialTenant
+ *
+ * Automatically provisions a dedicated tenant, root documents, default workspace,
+ * and sets Custom Claims { tenantId, role: "owner", isActive: true } for newly registered users.
+ *
+ * @security
+ * - Caller must be authenticated with emailVerified === true.
+ * - Idempotent: If user already has an active tenant, returns current tenant without re-creating.
+ *
+ * @gdpr
+ * - Logs tenant creation event to /audit for GDPR Art. 30 compliance.
+ */
+export const provisionInitialTenant = onCall(
+  { region: "europe-west1", cors: true, invoker: "public" },
+  async (request) => {
+    const rawAuth = request.auth;
+    if (!rawAuth || !rawAuth.uid) {
+      throw new HttpsError("unauthenticated", "Autenticazione richiesta.");
+    }
+
+    const emailVerified =
+      rawAuth.token.email_verified === true ||
+      rawAuth.token.firebase?.sign_in_provider === "google.com";
+
+    if (!emailVerified) {
+      throw new HttpsError(
+        "failed-precondition",
+        "L'email deve essere verificata prima di procedere con l'inizializzazione del tenant.",
+      );
+    }
+
+    const { organizationName } = (request.data || {}) as { organizationName?: string };
+    const uid = rawAuth.uid;
+    const userEmail = (rawAuth.token.email as string) || "";
+    const existingTenantId = rawAuth.token.tenantId as string | undefined;
+
+    const db = getFirestore();
+    const authAdmin = getAuth();
+
+    if (existingTenantId && existingTenantId !== "default-tenant") {
+      const existingTenantDoc = await db.collection("tenants").doc(existingTenantId).get();
+      if (existingTenantDoc.exists) {
+        logger.info("provisionInitialTenant: user already has an active tenant", {
+          uid,
+          tenantId: existingTenantId,
+        });
+        return {
+          success: true,
+          tenantId: existingTenantId,
+          workspaceId: "main",
+          alreadyExisted: true,
+        };
+      }
+    }
+
+    const tenantId = `t_${uid
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .slice(0, 12)
+      .toLowerCase()}`;
+    const cleanOrgName =
+      typeof organizationName === "string" && organizationName.trim().length > 0 ?
+        organizationName.trim() :
+        `Spazio di ${userEmail.split("@")[0] || "OpsFlow"}`;
+
+    const nowIso = new Date().toISOString();
+    const batch = db.batch();
+
+    // 1. Root tenant: tenants/{tenantId}
+    const tenantRef = db.collection("tenants").doc(tenantId);
+    batch.set(
+      tenantRef,
+      {
+        id: tenantId,
+        name: cleanOrgName,
+        ownerUid: uid,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        status: "active",
+        tier: "free",
+      },
+      { merge: true },
+    );
+
+    // 2. Default workspace: tenants/{tenantId}/workspaces/main
+    const workspaceRef = tenantRef.collection("workspaces").doc("main");
+    batch.set(
+      workspaceRef,
+      {
+        id: "main",
+        name: "Workspace Principale",
+        description: "Spazio di lavoro operativo predefinito",
+        tenantId,
+        isPinned: true,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      },
+      { merge: true },
+    );
+
+    // 3. User profile: users/{uid}
+    const userRef = db.collection("users").doc(uid);
+    batch.set(
+      userRef,
+      {
+        uid,
+        email: userEmail,
+        displayName: (rawAuth.token.name as string) || cleanOrgName,
+        tenantId,
+        role: "owner",
+        isActive: true,
+        createdAt: nowIso,
+        lastLoginAt: nowIso,
+      },
+      { merge: true },
+    );
+
+    // 4. Tenant membership: tenants/{tenantId}/members/{uid}
+    const memberRef = tenantRef.collection("members").doc(uid);
+    batch.set(
+      memberRef,
+      {
+        uid,
+        email: userEmail,
+        role: "owner",
+        joinedAt: nowIso,
+      },
+      { merge: true },
+    );
+
+    // 5. GDPR Art. 30 audit log
+    const auditRef = db.collection("audit").doc();
+    batch.set(auditRef, {
+      action: "provisionInitialTenant",
+      tenantId,
+      ownerUid: uid,
+      email: userEmail,
+      timestamp: nowIso,
+    });
+
+    await batch.commit();
+
+    await authAdmin.setCustomUserClaims(uid, {
+      tenantId,
+      role: "owner",
+      isActive: true,
+    });
+
+    logger.info("provisionInitialTenant: tenant provisioned successfully", {
+      uid,
+      tenantId,
+      cleanOrgName,
+    });
+
+    return {
+      success: true,
+      tenantId,
+      workspaceId: "main",
+      alreadyExisted: false,
+    };
+  },
+); // end provisionInitialTenant
