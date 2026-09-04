@@ -118,7 +118,7 @@ const confirmCreateTask = async (): Promise<void> => {
         suggestedCategory: newTaskCategory.value,
         complexityScore: 5,
         confidence: 0.8,
-        modelVersion: "gemini-1.5-flash",
+        modelVersion: "gemini-3.6-flash",
         lastAnalyzed: new Date(),
       },
     });

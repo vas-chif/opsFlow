@@ -217,7 +217,7 @@ export const onTaskCreated = onDocumentCreated(
         "Assegna un punteggio di complessità da 1 (banale) a 10 (complesso) ed una categoria pertinente.";
 
       const llmResponse = await ai.generate({
-        model: "googleai/gemini-1.5-flash",
+        model: "googleai/gemini-3.6-flash",
         prompt: plannerPrompt,
         output: { schema: TaskBreakdownSchema },
       });
@@ -598,7 +598,7 @@ export const generateDbsAttitude = onCall(
     try {
       const { ai, WorkspaceAttitudeSchema } = await import("./ai/genkitConfig.js");
       const llmResponse = await ai.generate({
-        model: "googleai/gemini-1.5-flash",
+        model: "googleai/gemini-3.6-flash",
         prompt: `${DBS_SYSTEM_PROMPT}\n\nDescrizione Workspace Utente:\n"${sanitized.sanitizedText}"`,
         output: { schema: WorkspaceAttitudeSchema },
       });

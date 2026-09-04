@@ -36,7 +36,7 @@ export const getAi = (): ReturnType<typeof genkit> => {
 
     _aiInstance = genkit({
       plugins: [googleAI({ apiKey })],
-      model: "googleai/gemini-1.5-flash",
+      model: "googleai/gemini-3.6-flash",
     });
   }
   return _aiInstance;

@@ -85,6 +85,25 @@ service cloud.firestore {
       allow delete: if isActiveAndVerified() && isAdmin() && belongsToTenant(tenantId);
     }
 
+    match /tenants/{tenantId}/tasks/{taskId} {
+      // Legacy flat tasks: all members read/create; admin can delete; immutable fields protected
+      allow read: if isActiveAndVerified() && belongsToTenant(tenantId);
+      allow create: if isActiveAndVerified() && belongsToTenant(tenantId)
+        && (isAdmin() || isUser());
+      allow update: if isActiveAndVerified() && belongsToTenant(tenantId)
+        && !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['createdAt', 'createdBy', 'tenantId']);
+      allow delete: if isActiveAndVerified() && isAdmin() && belongsToTenant(tenantId);
+    }
+
+    match /tenants/{tenantId}/tasks/{taskId}/{document=**} {
+      // Legacy task sub-collections: same as task
+      allow read: if isActiveAndVerified() && belongsToTenant(tenantId);
+      allow create, update: if isActiveAndVerified() && belongsToTenant(tenantId)
+        && (isAdmin() || isUser());
+      allow delete: if isActiveAndVerified() && isAdmin() && belongsToTenant(tenantId);
+    }
+
     match /tenants/{tenantId}/knowledgeBase/{kbId} {
       // Knowledge base: all tenant members read; admin can write
       allow read: if isActiveAndVerified() && belongsToTenant(tenantId);
@@ -124,6 +143,13 @@ service cloud.firestore {
     match /users_metadata/{userId}/{document=**} {
       allow read, write: if isAuthenticated() && request.auth.uid == userId;
       allow read: if isAuthenticated() && isAdmin(); // admin can list members
+    }
+
+    // ── User account documents (Step 15 — Provisioning & Profiles) ────────
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow create, update: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow delete: if false; // Deletion handled via Cloud Function
     }
 
     // ── Audit logs (GDPR Art. 30 — Append Only) ───────────────────────────

@@ -239,7 +239,12 @@ export const useTaskStore = defineStore("tasks", {
 
       try {
         const nestedTasks = await firestore.getWorkspaceTaskDocs<Task>(workspaceId);
-        const legacyTasks = await firestore.getTenantDocs<Task>(firestore.COLLECTIONS.TASKS);
+        let legacyTasks: Task[] = [];
+        try {
+          legacyTasks = await firestore.getTenantDocs<Task>(firestore.COLLECTIONS.TASKS);
+        } catch {
+          // Legacy tasks collection may be empty or unmigrated
+        }
         const filteredLegacy = legacyTasks.filter((t) => t.workspaceId === workspaceId);
 
         // Merge without duplicates
@@ -279,7 +284,12 @@ export const useTaskStore = defineStore("tasks", {
           firestore.getWorkspaceTaskDocs<Task>(ws.id),
         );
         const nestedResults = await Promise.all(taskPromises);
-        const legacyTasks = await firestore.getTenantDocs<Task>(firestore.COLLECTIONS.TASKS);
+        let legacyTasks: Task[] = [];
+        try {
+          legacyTasks = await firestore.getTenantDocs<Task>(firestore.COLLECTIONS.TASKS);
+        } catch {
+          // Legacy tasks collection may be empty or unmigrated
+        }
 
         const allTasks: Task[] = [];
         const seenIds = new Set<string>();

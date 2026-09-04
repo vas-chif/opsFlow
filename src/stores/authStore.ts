@@ -102,7 +102,16 @@ function mapClaims(claims: Record<string, unknown>): AuthClaims | null {
     return null;
   }
 
-  const validRoles: TenantRole[] = ["superadmin", "admin", "user", "manager", "operator", "viewer"];
+  const validRoles: TenantRole[] = [
+    "owner",
+    "superadmin",
+    "admin",
+    "member",
+    "user",
+    "manager",
+    "operator",
+    "viewer",
+  ];
   if (!validRoles.includes(role as TenantRole)) {
     return null;
   }
@@ -115,7 +124,7 @@ function mapClaims(claims: Record<string, unknown>): AuthClaims | null {
 } /*end mapClaims*/
 
 async function buildUserProfile(firebaseUser: User): Promise<UserProfile> {
-  const tokenResult = await firebaseUser.getIdTokenResult();
+  const tokenResult = await firebaseUser.getIdTokenResult(true);
   const rawClaims = tokenResult.claims as Record<string, unknown>;
 
   const claims = mapClaims(rawClaims) ?? {
@@ -255,6 +264,7 @@ export const useAuthStore = defineStore("auth", {
       try {
         const credential = await signInWithEmailAndPassword(auth, email, password);
         await credential.user.reload();
+        await credential.user.getIdToken(true);
 
         if (!credential.user.emailVerified) {
           await signOut(auth);
