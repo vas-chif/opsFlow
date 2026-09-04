@@ -417,3 +417,29 @@ export interface TenantMember {
   /** Whether the member account is currently active. */
   isActive: boolean;
 } /*end TenantMember*/
+
+// ── AI Task Architect: Refined Task Draft (Step 17) ──────────────────────────
+
+/**
+ * A single sub-task item within a refined task draft.
+ * UI-only — not Firestore data (stored embedded in RefinedTaskDraft).
+ */
+export interface RefinedSubTask {
+  order: number;
+  title: string;
+  description: string;
+} // UI-only — not Firestore data
+
+/**
+ * Structured task draft returned by the `refineTaskDraft` Cloud Function.
+ * Populated into AITaskArchitectModal.vue for human review before saving.
+ * UI-only — not Firestore data.
+ */
+export interface RefinedTaskDraft {
+  title: string;
+  description: string;
+  suggestedCategory: "general" | "marketing" | "research" | "admin" | "dev" | "clinical";
+  priority: "low" | "medium" | "high";
+  estimatedMinutes: number;
+  subtasks: RefinedSubTask[];
+} // UI-only — not Firestore data

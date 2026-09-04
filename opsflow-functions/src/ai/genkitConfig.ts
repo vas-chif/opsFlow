@@ -112,3 +112,40 @@ export const WorkspaceAttitudeSchema = z.object({
 });
 
 export type WorkspaceAttitudeResult = z.infer<typeof WorkspaceAttitudeSchema>;
+
+/**
+ * Schema for AITaskArchitect refined task draft output (Step 17).
+ * Enforces strict typed output to prevent hallucinations and JSON malformation.
+ */
+export const RefinedTaskDraftSchema = z.object({
+  title: z
+    .string()
+    .describe("Titolo sintetico, professionale ed orientato all'azione (max 80 caratteri)"),
+  description: z
+    .string()
+    .describe("Descrizione operativa dettagliata con contesto, istruzioni e obiettivo finale"),
+  suggestedCategory: z
+    .enum(["general", "marketing", "research", "admin", "dev", "clinical"])
+    .describe("Categoria tematica del task"),
+  priority: z
+    .enum(["low", "medium", "high"])
+    .describe("Priorità operativa del task"),
+  estimatedMinutes: z
+    .number()
+    .min(5)
+    .max(480)
+    .describe("Stima temporale realistica in minuti (5-480)"),
+  subtasks: z
+    .array(
+      z.object({
+        order: z.number().describe("Ordine sequenziale di esecuzione (1-indexed)"),
+        title: z.string().describe("Titolo conciso della sotto-task"),
+        description: z.string().describe("Descrizione azionabile della sotto-task"),
+      }),
+    )
+    .min(2)
+    .max(6)
+    .describe("Sotto-task operative in sequenza logica (minimo 2, massimo 6)"),
+});
+
+export type RefinedTaskDraftResult = z.infer<typeof RefinedTaskDraftSchema>;

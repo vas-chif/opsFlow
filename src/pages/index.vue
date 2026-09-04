@@ -37,6 +37,7 @@ import type { Task, Workspace, TaskStatus } from "@/types/models";
 import TaskChatWindow from "@/components/TaskChatWindow.vue";
 import WorkspaceAttitudeModal from "@/components/WorkspaceAttitudeModal.vue";
 import AIPromptArchitectModal from "@/components/AIPromptArchitectModal.vue";
+import AITaskArchitectModal from "@/components/AITaskArchitectModal.vue";
 
 // ── State ────────────────────────────────────────────────────────────────────
 const q = useQuasar();
@@ -56,6 +57,10 @@ const showCreateTaskModal = ref(false);
 const newTaskTitle = ref("");
 const newTaskPrompt = ref("");
 const newTaskCategory = ref("general");
+/** AI Task Architect modal state (Step 17). */
+const showTaskArchitectModal = ref(false);
+/** Pre-populated draft when opened from the inline chip in the standard task dialog (Step 17 §4.2). */
+const rawDraftFromInline = ref("");
 
 const categoryOptions = [
   { label: "Generale / Operativo", value: "general" },
@@ -63,6 +68,7 @@ const categoryOptions = [
   { label: "Ricerca & Sourcing", value: "research" },
   { label: "Amministrazione & Email", value: "admin" },
   { label: "Sviluppo & Tech", value: "dev" },
+  { label: "Assistenza Sanitaria / Clinica", value: "clinical" },
 ];
 
 // Modal states for SubTask Inspector
@@ -341,6 +347,23 @@ onMounted(async () => {
               :disabled="!selectedWorkspace"
               @click="openCreateTaskModal"
             />
+
+            <!-- AI Task Architect button (Step 17) — workspace-scoped -->
+            <q-btn
+              id="ai-task-architect-btn"
+              unelevated
+              icon="architecture"
+              label="AI Task Architect"
+              no-caps
+              color="secondary"
+              class="create-task-btn"
+              :disabled="!selectedWorkspace"
+              @click="showTaskArchitectModal = true"
+            >
+              <q-tooltip
+                >Trasforma un appunto grezzo in un task strutturato con Gemini 3.6 Flash</q-tooltip
+              >
+            </q-btn>
           </div>
         </div>
       </div>
@@ -567,6 +590,25 @@ onMounted(async () => {
           </q-card-section>
 
           <q-card-actions align="right" class="q-pt-none">
+            <!-- Chip inline: Rifinisci con AI Task Architect (Step 17 §4.2) -->
+            <q-chip
+              v-if="selectedWorkspace && newTaskTitle.trim().length > 0"
+              clickable
+              dense
+              icon="auto_awesome"
+              color="secondary"
+              text-color="white"
+              class="q-mr-auto"
+              @click="
+                () => {
+                  rawDraftFromInline = newTaskTitle + ' ' + newTaskPrompt;
+                  showCreateTaskModal = false;
+                  showTaskArchitectModal = true;
+                }
+              "
+            >
+              ✨ Rifinisci con IA
+            </q-chip>
             <q-btn v-close-popup flat label="Annulla" no-caps />
             <q-btn
               color="primary"
@@ -783,6 +825,18 @@ onMounted(async () => {
         v-model="showPromptArchitectModal"
         :workspace-id="selectedWorkspace.id"
         @applied="handleAttitudeApplied"
+      />
+
+      <!-- AI Task Architect Modal (Step 17) — workspace-scoped -->
+      <AITaskArchitectModal
+        v-if="selectedWorkspace"
+        v-model="showTaskArchitectModal"
+        :workspace-id="selectedWorkspace.id"
+        :initial-draft="rawDraftFromInline"
+        @task-created="
+          taskStore.fetchWorkspaceTasks(selectedWorkspace.id);
+          rawDraftFromInline = '';
+        "
       />
     </q-page>
   </MainLayout>

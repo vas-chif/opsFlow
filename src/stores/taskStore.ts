@@ -36,6 +36,7 @@ import type {
   WorkspaceAttitude,
   CreateTaskPayload,
   CreateWorkspacePayload,
+  RefinedTaskDraft,
 } from "@/types/models";
 
 // ── Composables ──────────────────────────────────────────────────────────────
@@ -56,6 +57,8 @@ interface TaskState {
   activeWorkspaceId: string | null;
   isLoading: boolean;
   isGeneratingAttitude: boolean;
+  /** True while the refineTaskDraft Cloud Function call is in-flight (Step 17). */
+  isRefiningTaskDraft: boolean;
   error: string | null;
 } /*end TaskState*/
 
@@ -136,6 +139,7 @@ export const useTaskStore = defineStore("tasks", {
     activeWorkspaceId: null,
     isLoading: false,
     isGeneratingAttitude: false,
+    isRefiningTaskDraft: false,
     error: null,
   }),
 
@@ -487,6 +491,54 @@ export const useTaskStore = defineStore("tasks", {
         this.isGeneratingAttitude = false;
       }
     } /*end generateDbsAttitude*/,
+
+    /**
+     * Call refineTaskDraft Cloud Function via Firebase SDK (AI Task Architect — Step 17).
+     *
+     * Passes the Workspace DBS Attitude as context for the 3-level stacked prompt.
+     * On network failure the raw draft text is NOT reset (fail-safe per piano Step 17 §3.2).
+     *
+     * @param workspaceId - Target workspace ID.
+     * @param rawDraft - Raw informal text note from the user.
+     * @returns Structured RefinedTaskDraft for human review in AITaskArchitectModal.
+     */
+    async refineTaskDraft(workspaceId: string, rawDraft: string): Promise<RefinedTaskDraft> {
+      this.isRefiningTaskDraft = true;
+      this.error = null;
+
+      try {
+        const functions = getFunctions(app, "europe-west1");
+        const callable = httpsCallable<
+          { workspaceId: string; rawDraft: string; workspaceAttitude?: WorkspaceAttitude },
+          { success: boolean; refined: RefinedTaskDraft }
+        >(functions, "refineTaskDraft");
+
+        // Inject workspace DBS constitution as context (3-level stacked prompt)
+        const workspaceAttitude = this.activeWorkspaceAttitude;
+
+        const payload: {
+          workspaceId: string;
+          rawDraft: string;
+          workspaceAttitude?: WorkspaceAttitude;
+        } = {
+          workspaceId,
+          rawDraft,
+          ...(workspaceAttitude ? { workspaceAttitude } : {}),
+        };
+
+        const res = await callable(payload);
+        if (res.data && res.data.refined) {
+          return res.data.refined;
+        }
+        throw new Error("Risposta non valida da refineTaskDraft");
+      } catch (err) {
+        // Fail-safe: set error but do NOT reset rawDraft (handled in component)
+        this.error = err instanceof Error ? err.message : "Errore raffinamento task IA";
+        throw err;
+      } finally {
+        this.isRefiningTaskDraft = false;
+      }
+    } /*end refineTaskDraft*/,
 
     /**
      * @deprecated Use updateWorkspaceAttitude instead (Step 10 Fase 1.7).

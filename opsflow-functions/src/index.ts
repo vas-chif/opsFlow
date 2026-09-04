@@ -624,6 +624,120 @@ export const generateDbsAttitude = onCall(
   },
 ); // end generateDbsAttitude
 
+// ── AI TASK ARCHITECT: refineTaskDraft (Step 17) ──────────────────────────────
+
+const TASK_ARCHITECT_SYSTEM_PROMPT =
+  "Sei AITaskArchitect, il copilota no-code di OpsFlow specializzato nella creazione di task operativi.\n" +
+  "Il tuo compito è trasformare un appunto grezzo o informale in una scheda task professionale e strutturata.\n\n" +
+  "REGOLE TASSATIVE:\n" +
+  "1. Rispetta RIGOROSAMENTE il settore, il tono e le regole DO/DON'T della Costituzione DBS del Workspace.\n" +
+  "2. Genera un titolo sintetico orientato all'azione (max 80 caratteri).\n" +
+  "3. Scrivi una descrizione operativa con contesto, istruzioni e obiettivo finale.\n" +
+  "4. Scegli la categoria più pertinente tra: general, marketing, research, admin, dev, clinical.\n" +
+  "5. Definisci la priorità operativa: low, medium o high.\n" +
+  "6. Stima il tempo realistico in minuti (5-480).\n" +
+  "7. Crea 2-6 sotto-task in sequenza logica operativa.\n" +
+  "8. Rispondi ESCLUSIVAMENTE in formato JSON strutturato conforme allo schema richiesto.\n" +
+  "9. Non aggiungere dati personali identificabili (PII) nei campi di output.";
+
+/**
+ * Callable Function: refineTaskDraft
+ *
+ * Transforms a raw informal note into a fully structured task draft
+ * using the Workspace DBS Attitude (constitution) as context.
+ *
+ * Saves with modelVersion: "gemini-3.6-flash" to inhibit onTaskCreated
+ * auto-decomposition (Flow 03 guard — zero duplicate LLM calls).
+ *
+ * @security Verified active JWT token required (isActive === true).
+ * @gdpr PII sanitization applied before any LLM call.
+ * @performance 1 Gemini Flash call (~500 tokens ≈ 0.00005 €) + 0 Firestore reads.
+ */
+export const refineTaskDraft = onCall(
+  { region: "europe-west1", cors: true, invoker: "public" },
+  async (request) => {
+    const rawAuth = request.auth as { uid: string; token: Record<string, unknown> } | undefined;
+
+    if (!rawAuth || rawAuth.token.isActive !== true) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Autenticazione attiva richiesta per utilizzare AI Task Architect.",
+      );
+    }
+
+    const { workspaceId, rawDraft, workspaceAttitude } = request.data as {
+      workspaceId: string;
+      rawDraft: string;
+      workspaceAttitude?: {
+        industryScope?: string;
+        tone?: string;
+        skills?: string[];
+        rules?: {
+          doList?: string[];
+          dontList?: string[];
+        };
+      };
+    };
+
+    if (!workspaceId || !rawDraft || typeof rawDraft !== "string" || rawDraft.trim().length < 5) {
+      throw new HttpsError(
+        "invalid-argument",
+        "workspaceId e rawDraft (min 5 caratteri) sono obbligatori.",
+      );
+    }
+
+    logger.info("refineTaskDraft triggered", { workspaceId, uid: rawAuth.uid });
+
+    // GDPR Art. 32 — PII Sanitization before sending to LLM
+    const sanitized = sanitizePii(rawDraft);
+
+    // Build 3-level stacked prompt: Constitution → Task Architect → Raw Draft
+    const constitutionContext =
+      workspaceAttitude ?
+        "\n\n--- COSTITUZIONE DBS DEL WORKSPACE ---\n" +
+        `Settore: ${workspaceAttitude.industryScope || "Generale"}\n` +
+        `Tono: ${workspaceAttitude.tone || "professionale"}\n` +
+        `Competenze: ${(workspaceAttitude.skills || []).join(", ")}\n` +
+        `Regole DO: ${(workspaceAttitude.rules?.doList || []).join(" | ")}\n` +
+        `Regole DON'T: ${(workspaceAttitude.rules?.dontList || []).join(" | ")}\n` +
+        "--- FINE COSTITUZIONE ---" :
+        "";
+
+    const fullPrompt =
+      `${TASK_ARCHITECT_SYSTEM_PROMPT}${constitutionContext}\n\n` +
+      `--- APPUNTO GREZZO DELL'UTENTE ---\n"${sanitized.sanitizedText}"\n--- FINE APPUNTO ---\n\n` +
+      "Trasforma l'appunto in una scheda task strutturata conforme allo schema JSON richiesto.";
+
+    try {
+      const { ai, RefinedTaskDraftSchema } = await import("./ai/genkitConfig.js");
+      const llmResponse = await ai.generate({
+        model: "googleai/gemini-3.6-flash",
+        prompt: fullPrompt,
+        output: { schema: RefinedTaskDraftSchema },
+      });
+
+      if (!llmResponse.output) {
+        throw new HttpsError("internal", "Raffinamento task fallito: output LLM vuoto.");
+      }
+
+      const refined = llmResponse.output;
+
+      logger.info("refineTaskDraft completed", {
+        workspaceId,
+        title: refined.title,
+        category: refined.suggestedCategory,
+        subtasksCount: refined.subtasks.length,
+      });
+
+      return { success: true, refined };
+    } catch (err) {
+      logger.error("refineTaskDraft error", { workspaceId, err });
+      if (err instanceof HttpsError) throw err;
+      throw new HttpsError("internal", "Errore durante il raffinamento del task con IA.");
+    }
+  },
+); // end refineTaskDraft
+
 // ── ACCOUNT & TENANT PURGE: Single User & Company Purge (GDPR Art. 17) ───────────────
 
 // ── ACCOUNT DELETION & TENANT TEARDOWN (GDPR Art. 17 & RBAC) ─────────────────
