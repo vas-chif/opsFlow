@@ -214,38 +214,59 @@ const presetTemplates = [
   },
 ];
 
+const syncFromWorkspace = (newWs: Workspace | null): void => {
+  if (!newWs) return;
+  const att = newWs.attitude;
+  if (att) {
+    industryScope.value = att.industryScope || "Generale";
+    tone.value = att.tone || "operativo";
+    skills.value = Array.isArray(att.skills) ? [...att.skills] : [];
+    doListInput.value = att.rules?.doList ? att.rules.doList.join("\n") : "";
+    dontListInput.value = att.rules?.dontList ? att.rules.dontList.join("\n") : "";
+    systemPrompt.value =
+      newWs.systemPrompt ||
+      (att.industryScope
+        ? `Ruolo Agente Workspace: esperto in ${att.industryScope}. Tono: ${att.tone}.`
+        : "");
+  } else {
+    const res = newWs.linkedResources || {};
+    industryScope.value = newWs.category || "Generale";
+    tone.value = res.toneOfVoice || "operativo";
+    skills.value = res.assignedAgents ? [...res.assignedAgents] : [];
+    doListInput.value = res.doList ? res.doList.join("\n") : "";
+    dontListInput.value = res.dontList ? res.dontList.join("\n") : "";
+    systemPrompt.value = newWs.systemPrompt || "";
+  }
+  const res = newWs.linkedResources || {};
+  googleEmail.value = res.googleEmail || "";
+  linkedEmails.value = res.linkedEmails
+    ? [...res.linkedEmails]
+    : res.googleEmail
+      ? [res.googleEmail]
+      : [];
+  defaultSheetId.value = res.defaultSheetId || "";
+  defaultDriveFolderId.value = res.defaultDriveFolderId || "";
+  isOAuthConnected.value = res.isOAuthConnected || false;
+  if (res.assignedAgents) {
+    assignedAgents.value = [...res.assignedAgents];
+  }
+}; /*end syncFromWorkspace*/
+
 watch(
   () => props.workspace,
   (newWs) => {
-    if (newWs) {
-      systemPrompt.value = newWs.systemPrompt || "";
-      const att = newWs.attitude;
-      if (att) {
-        industryScope.value = att.industryScope || "Generale";
-        tone.value = att.tone || "operativo";
-        skills.value = att.skills || [];
-        doListInput.value = att.rules?.doList ? att.rules.doList.join("\n") : "";
-        dontListInput.value = att.rules?.dontList ? att.rules.dontList.join("\n") : "";
-      } else {
-        const res = newWs.linkedResources || {};
-        industryScope.value = newWs.category || "Generale";
-        tone.value = res.toneOfVoice || "operativo";
-        skills.value = res.assignedAgents || [];
-        doListInput.value = res.doList ? res.doList.join("\n") : "";
-        dontListInput.value = res.dontList ? res.dontList.join("\n") : "";
-      }
-      const res = newWs.linkedResources || {};
-      googleEmail.value = res.googleEmail || "";
-      linkedEmails.value = res.linkedEmails || (res.googleEmail ? [res.googleEmail] : []);
-      defaultSheetId.value = res.defaultSheetId || "";
-      defaultDriveFolderId.value = res.defaultDriveFolderId || "";
-      isOAuthConnected.value = res.isOAuthConnected || false;
-      if (res.assignedAgents) {
-        assignedAgents.value = res.assignedAgents;
-      }
+    syncFromWorkspace(newWs);
+  },
+  { immediate: true, deep: true },
+);
+
+watch(
+  () => props.modelValue,
+  (isOpenVal) => {
+    if (isOpenVal) {
+      syncFromWorkspace(props.workspace);
     }
   },
-  { immediate: true },
 );
 
 const applyPreset = (preset: (typeof presetTemplates)[0]): void => {

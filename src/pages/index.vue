@@ -106,6 +106,10 @@ const openCreateTaskModal = (): void => {
   showCreateTaskModal.value = true;
 }; /*end openCreateTaskModal*/
 
+const handleAttitudeApplied = async (): Promise<void> => {
+  await taskStore.fetchWorkspaces();
+}; /*end handleAttitudeApplied*/
+
 const confirmCreateTask = async (): Promise<void> => {
   if (!selectedWorkspace.value || !newTaskTitle.value.trim() || !newTaskPrompt.value.trim()) return;
 
@@ -778,6 +782,7 @@ onMounted(async () => {
         v-if="selectedWorkspace"
         v-model="showPromptArchitectModal"
         :workspace-id="selectedWorkspace.id"
+        @applied="handleAttitudeApplied"
       />
     </q-page>
   </MainLayout>

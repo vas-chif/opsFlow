@@ -427,10 +427,13 @@ export const useTaskStore = defineStore("tasks", {
      * Set attitude in-memory for a workspace and persist to localStorage cache (Step 10 Fase 1.7).
      */
     setAttitude(workspaceId: string, attitude: WorkspaceAttitude): void {
-      const ws = this.workspaces.find((w) => w.id === workspaceId);
-      if (ws) {
-        ws.attitude = attitude;
-        ws.updatedAt = new Date();
+      const wsIdx = this.workspaces.findIndex((w) => w.id === workspaceId);
+      if (wsIdx !== -1 && this.workspaces[wsIdx]) {
+        this.workspaces[wsIdx] = {
+          ...this.workspaces[wsIdx],
+          attitude,
+          updatedAt: new Date(),
+        } as Workspace;
       }
       saveCachedWorkspaces(this.workspaces);
     } /*end setAttitude*/,
