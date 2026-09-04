@@ -24,8 +24,8 @@
 // ── Firebase ──────────────────────────────────────────────────────────────────
 import { getFirestore } from "firebase-admin/firestore";
 
-// ── Google APIs ───────────────────────────────────────────────────────────────
-import { google } from "googleapis";
+// ── Google APIs (Type-only import — stripped from JS output to optimize cold-start) ──
+import type { google } from "googleapis";
 
 // ── Node Built-ins ────────────────────────────────────────────────────────────
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
@@ -142,7 +142,8 @@ function decryptToken(record: Pick<EncryptedTokenRecord, "iv" | "authTag" | "cip
  *
  * @return {GoogleOAuth2Client} Unconfigured OAuth2 client instance
  */
-function buildOAuth2Client(): GoogleOAuth2Client {
+async function buildOAuth2Client(): Promise<GoogleOAuth2Client> {
+  const { google } = await import("googleapis");
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
@@ -203,7 +204,7 @@ export async function getAuthenticatedOAuth2Client(
     ciphertext: record.ciphertext,
   });
 
-  const oAuth2Client = buildOAuth2Client();
+  const oAuth2Client = await buildOAuth2Client();
   oAuth2Client.setCredentials({ refresh_token: refreshToken });
 
   // Proactive refresh: if expiring within 5 minutes

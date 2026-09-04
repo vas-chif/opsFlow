@@ -27,7 +27,15 @@
  * @remarks Legacy values (`manager`, `operator`, `viewer`) are kept for backward
  * compatibility during migration and map to `user` at runtime.
  */
-export type TenantRole = "superadmin" | "admin" | "user" | "manager" | "operator" | "viewer";
+export type TenantRole =
+  | "owner"
+  | "superadmin"
+  | "admin"
+  | "member"
+  | "user"
+  | "manager"
+  | "operator"
+  | "viewer";
 
 /**
  * Custom claims embedded in the Firebase Auth JWT.

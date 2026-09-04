@@ -34,6 +34,9 @@ import { useAuthStore } from "@/stores/authStore";
 // ── Types ────────────────────────────────────────────────────────────────────
 import type { Workspace, Task } from "@/types/models";
 
+// ── Components ───────────────────────────────────────────────────────────────
+import DeleteAccountDialog from "@/components/DeleteAccountDialog.vue";
+
 // ── Composables ──────────────────────────────────────────────────────────────
 const route = useRoute();
 const router = useRouter();
@@ -76,6 +79,8 @@ const handleLogout = async (): Promise<void> => {
     });
   }
 }; /*end handleLogout*/
+
+const showDeleteAccountDialog = ref(false);
 
 onMounted(async () => {
   try {
@@ -176,7 +181,7 @@ const sendChatMessage = async (): Promise<void> => {
   isAgentTyping.value = true;
 
   try {
-    const res = await fetch("https://us-central1-opsflow-88of.cloudfunctions.net/chatWithAgent", {
+    const res = await fetch("https://europe-west1-opsflow-88of.cloudfunctions.net/chatWithAgent", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -869,10 +874,52 @@ const confirmDeleteWorkspace = async (): Promise<void> => {
           </q-item>
         </q-list>
 
+        <q-separator class="q-my-md" />
+
+        <!-- GDPR Art. 17 Account Self-Deletion Danger Zone -->
+        <!-- Account Deletion / Organization Teardown Zone -->
+        <div class="q-pa-sm bg-red-1 border-radius-8">
+          <div class="text-caption text-weight-bold text-negative q-mb-xs">
+            <q-icon name="warning" class="q-mr-xs" />
+            {{
+              authStore.isOwner
+                ? "Dismissione Organizzazione Aziendale"
+                : "Eliminazione Account Personale"
+            }}
+          </div>
+          <div class="text-caption text-grey-8 q-mb-sm">
+            {{
+              authStore.isOwner
+                ? "Chiusura definitiva del tenant aziendale con cancellazione a cascata di workspace, task e membri."
+                : "Diritto all'Oblio (GDPR Art. 17): elimina il tuo profilo personale. I workspace aziendali rimarranno intatti."
+            }}
+          </div>
+          <q-btn
+            color="negative"
+            outline
+            dense
+            no-caps
+            icon="delete_forever"
+            :label="
+              authStore.isOwner
+                ? 'Dismetti Organizzazione ed Account'
+                : 'Elimina il mio Account Personale'
+            "
+            class="full-width"
+            @click="
+              showProfileModal = false;
+              showDeleteAccountDialog = true;
+            "
+          />
+        </div>
+
         <div class="row justify-end q-mt-lg">
           <q-btn color="primary" label="Chiudi" no-caps v-close-popup />
         </div>
       </q-card>
     </q-dialog>
+
+    <!-- Security Account Deletion & Tenant Teardown Dialog (GDPR Art. 17 & RBAC) -->
+    <delete-account-dialog v-model="showDeleteAccountDialog" />
   </q-layout>
 </template>

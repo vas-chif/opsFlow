@@ -142,7 +142,7 @@ const handleSendChatMessage = async (): Promise<void> => {
   let fetchedOk = false;
 
   try {
-    const res = await fetch("https://us-central1-opsflow-88of.cloudfunctions.net/chatWithAgent", {
+    const res = await fetch("https://europe-west1-opsflow-88of.cloudfunctions.net/chatWithAgent", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

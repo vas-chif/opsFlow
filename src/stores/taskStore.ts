@@ -455,7 +455,7 @@ export const useTaskStore = defineStore("tasks", {
       this.error = null;
 
       try {
-        const functions = getFunctions(app, "us-central1");
+        const functions = getFunctions(app, "europe-west1");
         const callable = httpsCallable<
           { workspaceId: string; userPrompt: string },
           { success: boolean; attitude: WorkspaceAttitude }

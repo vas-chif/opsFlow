@@ -35,9 +35,11 @@ import {
   GoogleAuthProvider,
   sendEmailVerification,
   signOut,
+  deleteUser,
   type User,
 } from "firebase/auth";
 import { getFunctions, httpsCallable } from "firebase/functions";
+import { doc, deleteDoc } from "firebase/firestore";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 import type {
@@ -49,7 +51,7 @@ import type {
 } from "@/types/auth";
 
 // ── Utils ────────────────────────────────────────────────────────────────────
-import { auth, app } from "@/boot/firebase";
+import { auth, app, db } from "@/boot/firebase";
 
 interface AuthState {
   user: UserProfile | null;
@@ -162,28 +164,34 @@ export const useAuthStore = defineStore("auth", {
       return state.user?.claims?.role === "superadmin";
     },
 
-    /** True if the user is admin or superadmin — can manage workspaces and members (Step 8). */
+    /** True if the user is tenant owner or superadmin. */
+    isOwner: (state): boolean => {
+      const r = state.user?.claims?.role;
+      return r === "owner" || r === "superadmin";
+    },
+
+    /** True if the user is admin, owner or superadmin — can manage workspaces and members (Step 8). */
     isAdmin: (state): boolean => {
       const r = state.user?.claims?.role;
-      return r === "admin" || r === "superadmin";
+      return r === "admin" || r === "owner" || r === "superadmin";
     },
 
     /**
      * True if the user can manage workspace settings, invite members, and configure integrations.
-     * Requires `admin` or `superadmin` role (Step 8 — Fase 2.2).
+     * Requires `admin`, `owner` or `superadmin` role (Step 8 — Fase 2.2).
      */
     canManageWorkspace: (state): boolean => {
       const r = state.user?.claims?.role;
-      return r === "admin" || r === "superadmin";
+      return r === "admin" || r === "owner" || r === "superadmin";
     },
 
     /**
      * True if the user can approve or reject critical AI actions (Human-in-the-Loop).
-     * Requires `admin` or `superadmin` role (Step 8 — Fase 2.2).
+     * Requires `admin`, `owner` or `superadmin` role (Step 8 — Fase 2.2).
      */
     canApproveAI: (state): boolean => {
       const r = state.user?.claims?.role;
-      return r === "admin" || r === "superadmin";
+      return r === "admin" || r === "owner" || r === "superadmin";
     },
   },
 
@@ -314,6 +322,52 @@ export const useAuthStore = defineStore("auth", {
     } /*end logout*/,
 
     /**
+     * Delete the current user's account and personal data (GDPR Art. 17 Right to Erasure).
+     * Permanent removal of registration email from Firebase Auth & profile from Firestore.
+     */
+    async deleteAccount(): Promise<void> {
+      this.isLoading = true;
+      this.error = null;
+
+      try {
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+          throw new Error("Nessun utente autenticato trovato da eliminare.");
+        }
+
+        const uid = currentUser.uid;
+
+        // 1. Delete user registration account permanently from Firebase Auth FIRST.
+        // Firebase Auth enforces a security check (requires-recent-login).
+        // If session is old, this throws auth/requires-recent-login before modifying DB.
+        await deleteUser(currentUser);
+
+        // 2. Clean up user profile metadata doc in Firestore (GDPR Art. 17)
+        if (uid) {
+          try {
+            const userDocRef = doc(db, `users_metadata/${uid}`);
+            await deleteDoc(userDocRef);
+          } catch {
+            // Firestore cleanup optional fallback
+          }
+        }
+
+        // 3. Reset session state & clear session cache only (§5, §11)
+        this.user = null;
+        saveCachedUser(null);
+
+        // Remove user profile cache
+        localStorage.removeItem(`opsflow_user_${uid}_profile`);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Cancellazione account fallita";
+        this.error = msg;
+        throw err;
+      } finally {
+        this.isLoading = false;
+      }
+    } /*end deleteAccount*/,
+
+    /**
      * Force-refresh the ID token and re-read custom claims.
      */
     /**
@@ -326,7 +380,7 @@ export const useAuthStore = defineStore("auth", {
       this.error = null;
 
       try {
-        const functions = getFunctions(app, "us-central1");
+        const functions = getFunctions(app, "europe-west1");
         const callable = httpsCallable<SetUserRoleRequest, SetUserRoleResponse>(
           functions,
           "setUserRole",
@@ -363,6 +417,33 @@ export const useAuthStore = defineStore("auth", {
         this.isLoading = false;
       }
     } /*end refreshClaims*/,
+
+    /**
+     * Purge the entire company tenant and all workspaces/tasks (Admin only).
+     * Calls the purgeCompanyTenant Cloud Function.
+     */
+    async purgeCompanyTenant(confirmTenantName: string): Promise<void> {
+      this.isLoading = true;
+      this.error = null;
+
+      try {
+        const tenantId = this.tenantId;
+        const functions = getFunctions(app, "europe-west1");
+        const callable = httpsCallable<
+          { tenantId: string; confirmTenantName: string },
+          { success: boolean; message: string }
+        >(functions, "purgeCompanyTenant");
+        await callable({ tenantId, confirmTenantName });
+
+        // Once tenant is purged, delete user account locally & sign out
+        await this.deleteAccount();
+      } catch (err: unknown) {
+        this.error = err instanceof Error ? err.message : "Eliminazione organizzazione fallita";
+        throw err;
+      } finally {
+        this.isLoading = false;
+      }
+    } /*end purgeCompanyTenant*/,
   },
 });
 

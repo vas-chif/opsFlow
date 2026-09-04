@@ -28,14 +28,16 @@ setGlobalOptions({
 // ── Secret Manager Declaration ──────────────────────────────────────────────────────
 // GCP Secret Manager registration (step 12: Tavily, Exa; step 13: Brave)
 const BRAVE_SEARCH_API_KEY = defineSecret("BRAVE_SEARCH_API_KEY");
+const RESEND_API_KEY = defineSecret("RESEND_API_KEY");
 
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
+import * as functionsV1 from "firebase-functions/v1";
 import * as logger from "firebase-functions/logger";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import { initializeApp } from "firebase-admin/app";
-import { google } from "googleapis";
+// Note: googleapis is lazy-imported inside handlers to optimize cold-start boot time
 
 // Initialize Firebase Admin SDK (idempotent)
 try {
@@ -54,17 +56,19 @@ import {
 
 // ── RBAC: JWT Middleware Helper (Fase 1.2) ────────────────────────────────────
 
+type AppRole = "owner" | "superadmin" | "admin" | "member" | "user";
+
 /**
  * Validates the caller's JWT token and checks the required role.
  * Throws HttpsError if unauthorized — never queries Firestore for authz (§5).
  *
  * @param {object | undefined} auth - The auth context from an onCall handler.
- * @param {Array<string>} allowedRoles - At least one of these roles must match the token claim.
+ * @param {Array<AppRole>} allowedRoles - At least one of these roles must match the token claim.
  * @return {void}
  */
 function requireRole(
   auth: { uid: string; token: Record<string, unknown> } | undefined,
-  allowedRoles: Array<"superadmin" | "admin" | "user">,
+  allowedRoles: Array<AppRole>,
 ): void {
   if (!auth) {
     throw new HttpsError("unauthenticated", "Autenticazione richiesta.");
@@ -72,8 +76,8 @@ function requireRole(
   if (auth.token.isActive !== true) {
     throw new HttpsError("permission-denied", "Account non attivo. Contatta l'amministratore.");
   }
-  const callerRole = auth.token.role as string | undefined;
-  if (!callerRole || !allowedRoles.includes(callerRole as "superadmin" | "admin" | "user")) {
+  const callerRole = auth.token.role as AppRole | undefined;
+  if (!callerRole || !allowedRoles.includes(callerRole)) {
     throw new HttpsError(
       "permission-denied",
       `Ruolo insufficiente. Richiesto: ${allowedRoles.join(" o ")}.`,
@@ -93,63 +97,66 @@ function requireRole(
  * @security JWT-only authz (§5) — no Firestore read for permission check.
  * @gdpr Logs operation to audit trail for GDPR Art. 30 compliance.
  */
-export const setUserRole = onCall({ region: "europe-west1" }, async (request) => {
-  const rawAuth = request.auth as { uid: string; token: Record<string, unknown> } | undefined;
+export const setUserRole = onCall(
+  { region: "europe-west1", cors: true, invoker: "public" },
+  async (request) => {
+    const rawAuth = request.auth as { uid: string; token: Record<string, unknown> } | undefined;
 
-  // Fase 1.2: validate caller role via JWT middleware — throws if unauthenticated or missing role
-  requireRole(rawAuth, ["superadmin", "admin"]);
+    // Fase 1.2: validate caller role via JWT middleware — throws if unauthenticated or missing role
+    requireRole(rawAuth, ["superadmin", "admin"]);
 
-  // After requireRole succeeds, rawAuth is guaranteed non-null. Use typed const to avoid !
-  const caller = rawAuth as { uid: string; token: Record<string, unknown> };
+    // After requireRole succeeds, rawAuth is guaranteed non-null. Use typed const to avoid !
+    const caller = rawAuth as { uid: string; token: Record<string, unknown> };
 
-  const {
-    uid,
-    tenantId,
-    role,
-    isActive = true,
-  } = request.data as {
-    uid: string;
-    tenantId: string;
-    role: "superadmin" | "admin" | "user";
-    isActive?: boolean;
-  };
+    const {
+      uid,
+      tenantId,
+      role,
+      isActive = true,
+    } = request.data as {
+      uid: string;
+      tenantId: string;
+      role: "superadmin" | "admin" | "user";
+      isActive?: boolean;
+    };
 
-  if (!uid || !tenantId || !role) {
-    throw new HttpsError("invalid-argument", "uid, tenantId e role sono obbligatori.");
-  }
+    if (!uid || !tenantId || !role) {
+      throw new HttpsError("invalid-argument", "uid, tenantId e role sono obbligatori.");
+    }
 
-  // Admin can only assign roles within their own tenant
-  const callerRole = caller.token.role as string;
-  if (callerRole === "admin" && caller.token.tenantId !== tenantId) {
-    throw new HttpsError(
-      "permission-denied",
-      "Un admin può assegnare ruoli solo all'interno del proprio tenant.",
-    );
-  }
+    // Admin can only assign roles within their own tenant
+    const callerRole = caller.token.role as string;
+    if (callerRole === "admin" && caller.token.tenantId !== tenantId) {
+      throw new HttpsError(
+        "permission-denied",
+        "Un admin può assegnare ruoli solo all'interno del proprio tenant.",
+      );
+    }
 
-  // Admin cannot elevate to superadmin
-  if (callerRole === "admin" && role === "superadmin") {
-    throw new HttpsError("permission-denied", "Un admin non può assegnare il ruolo superadmin.");
-  }
+    // Admin cannot elevate to superadmin
+    if (callerRole === "admin" && role === "superadmin") {
+      throw new HttpsError("permission-denied", "Un admin non può assegnare il ruolo superadmin.");
+    }
 
-  await getAuth().setCustomUserClaims(uid, { tenantId, role, isActive });
+    await getAuth().setCustomUserClaims(uid, { tenantId, role, isActive });
 
-  // GDPR Art. 30 audit log
-  const db = getFirestore();
-  await db.collection("audit").add({
-    action: "setUserRole",
-    targetUid: uid,
-    tenantId,
-    newRole: role,
-    isActive,
-    performedBy: caller.uid,
-    performedByRole: callerRole,
-    timestamp: new Date().toISOString(),
-  });
+    // GDPR Art. 30 audit log
+    const db = getFirestore();
+    await db.collection("audit").add({
+      action: "setUserRole",
+      targetUid: uid,
+      tenantId,
+      newRole: role,
+      isActive,
+      performedBy: caller.uid,
+      performedByRole: callerRole,
+      timestamp: new Date().toISOString(),
+    });
 
-  logger.info("setUserRole: claims updated", { targetUid: uid, tenantId, role, isActive });
-  return { success: true, uid, role };
-}); // end setUserRole
+    logger.info("setUserRole: claims updated", { targetUid: uid, tenantId, role, isActive });
+    return { success: true, uid, role };
+  },
+); // end setUserRole
 
 /**
  * Trigger: AgentePlanner
@@ -306,7 +313,7 @@ export const chatWithAgent = onRequest(
     cors: true,
     region: "europe-west1",
     timeoutSeconds: 60, // Step 12: Reduced from 300s → 60s (eliminates idle billing on blocked requests)
-    memory: "1GiB", // Step 12: 1GiB RAM grants 1 full vCPU to Cloud Run (fixes container healthcheck boot timeout)
+    memory: "512MiB", // Standard Cloud Functions memory allocation
     minInstances: 0, // Scale-to-Zero: €0,00 during inactivity
     maxInstances: 10, // Hard-cap for 1000 concurrent users
     secrets: [BRAVE_SEARCH_API_KEY], // Step 13: Brave Search API key via GCP Secret Manager
@@ -433,6 +440,7 @@ export const resolveApproval = onRequest(
           .replace(/\//g, "_")
           .replace(/=+$/, "");
 
+        const { google } = await import("googleapis");
         const gmail = google.gmail({ version: "v1", auth: oAuth2Client });
         await gmail.users.drafts.create({
           userId: "me",
@@ -451,6 +459,7 @@ export const resolveApproval = onRequest(
           "https://www.googleapis.com/auth/spreadsheets",
         ]);
 
+        const { google } = await import("googleapis");
         const sheets = google.sheets({ version: "v4", auth: oAuth2Client });
         await sheets.spreadsheets.values.append({
           spreadsheetId: preview.spreadsheetId,
@@ -508,6 +517,7 @@ export const googleOAuthCallback = onRequest(
     }
 
     try {
+      const { google } = await import("googleapis");
       const { OAuth2 } = google.auth;
       const oAuth2Client = new OAuth2(
         process.env.GOOGLE_CLIENT_ID,
@@ -560,53 +570,760 @@ const DBS_SYSTEM_PROMPT =
  *
  * @security Verified active JWT token required (isActive === true).
  */
-export const generateDbsAttitude = onCall({ region: "europe-west1" }, async (request) => {
-  const rawAuth = request.auth as { uid: string; token: Record<string, unknown> } | undefined;
+export const generateDbsAttitude = onCall(
+  { region: "europe-west1", cors: true, invoker: "public" },
+  async (request) => {
+    const rawAuth = request.auth as { uid: string; token: Record<string, unknown> } | undefined;
 
-  if (!rawAuth || rawAuth.token.isActive !== true) {
-    throw new HttpsError(
-      "unauthenticated",
-      "Autenticazione attiva richiesta per utilizzare AI Prompt Architect.",
-    );
-  }
-
-  const { workspaceId, userPrompt } = request.data as {
-    workspaceId: string;
-    userPrompt: string;
-  };
-
-  if (!workspaceId || !userPrompt || typeof userPrompt !== "string") {
-    throw new HttpsError("invalid-argument", "workspaceId e userPrompt sono campi obbligatori.");
-  }
-
-  logger.info("generateDbsAttitude triggered", { workspaceId, uid: rawAuth.uid });
-
-  const sanitized = sanitizePii(userPrompt);
-
-  try {
-    const { ai, WorkspaceAttitudeSchema } = await import("./ai/genkitConfig.js");
-    const llmResponse = await ai.generate({
-      model: "googleai/gemini-1.5-flash",
-      prompt: `${DBS_SYSTEM_PROMPT}\n\nDescrizione Workspace Utente:\n"${sanitized.sanitizedText}"`,
-      output: { schema: WorkspaceAttitudeSchema },
-    });
-
-    if (!llmResponse.output) {
-      throw new HttpsError("internal", "Generazione atteggiamento fallita o output vuoto.");
+    if (!rawAuth || rawAuth.token.isActive !== true) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Autenticazione attiva richiesta per utilizzare AI Prompt Architect.",
+      );
     }
 
-    const attitude = llmResponse.output;
+    const { workspaceId, userPrompt } = request.data as {
+      workspaceId: string;
+      userPrompt: string;
+    };
 
-    logger.info("generateDbsAttitude completed", {
-      workspaceId,
-      industryScope: attitude.industryScope,
-      skillsCount: attitude.skills.length,
+    if (!workspaceId || !userPrompt || typeof userPrompt !== "string") {
+      throw new HttpsError("invalid-argument", "workspaceId e userPrompt sono campi obbligatori.");
+    }
+
+    logger.info("generateDbsAttitude triggered", { workspaceId, uid: rawAuth.uid });
+
+    const sanitized = sanitizePii(userPrompt);
+
+    try {
+      const { ai, WorkspaceAttitudeSchema } = await import("./ai/genkitConfig.js");
+      const llmResponse = await ai.generate({
+        model: "googleai/gemini-1.5-flash",
+        prompt: `${DBS_SYSTEM_PROMPT}\n\nDescrizione Workspace Utente:\n"${sanitized.sanitizedText}"`,
+        output: { schema: WorkspaceAttitudeSchema },
+      });
+
+      if (!llmResponse.output) {
+        throw new HttpsError("internal", "Generazione atteggiamento fallita o output vuoto.");
+      }
+
+      const attitude = llmResponse.output;
+
+      logger.info("generateDbsAttitude completed", {
+        workspaceId,
+        industryScope: attitude.industryScope,
+        skillsCount: attitude.skills.length,
+      });
+
+      return { success: true, attitude };
+    } catch (err) {
+      logger.error("generateDbsAttitude error", { workspaceId, err });
+      if (err instanceof HttpsError) throw err;
+      throw new HttpsError("internal", "Errore durante la generazione dell'atteggiamento IA.");
+    }
+  },
+); // end generateDbsAttitude
+
+// ── ACCOUNT & TENANT PURGE: Single User & Company Purge (GDPR Art. 17) ───────────────
+
+// ── ACCOUNT DELETION & TENANT TEARDOWN (GDPR Art. 17 & RBAC) ─────────────────
+
+/**
+ * Callable Function: deleteMemberAccount
+ *
+ * Removes personal records of a team collaborator/member while preserving company workspaces.
+ * Deletes:
+ * - tenants/{tenantId}/members/{uid}
+ * - tenants/{tenantId}/users/{uid} (tokens)
+ * - users_metadata/{uid}
+ * - users/{uid} (fallback)
+ * - Firebase Auth user via auth.deleteUser(uid)
+ *
+ * @security Verified JWT active claims required. Owners are rejected.
+ */
+export const deleteMemberAccount = onCall(
+  { region: "europe-west1", cors: true, invoker: "public" },
+  async (request) => {
+    const rawAuth = request.auth as { uid: string; token: Record<string, unknown> } | undefined;
+    if (!rawAuth || !rawAuth.uid) {
+      throw new HttpsError("unauthenticated", "Autenticazione richiesta.");
+    }
+    if (rawAuth.token.isActive !== true) {
+      throw new HttpsError("permission-denied", "Account non attivo.");
+    }
+
+    const uid = rawAuth.uid;
+    const role = (rawAuth.token.role as string) ?? "user";
+    const tenantId = (rawAuth.token.tenantId as string) ?? "default-tenant";
+
+    if (role === "owner" || role === "superadmin") {
+      throw new HttpsError(
+        "failed-precondition",
+        "Il titolare dell'azienda non può eliminarsi come semplice membro. Usa deleteTenantAndAccount.",
+      );
+    }
+
+    const db = getFirestore();
+    logger.info("deleteMemberAccount initiated", { uid, tenantId, role });
+
+    try {
+      if (tenantId && tenantId !== "default-tenant") {
+        const memberRef = db.doc(`tenants/${tenantId}/members/${uid}`);
+        await memberRef.delete();
+
+        const userTokensRef = db.doc(`tenants/${tenantId}/users/${uid}`);
+        await db.recursiveDelete(userTokensRef);
+      }
+
+      await db.doc(`users_metadata/${uid}`).delete();
+
+      try {
+        await db.doc(`users/${uid}`).delete();
+      } catch {
+        // Ignored if non-existent
+      }
+
+      await db.collection("audit").add({
+        action: "deleteMemberAccount",
+        uid,
+        tenantId,
+        role,
+        timestamp: new Date().toISOString(),
+      });
+
+      await getAuth().deleteUser(uid);
+
+      logger.info("deleteMemberAccount completed successfully", { uid });
+      return { success: true, message: "Account utente eliminato con successo." };
+    } catch (err: unknown) {
+      logger.error("deleteMemberAccount failed", { uid, err });
+      throw new HttpsError("internal", "Errore durante l'eliminazione dell'account collaboratore.");
+    }
+  },
+); // end deleteMemberAccount
+
+/**
+ * Callable Function: deleteTenantAndAccount
+ *
+ * Permanently deletes an entire tenant (recursive delete of workspaces, tasks, approvals,
+ * invitations, members) and the owner's Auth user.
+ * Blocks deletion if other team members still exist in the tenant.
+ *
+ * @security Verified JWT active claims required (`owner` or `superadmin`).
+ */
+export const deleteTenantAndAccount = onCall(
+  { region: "europe-west1", cors: true, invoker: "public" },
+  async (request) => {
+    const rawAuth = request.auth as { uid: string; token: Record<string, unknown> } | undefined;
+    if (!rawAuth || !rawAuth.uid) {
+      throw new HttpsError("unauthenticated", "Autenticazione richiesta.");
+    }
+    if (rawAuth.token.isActive !== true) {
+      throw new HttpsError("permission-denied", "Account non attivo.");
+    }
+
+    const uid = rawAuth.uid;
+    const role = (rawAuth.token.role as string) ?? "user";
+    const tenantId = (rawAuth.token.tenantId as string) ?? "default-tenant";
+
+    if (role !== "owner" && role !== "superadmin") {
+      throw new HttpsError(
+        "permission-denied",
+        "Solo il titolare aziendale (owner) può eliminare l'organizzazione.",
+      );
+    }
+
+    const { confirmText } = (request.data as { confirmText?: string }) ?? {};
+    if (!confirmText || typeof confirmText !== "string") {
+      throw new HttpsError("invalid-argument", "È obbligatorio inserire la stringa di conferma.");
+    }
+
+    const db = getFirestore();
+    const tenantRef = db.doc(`tenants/${tenantId}`);
+    const tenantSnap = await tenantRef.get();
+
+    const tenantData = tenantSnap.data();
+    const tenantName = (tenantData?.name as string | undefined) ?? "";
+    const trimmedConfirm = confirmText.trim();
+    const isPhraseValid =
+      trimmedConfirm === "ELIMINA DEFINITIVAMENTE" ||
+      trimmedConfirm === tenantId ||
+      (tenantName !== "" && trimmedConfirm.toLowerCase() === tenantName.toLowerCase());
+
+    if (!isPhraseValid) {
+      throw new HttpsError(
+        "invalid-argument",
+        "La stringa di conferma inserita non corrisponde al nome dell'organizzazione o alla frase di sicurezza.",
+      );
+    }
+
+    // Integrity Check: ensure no other team members exist
+    const membersSnap = await tenantRef.collection("members").get();
+    const otherMembers = membersSnap.docs.filter((docSnap) => docSnap.id !== uid);
+
+    if (otherMembers.length > 0) {
+      throw new HttpsError(
+        "failed-precondition",
+        `Impossibile eliminare l'organizzazione: sono ancora presenti ${otherMembers.length} ` +
+          "collaboratori attivi. Rimuovi prima tutti i membri dal team o trasferisci la proprietà.",
+      );
+    }
+
+    logger.warn("deleteTenantAndAccount: Initiating TOTAL recursive deletion", {
+      tenantId,
+      ownerUid: uid,
     });
 
-    return { success: true, attitude };
-  } catch (err) {
-    logger.error("generateDbsAttitude error", { workspaceId, err });
-    if (err instanceof HttpsError) throw err;
-    throw new HttpsError("internal", "Errore durante la generazione dell'atteggiamento IA.");
-  }
-}); // end generateDbsAttitude
+    try {
+      if (tenantSnap.exists) {
+        await db.recursiveDelete(tenantRef);
+      } else {
+        const workspacesQuery = await tenantRef.collection("workspaces").get();
+        for (const wsDoc of workspacesQuery.docs) {
+          await db.recursiveDelete(wsDoc.ref);
+        }
+      }
+
+      await db.doc(`users_metadata/${uid}`).delete();
+      try {
+        await db.doc(`users/${uid}`).delete();
+      } catch {
+        // Ignored if non-existent
+      }
+
+      await db.collection("audit").add({
+        action: "deleteTenantAndAccount",
+        tenantId,
+        ownerUid: uid,
+        timestamp: new Date().toISOString(),
+      });
+
+      await getAuth().deleteUser(uid);
+
+      logger.info("deleteTenantAndAccount completed successfully", { tenantId, uid });
+      return {
+        success: true,
+        message: "Organizzazione ed account eliminati definitivamente senza lasciare dati orfani.",
+      };
+    } catch (err: unknown) {
+      logger.error("deleteTenantAndAccount failed", { tenantId, uid, err });
+      throw new HttpsError(
+        "internal",
+        "Errore critico durante la distruzione ricorsiva del tenant.",
+      );
+    }
+  },
+); // end deleteTenantAndAccount
+
+/**
+ * Event Trigger: onUserAccountDeleted
+ *
+ * Intercepts user account deletion in Firebase Auth.
+ * 1. Deletes personal profile metadata from `users_metadata/{uid}`.
+ * 2. Checks if user was the sole member of a tenant or if tenant has no active members.
+ * 3. If solo tenant, performs `db.recursiveDelete()` on `tenants/{tenantId}` (GDPR Art. 17).
+ */
+export const onUserAccountDeleted = functionsV1
+  .region("europe-west1")
+  .auth.user()
+  .onDelete(async (user: functionsV1.auth.UserRecord) => {
+    const uid = user.uid;
+    logger.info("onUserAccountDeleted triggered", { uid });
+
+    const db = getFirestore();
+
+    // 1. Delete personal profile metadata doc
+    try {
+      await db.doc(`users_metadata/${uid}`).delete();
+      logger.info("users_metadata deleted", { uid });
+    } catch (err) {
+      logger.warn("Failed to delete users_metadata doc", { uid, err });
+    }
+
+    // 2. Search for member documents matching uid across tenants
+    try {
+      const membersQuery = await db.collectionGroup("members").where("uid", "==", uid).get();
+
+      for (const memberDoc of membersQuery.docs) {
+        const tenantRef = memberDoc.ref.parent.parent;
+        if (!tenantRef) continue;
+
+        const tenantId = tenantRef.id;
+
+        // Delete this member record
+        await memberDoc.ref.delete();
+
+        // Check remaining members in tenant
+        const remainingMembers = await tenantRef.collection("members").get();
+        if (remainingMembers.empty) {
+          logger.info(
+            "Solo tenant detected with 0 remaining members. Purging tenant ricorsivamente",
+            { tenantId },
+          );
+          await db.recursiveDelete(tenantRef);
+        }
+      }
+
+      // Also check fallback for default-tenant or tenant named by uid
+      const userTenantRef = db.doc(`tenants/${uid}`);
+      const userTenantSnap = await userTenantRef.get();
+      if (userTenantSnap.exists) {
+        logger.info("Purging user personal tenant ricorsivamente", { tenantId: uid });
+        await db.recursiveDelete(userTenantRef);
+      }
+    } catch (err) {
+      logger.error("Error during tenant member cleanup on user deletion", { uid, err });
+    }
+  }); // end onUserAccountDeleted
+
+/**
+ * Callable Function: purgeCompanyTenant
+ *
+ * Allows a Tenant Admin or Superadmin to permanently delete a company workspace and all its data.
+ * Requires double confirmation with `confirmTenantName`.
+ *
+ * @security Verified JWT active claims required (`admin`, `owner` or `superadmin` role).
+ */
+export const purgeCompanyTenant = onCall(
+  { region: "europe-west1", cors: true, invoker: "public" },
+  async (request) => {
+    const rawAuth = request.auth as { uid: string; token: Record<string, unknown> } | undefined;
+
+    requireRole(rawAuth, ["admin", "owner", "superadmin"]);
+
+    const { tenantId, confirmTenantName } = request.data as {
+      tenantId: string;
+      confirmTenantName: string;
+    };
+
+    if (!tenantId || !confirmTenantName || typeof confirmTenantName !== "string") {
+      throw new HttpsError("invalid-argument", "tenantId e confirmTenantName sono obbligatori.");
+    }
+
+    // Tenant boundary check (§3, §5): caller must belong to target tenant unless superadmin
+    const callerTenantId = rawAuth?.token.tenantId as string | undefined;
+    const callerRole = rawAuth?.token.role as string | undefined;
+
+    if (callerRole !== "superadmin" && callerTenantId !== tenantId) {
+      throw new HttpsError("permission-denied", "Non sei autorizzato ad eliminare questo tenant.");
+    }
+
+    const db = getFirestore();
+    const tenantRef = db.doc(`tenants/${tenantId}`);
+    const tenantSnap = await tenantRef.get();
+
+    if (!tenantSnap.exists) {
+      throw new HttpsError("not-found", "Tenant non trovato.");
+    }
+
+    logger.info("purgeCompanyTenant initiated by admin", {
+      tenantId,
+      adminUid: rawAuth?.uid,
+      confirmTenantName,
+    });
+
+    try {
+      // Perform recursive delete of tenant document and ALL subcollections (workspaces, tasks, approvals, KB)
+      await db.recursiveDelete(tenantRef);
+
+      logger.info("purgeCompanyTenant completed successfully", { tenantId });
+      return {
+        success: true,
+        message: "Organizzazione ed i relativi dati aziendali eliminati definitivamente.",
+      };
+    } catch (err) {
+      logger.error("purgeCompanyTenant failed", { tenantId, err });
+      throw new HttpsError(
+        "internal",
+        "Errore durante l'eliminazione dell'organizzazione aziendale.",
+      );
+    }
+  },
+); // end purgeCompanyTenant
+
+// ── STEP 14: EMAIL INVITATION SYSTEM ─────────────────────────────────────────
+
+import * as crypto from "crypto";
+import { onSchedule } from "firebase-functions/v2/scheduler";
+
+/**
+ * Helper: compute SHA-256 hash of a raw token string.
+ * The raw token is NEVER stored — only its hash (GDPR Art. 32 / Anti-Replay).
+ * @param {string} rawToken - The raw invitation token generated with crypto.randomBytes.
+ * @return {string} Hex-encoded SHA-256 digest used as Firestore document ID.
+ */
+function hashToken(rawToken: string): string {
+  return crypto.createHash("sha256").update(rawToken).digest("hex");
+} // end hashToken
+
+/**
+ * Helper: send invitation email via Resend SDK (server-side only — Prescrizione 1).
+ * The raw token is embedded in the link; hashing happens only server-side.
+ * @param {object} params - Email parameters (toEmail, tenantName, tenantId, rawToken, role, resendApiKey).
+ * @return {Promise<void>} Resolves when email is accepted by Resend API.
+ */
+async function sendInvitationEmail(params: {
+  toEmail: string;
+  tenantName: string;
+  tenantId: string;
+  rawToken: string;
+  role: string;
+  resendApiKey: string;
+}): Promise<void> {
+  const { Resend } = await import("resend");
+  const resend = new Resend(params.resendApiKey);
+
+  const inviteUrl = `https://opsflow-88of.web.app/#/invite?token=${params.rawToken}&tenant=${params.tenantId}`;
+
+  await resend.emails.send({
+    from: "OpsFlow <onboarding@resend.dev>",
+    to: params.toEmail,
+    subject: `Sei stato invitato a unirti a ${params.tenantName} su OpsFlow`,
+    html: [
+      "<div style=\"font-family:'Mulish',sans-serif;background:#0a2342;",
+      'color:#f9f7f2;padding:40px;border-radius:12px;max-width:580px;margin:auto">',
+      "<h1 style=\"color:#c5a065;font-family:'Playfair Display',serif;margin-bottom:8px\">",
+      "Benvenuto in OpsFlow &#x1F44B;</h1>",
+      '<p style="margin-bottom:24px">',
+      `Sei stato invitato a unirti all'organizzazione <strong>${params.tenantName}</strong>`,
+      `con il ruolo <strong>${params.role}</strong>.</p>`,
+      `<a href="${inviteUrl}"`,
+      'style="display:inline-block;background:#c5a065;color:#0a2342;',
+      'font-weight:700;padding:14px 32px;border-radius:8px;"',
+      'text-decoration:none;font-size:16px">',
+      "&#x2705; Accetta invito &amp; unisciti al team</a>",
+      '<p style="margin-top:32px;font-size:13px;color:#9aacbe">',
+      "Questo link scade in 7 giorni. ",
+      "Se non riconosci questo invito puoi ignorare questa email.<br>",
+      'Per revocare: <a href="mailto:support@opsflow.app"',
+      'style="color:#c5a065">support@opsflow.app</a></p>',
+      '<p style="margin-top:16px;font-size:11px;color:#5a7a9b">',
+      "OpsFlow SaaS Platform &mdash; GDPR Art. 14 compliant.</p>",
+      "</div>",
+    ].join(""),
+  });
+} // end sendInvitationEmail
+
+/**
+ * Callable Function: createTenantInvitation (Fase 2.1)
+ *
+ * Creates a cryptographic invitation token (SHA-256 hash as Firestore document ID)
+ * and delivers the invitation email server-side via Resend.
+ *
+ * @security JWT: admin or superadmin only. Admin restricted to own tenant.
+ * @gdpr Audit log written on every invitation issuance (GDPR Art. 30).
+ * @performance 1 Firestore write + 1 email send.
+ */
+export const createTenantInvitation = onCall(
+  {
+    region: "europe-west1",
+    cors: true,
+    invoker: "public",
+    secrets: [RESEND_API_KEY],
+  },
+  async (request) => {
+    const rawAuth = request.auth as { uid: string; token: Record<string, unknown> } | undefined;
+    requireRole(rawAuth, ["admin", "superadmin"]);
+    const caller = rawAuth as { uid: string; token: Record<string, unknown> };
+
+    const { email, role } = request.data as { email: string; role: "admin" | "user" };
+
+    // Input validation
+    if (!email || !role) {
+      throw new HttpsError("invalid-argument", "email e role sono obbligatori.");
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new HttpsError("invalid-argument", "Indirizzo email non valido.");
+    }
+    if (!["admin", "user"].includes(role)) {
+      throw new HttpsError("invalid-argument", "Ruolo non valido. Usare 'admin' o 'user'.");
+    }
+
+    // Tenant boundary check
+    const callerTenantId = caller.token.tenantId as string | undefined;
+    const callerRole = caller.token.role as string;
+    if (callerRole === "admin" && !callerTenantId) {
+      throw new HttpsError("permission-denied", "Tenant non trovato nel token JWT.");
+    }
+    let tenantId = callerTenantId || "";
+    if (callerRole === "superadmin") {
+      tenantId = (request.data.tenantId as string) || callerTenantId || "";
+    }
+
+    // Retrieve tenant name for the email
+    const db = getFirestore();
+    const tenantSnap = await db.doc(`tenants/${tenantId}`).get();
+    const tenantName = (tenantSnap.data()?.name as string | undefined) ?? tenantId;
+
+    // Prescrizione 2: Generate raw token + tokenHash (document ID = tokenHash for O(1) lookup)
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = hashToken(rawToken);
+
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // +7 days
+
+    // Write invitation doc (tokenHash = document ID)
+    await db.doc(`tenants/${tenantId}/invitations/${tokenHash}`).set({
+      tokenHash,
+      tenantId,
+      email,
+      role,
+      status: "pending",
+      invitedBy: caller.uid,
+      createdAt: now.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+    });
+
+    // Prescrizione 1: Send email server-side ONLY
+    try {
+      await sendInvitationEmail({
+        toEmail: email,
+        tenantName,
+        tenantId,
+        rawToken,
+        role,
+        resendApiKey: RESEND_API_KEY.value(),
+      });
+    } catch (emailErr) {
+      // Rollback invitation doc if email fails — atomic consistency
+      await db.doc(`tenants/${tenantId}/invitations/${tokenHash}`).delete();
+      logger.error("createTenantInvitation: email send failed — invitation rolled back", {
+        tenantId,
+        email,
+        emailErr,
+      });
+      throw new HttpsError("internal", "Errore nell'invio dell'email di invito. Riprova.");
+    }
+
+    // GDPR Art. 30 audit log
+    await db.collection("audit").add({
+      action: "createTenantInvitation",
+      tenantId,
+      invitedEmail: email, // email allowed in audit — GDPR Art. 30 (traceability)
+      role,
+      invitedBy: caller.uid,
+      timestamp: now.toISOString(),
+    });
+
+    logger.info("createTenantInvitation: invitation issued", { tenantId, email, role });
+    return { success: true, message: `Invito inviato a ${email} con ruolo ${role}.` };
+  },
+); // end createTenantInvitation
+
+/**
+ * Callable Function: acceptTenantInvitation (Fase 2.2)
+ *
+ * Validates the raw invitation token (O(1) getDoc by tokenHash), verifies expiry and status,
+ * then atomically via runTransaction:
+ *  - Sets JWT Custom Claims { tenantId, role, isActive: true }
+ *  - Writes member doc in tenants/{tenantId}/members/{uid}
+ *  - Marks invitation as accepted
+ *
+ * @security Prescrizione 3 — caller must invoke getIdToken(true) after this returns.
+ * @performance 1 O(1) getDoc + runTransaction (1 read + 2 writes).
+ */
+export const acceptTenantInvitation = onCall(
+  { region: "europe-west1", cors: true, invoker: "public" },
+  async (request) => {
+    const rawAuth = request.auth as { uid: string; token: Record<string, unknown> } | undefined;
+    if (!rawAuth) {
+      throw new HttpsError("unauthenticated", "Devi essere autenticato per accettare un invito.");
+    }
+
+    const { token, tenantId } = request.data as { token: string; tenantId: string };
+    if (!token || !tenantId) {
+      throw new HttpsError("invalid-argument", "token e tenantId sono obbligatori.");
+    }
+
+    // Prescrizione 2: O(1) direct lookup by tokenHash
+    const tokenHash = hashToken(token);
+    const db = getFirestore();
+    const invitationRef = db.doc(`tenants/${tenantId}/invitations/${tokenHash}`);
+
+    // Prescrizione 3 (Anti-Replay): use runTransaction to prevent concurrent redemption
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(invitationRef);
+
+      if (!snap.exists) {
+        throw new HttpsError("not-found", "Invito non valido o già riscattato.");
+      }
+
+      const inv = snap.data() as {
+        status: string;
+        expiresAt: string;
+        email: string;
+        role: string;
+        tenantId: string;
+      };
+
+      // Status check
+      if (inv.status !== "pending") {
+        throw new HttpsError(
+          "failed-precondition",
+          `Invito non più valido (stato: ${inv.status}).`,
+        );
+      }
+
+      // Expiry check
+      if (new Date(inv.expiresAt) < new Date()) {
+        tx.update(invitationRef, { status: "expired" });
+        throw new HttpsError("deadline-exceeded", "Il link di invito è scaduto.");
+      }
+
+      // Anti-Privilege Escalation: role is read from DB — not from client payload
+      const assignedRole = inv.role as "admin" | "user";
+
+      // Set JWT Custom Claims via Admin SDK (bypasses Firestore rules — server-side only)
+      await getAuth().setCustomUserClaims(rawAuth.uid, {
+        tenantId: inv.tenantId,
+        role: assignedRole,
+        isActive: true,
+      });
+
+      // Write member document
+      const memberRef = db.doc(`tenants/${tenantId}/members/${rawAuth.uid}`);
+      tx.set(memberRef, {
+        uid: rawAuth.uid,
+        email: rawAuth.token.email ?? inv.email,
+        role: assignedRole,
+        tenantId: inv.tenantId,
+        joinedAt: new Date().toISOString(),
+        displayName: rawAuth.token.name ?? null,
+        photoURL: rawAuth.token.picture ?? null,
+        isActive: true,
+      });
+
+      // Mark invitation as accepted
+      tx.update(invitationRef, {
+        status: "accepted",
+        acceptedAt: new Date().toISOString(),
+        acceptedByUid: rawAuth.uid,
+      });
+    });
+
+    // GDPR Art. 30 audit log
+    await db.collection("audit").add({
+      action: "acceptTenantInvitation",
+      tenantId,
+      acceptedByUid: rawAuth.uid,
+      timestamp: new Date().toISOString(),
+    });
+
+    logger.info("acceptTenantInvitation: membership granted", { tenantId, uid: rawAuth.uid });
+
+    // IMPORTANT: After this response, the FRONTEND must call getIdToken(true) + refreshClaims()
+    // to load the new JWT Custom Claims before navigating (Prescrizione 3).
+    return {
+      success: true,
+      tenantId,
+      message: "Accesso all'organizzazione concesso con successo. Benvenuto!",
+    };
+  },
+); // end acceptTenantInvitation
+
+/**
+ * Callable Function: revokeTenantInvitation (Fase 2.3)
+ *
+ * Allows an Admin to revoke a pending invitation before it is redeemed.
+ * Updates status to 'revoked' — invitation can no longer be accepted.
+ *
+ * @security Admin of the same tenant only.
+ */
+export const revokeTenantInvitation = onCall(
+  { region: "europe-west1", cors: true, invoker: "public" },
+  async (request) => {
+    const rawAuth = request.auth as { uid: string; token: Record<string, unknown> } | undefined;
+    requireRole(rawAuth, ["admin", "superadmin"]);
+    const caller = rawAuth as { uid: string; token: Record<string, unknown> };
+
+    const { tokenHash, tenantId } = request.data as { tokenHash: string; tenantId: string };
+    if (!tokenHash || !tenantId) {
+      throw new HttpsError("invalid-argument", "tokenHash e tenantId sono obbligatori.");
+    }
+
+    // Tenant boundary check
+    const callerRole = caller.token.role as string;
+    const callerTenantId = caller.token.tenantId as string | undefined;
+    if (callerRole === "admin" && callerTenantId !== tenantId) {
+      throw new HttpsError(
+        "permission-denied",
+        "Un admin può revocare inviti solo per il proprio tenant.",
+      );
+    }
+
+    const db = getFirestore();
+    const invRef = db.doc(`tenants/${tenantId}/invitations/${tokenHash}`);
+    const snap = await invRef.get();
+
+    if (!snap.exists) {
+      throw new HttpsError("not-found", "Invito non trovato.");
+    }
+    if (snap.data()?.status !== "pending") {
+      throw new HttpsError(
+        "failed-precondition",
+        "L'invito non è in stato 'pending' e non può essere revocato.",
+      );
+    }
+
+    await invRef.update({
+      status: "revoked",
+      revokedBy: caller.uid,
+      revokedAt: new Date().toISOString(),
+    });
+
+    // GDPR Art. 30 audit log
+    await db.collection("audit").add({
+      action: "revokeTenantInvitation",
+      tenantId,
+      tokenHash,
+      revokedBy: caller.uid,
+      timestamp: new Date().toISOString(),
+    });
+
+    logger.info("revokeTenantInvitation: invitation revoked", { tenantId, tokenHash });
+    return { success: true, message: "Invito revocato con successo." };
+  },
+); // end revokeTenantInvitation
+
+/**
+ * Scheduled Function: cleanupExpiredInvitations (Fase 2.4)
+ *
+ * Runs every 24 hours via Cloud Scheduler.
+ * Deletes all invitation documents in 'pending' status with expiresAt < now (GDPR Art. 17 TTL).
+ *
+ * @performance Bounded: max 7-day-old documents × active tenants. Paginated in batches of 100.
+ */
+export const cleanupExpiredInvitations = onSchedule(
+  {
+    schedule: "every 24 hours",
+    region: "europe-west1",
+    timeoutSeconds: 120,
+    memory: "256MiB",
+  },
+  async () => {
+    const db = getFirestore();
+    const now = new Date().toISOString();
+
+    const expiredQuery = await db
+      .collectionGroup("invitations")
+      .where("status", "==", "pending")
+      .where("expiresAt", "<", now)
+      .limit(100)
+      .get();
+
+    if (expiredQuery.empty) {
+      logger.info("cleanupExpiredInvitations: no expired invitations found.");
+      return;
+    }
+
+    const batch = db.batch();
+    expiredQuery.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+    });
+    await batch.commit();
+
+    logger.info("cleanupExpiredInvitations: deleted expired invitations", {
+      count: expiredQuery.docs.length,
+    });
+  },
+); // end cleanupExpiredInvitations

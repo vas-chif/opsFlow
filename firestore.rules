@@ -15,13 +15,18 @@ service cloud.firestore {
 
     function isSuperAdmin() { return request.auth.token.role == 'superadmin'; }
 
+    function isOwner() {
+      return request.auth.token.role == 'owner' || isSuperAdmin();
+    }
+
     function isAdmin() {
       return request.auth.token.role == 'admin'
-          || request.auth.token.role == 'superadmin';
+          || isOwner();
     }
 
     function isUser() {
       return request.auth.token.role == 'user'
+          || request.auth.token.role == 'member'
           || request.auth.token.role == 'operator'  // legacy
           || request.auth.token.role == 'manager'   // legacy
           || request.auth.token.role == 'viewer';   // legacy
@@ -46,11 +51,12 @@ service cloud.firestore {
 
     // ── Tenant-isolated collections ────────────────────────────────────────
     match /tenants/{tenantId} {
-      // Tenant root doc: only admin/superadmin can write; any member can read
+      // Tenant root doc: only admin/owner can write; any member can read
+      // Direct deletion blocked client-side: MUST go through deleteTenantAndAccount Cloud Function
       allow read: if isActiveAndVerified() && belongsToTenant(tenantId);
-      allow create: if isActiveAndVerified() && isSuperAdmin();
-      allow update: if isActiveAndVerified() && isSuperAdmin();
-      allow delete: if isActiveAndVerified() && isSuperAdmin();
+      allow create: if isActiveAndVerified() && isOwner();
+      allow update: if isActiveAndVerified() && isOwner();
+      allow delete: if false;
     }
 
     match /tenants/{tenantId}/workspaces/{workspaceId} {
@@ -89,6 +95,29 @@ service cloud.firestore {
       // Members list: readable by tenant members; admin manages
       allow read: if isActiveAndVerified() && belongsToTenant(tenantId);
       allow write: if isActiveAndVerified() && isAdmin() && belongsToTenant(tenantId);
+    }
+
+    match /tenants/{tenantId}/invitations/{tokenHash} {
+      // ── Invitations (Step 14 — Email Magic Invitation) ──────────────────
+      // READ: Admin can list/view pending invitations for their tenant dashboard.
+      allow read: if isActiveAndVerified() && isAdmin() && belongsToTenant(tenantId);
+
+      // CREATE: Admin can issue new invitations. invitedBy must match the caller UID.
+      allow create: if isActiveAndVerified() && isAdmin() && belongsToTenant(tenantId)
+        && request.resource.data.invitedBy == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.tenantId == tenantId;
+
+      // UPDATE: Admin can revoke (set status = 'revoked') — no other field changes.
+      allow update: if isActiveAndVerified() && isAdmin() && belongsToTenant(tenantId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status == 'revoked';
+
+      // DELETE: Admin can delete an invitation document (purge).
+      allow delete: if isActiveAndVerified() && isAdmin() && belongsToTenant(tenantId);
+
+      // ⛔ ACCEPTANCE IS BLOCKED CLIENT-SIDE — must go through Cloud Function (Admin SDK).
+      // The Cloud Function uses runTransaction + setCustomUserClaims — not writable by client.
     }
 
     // ── User profiles (Privacy First) ─────────────────────────────────────

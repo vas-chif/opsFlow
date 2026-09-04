@@ -329,3 +329,91 @@ export interface TaskKeyPoint {
   color: string;
   timestamp: string;
 } /*end TaskKeyPoint*/
+
+// ── Team Onboarding & Multi-Tenant Invitations (Step 14) ─────────────────────
+
+/**
+ * Roles available within an OpsFlow tenant.
+ * Sealed here as single source of truth for both Frontend and Cloud Functions.
+ */
+export type TenantRole = "owner" | "superadmin" | "admin" | "member" | "user";
+
+/** Lifecycle status of a tenant invitation document. */
+export type TenantInvitationStatus = "pending" | "accepted" | "expired" | "revoked";
+
+/**
+ * Firestore document for a tenant email invitation.
+ * Path: tenants/{tenantId}/invitations/{tokenHash}
+ *
+ * @notes
+ * - Document ID IS the tokenHash (SHA-256 of the raw token) for direct O(1) lookup.
+ * - The raw token is NEVER stored — only its SHA-256 hash (GDPR Art. 32 — Anti-Replay).
+ * - Riscatto (acceptance) must go through Cloud Function with Admin SDK only (no client writes).
+ * - TTL: inviti pendenti eliminati automaticamente dopo 7 giorni (GDPR Art. 17).
+ *
+ * @performance
+ * - Create: 1 Firestore write
+ * - Accept: 1 O(1) getDoc + 1 write (runTransaction)
+ */
+export interface TenantInvitation {
+  /** SHA-256 hash of the raw token — also serves as Document ID. */
+  tokenHash: string;
+  tenantId: string;
+  /** Email address of the invited user. */
+  email: string;
+  /** Role assigned upon acceptance — sealed server-side (Anti-Privilege Escalation). */
+  role: TenantRole;
+  status: TenantInvitationStatus;
+  /** UID of the admin who sent the invitation. */
+  invitedBy: string;
+  createdAt: FirestoreTimestamp;
+  /** Absolute expiry — 7 days from createdAt. */
+  expiresAt: FirestoreTimestamp;
+  /** Set by Cloud Function acceptTenantInvitation upon successful redemption. */
+  acceptedAt?: FirestoreTimestamp;
+  /** UID of the user who redeemed the invitation. */
+  acceptedByUid?: string;
+} /*end TenantInvitation*/
+
+/**
+ * Payload for the createTenantInvitation callable function.
+ * Only email + role: the UID is no longer required from the Admin (Step 14 goal).
+ */
+export interface CreateInvitationPayload {
+  email: string;
+  role: TenantRole;
+} /*end CreateInvitationPayload*/
+
+/**
+ * Payload for the acceptTenantInvitation callable function.
+ * The raw token (not the hash) is passed; hashing happens server-side.
+ */
+export interface AcceptInvitationPayload {
+  token: string;
+  tenantId: string;
+} /*end AcceptInvitationPayload*/
+
+/**
+ * Payload for the revokeTenantInvitation callable function.
+ */
+export interface RevokeInvitationPayload {
+  tokenHash: string;
+} /*end RevokeInvitationPayload*/
+
+/**
+ * Member document stored in tenants/{tenantId}/members/{uid}.
+ * Written atomically by acceptTenantInvitation Cloud Function.
+ */
+export interface TenantMember {
+  uid: string;
+  email: string;
+  role: TenantRole;
+  tenantId: string;
+  joinedAt: FirestoreTimestamp;
+  /** Display name, populated from Firebase Auth profile. */
+  displayName?: string;
+  /** photoURL from Firebase Auth profile. */
+  photoURL?: string;
+  /** Whether the member account is currently active. */
+  isActive: boolean;
+} /*end TenantMember*/

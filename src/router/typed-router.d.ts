@@ -37,6 +37,13 @@ declare module "vue-router/auto-routes" {
       { path: ParamValue<false> },
       never
     >;
+    "/invite": RouteRecordInfo<
+      "/invite",
+      "/invite",
+      Record<never, never>,
+      Record<never, never>,
+      never
+    >;
     "/login": RouteRecordInfo<
       "/login",
       "/login",
@@ -73,6 +80,11 @@ declare module "vue-router/auto-routes" {
       routes: "/[...path]";
       views: never;
       pathParamNames: "path";
+    };
+    "src/pages/invite.vue": {
+      routes: "/invite";
+      views: never;
+      pathParamNames: never;
     };
     "src/pages/login.vue": {
       routes: "/login";
