@@ -89,16 +89,17 @@ const isOpen = computed({
   set: (v) => emit("update:modelValue", v),
 }); /*end isOpen*/
 
+const categoryLabels: Record<string, string> = {
+  general: "Generale",
+  marketing: "Marketing",
+  research: "Ricerca",
+  admin: "Amministrazione",
+  dev: "Sviluppo",
+  clinical: "🏥 Sanitario",
+};
+
 const categoryLabel = computed(() => {
-  const map: Record<string, string> = {
-    general: "Generale",
-    marketing: "Marketing",
-    research: "Ricerca",
-    admin: "Amministrazione",
-    dev: "Sviluppo",
-    clinical: "Sanitario / Clinico",
-  };
-  return map[editableCategory.value] ?? editableCategory.value;
+  return categoryLabels[editableCategory.value] ?? editableCategory.value;
 }); /*end categoryLabel*/
 
 const priorityColor = computed(() => {
@@ -108,6 +109,10 @@ const priorityColor = computed(() => {
 const priorityLabel = computed(() => {
   return { high: "Alta", medium: "Media", low: "Bassa" }[editablePriority.value] ?? "";
 }); /*end priorityLabel*/
+
+function priorityChipColor(p: "low" | "medium" | "high"): string {
+  return { high: "negative", medium: "warning", low: "positive" }[p];
+} /*end priorityChipColor*/
 
 // ── Methods ───────────────────────────────────────────────────────────────────
 
@@ -198,7 +203,7 @@ async function handleCreateTask(): Promise<void> {
     });
 
     emit("taskCreated");
-    isOpen.value = false;
+    emit("update:modelValue", false);
     resetModal();
   } catch {
     $q.notify({ type: "negative", message: "Errore durante la creazione del task." });
@@ -208,437 +213,246 @@ async function handleCreateTask(): Promise<void> {
 } /*end handleCreateTask*/
 
 function handleClose(): void {
-  isOpen.value = false;
+  emit("update:modelValue", false);
   resetModal();
 } /*end handleClose*/
 </script>
 
 <template>
   <q-dialog
-    v-model="isOpen"
+    :model-value="modelValue"
     persistent
-    maximized
-    transition-show="slide-up"
-    transition-hide="slide-down"
+    maximized-mobile
+    transition-show="scale"
+    transition-hide="scale"
+    @update:model-value="emit('update:modelValue', $event)"
   >
-    <q-card class="ai-architect-modal">
-      <!-- ── Header ───────────────────────────────────────────────────── -->
-      <div class="architect-header q-pa-lg">
-        <div class="row items-center justify-between">
-          <div class="row items-center gap-md">
-            <div class="architect-icon">
-              <q-icon name="auto_awesome" size="28px" color="gold" />
-            </div>
-            <div>
-              <div class="architect-title">AI Task Architect</div>
-              <div class="architect-subtitle">
-                Trasforma un appunto in un task operativo strutturato
-              </div>
+    <q-card class="dbs-modal-card" style="width: 720px; max-width: 95vw">
+      <!-- ── Header Royal Navy ─────────────────────────────────────────── -->
+      <q-card-section class="bg-navy text-white row items-center justify-between">
+        <div class="row items-center q-gutter-sm">
+          <q-icon name="auto_awesome" color="gold" size="28px" />
+          <div>
+            <div class="text-h6 text-weight-bold">✨ AI Task Architect</div>
+            <div class="text-caption text-gold-light">
+              Scomposizione Intelligente & Scheda Operativa (Gemini 3.6 Flash)
             </div>
           </div>
-          <q-btn flat round icon="close" color="white" size="md" @click="handleClose" />
         </div>
-      </div>
+        <q-btn flat round dense icon="close" color="white" @click="handleClose" />
+      </q-card-section>
 
-      <q-separator color="gold" style="opacity: 0.3" />
+      <!-- ── Card Body Chiaro ─────────────────────────────────────────── -->
+      <q-card-section class="q-pa-md">
+        <div class="text-body2 text-grey-8 q-mb-md">
+          Descrivi con parole tue il task da svolgere (anche un appunto veloce o informale). Gemini
+          estrarrà automaticamente il <strong>Titolo</strong>, la <strong>Categoria</strong>, la
+          <strong>Priorità</strong> e la <strong>Checklist di sotto-task</strong> operative in base
+          alla Costituzione del tuo Workspace.
+        </div>
 
-      <q-card-section class="architect-body scroll">
-        <!-- ── FASE 1: Input appunto grezzo ───────────────────────────── -->
-        <div v-if="!refinedDraft" class="input-phase">
-          <!-- Preset Templates -->
-          <div class="section-label q-mb-md">Modelli Rapidi</div>
-          <div class="row q-gutter-sm q-mb-lg">
+        <!-- Modelli Rapidi -->
+        <div class="q-mb-md">
+          <div class="text-caption text-weight-bold text-grey-7 q-mb-xs">
+            Oppure seleziona un modello veloce:
+          </div>
+          <div class="row q-gutter-xs">
             <q-chip
               v-for="tpl in presetTemplates"
               :key="tpl.label"
               clickable
               outline
-              color="gold"
-              text-color="gold"
-              class="preset-chip"
+              color="primary"
+              size="sm"
               @click="selectTemplate(tpl.text)"
             >
               {{ tpl.label }}
             </q-chip>
           </div>
-
-          <!-- Raw Draft Input -->
-          <div class="section-label q-mb-sm">Descrivi il tuo task (anche informalmente)</div>
-          <q-input
-            v-model="rawDraft"
-            outlined
-            autogrow
-            type="textarea"
-            placeholder="es. medicazione paziente a Forte dei Marmi martedì mattina, verificare bende sterili e mandare fattura…"
-            :rows="4"
-            class="draft-input q-mb-md"
-            dark
-            color="gold"
-            label-color="gold"
-            :hint="`${rawDraft.length} caratteri · min 5 richiesti`"
-          />
-
-          <!-- CTA Refine Button -->
-          <q-btn
-            class="refine-btn full-width q-py-sm"
-            :loading="taskStore.isRefiningTaskDraft"
-            :disable="rawDraft.trim().length < 5"
-            icon="auto_awesome"
-            label="✨ Genera Struttura Task con IA"
-            no-caps
-            size="lg"
-            @click="handleRefine"
-          >
-            <template #loading>
-              <q-spinner-dots color="white" size="24px" />
-              <span class="q-ml-sm">Gemini sta analizzando…</span>
-            </template>
-          </q-btn>
         </div>
 
-        <!-- ── FASE 2: Anteprima Interattiva ──────────────────────────── -->
-        <div v-else class="preview-phase">
-          <!-- Back button -->
-          <q-btn
-            flat
-            icon="arrow_back"
-            label="Modifica appunto"
-            color="gold"
-            no-caps
-            class="q-mb-lg"
-            @click="refinedDraft = null"
-          />
+        <!-- Input Appunto -->
+        <q-input
+          v-model="rawDraft"
+          type="textarea"
+          rows="3"
+          outlined
+          dense
+          placeholder="Es: 'medicazione paziente a Forte dei Marmi martedì mattina, verificare bende sterili e mandare fattura...'"
+          class="q-mb-md"
+        />
 
-          <!-- Preview Card -->
-          <div class="preview-card q-pa-lg q-mb-lg">
-            <!-- Category + Priority + Time -->
-            <div class="row items-center q-gutter-sm q-mb-md">
-              <q-chip
-                :label="categoryLabel"
-                color="primary"
-                text-color="white"
-                icon="category"
-                dense
-              />
-              <q-chip
-                :label="priorityLabel"
-                :color="priorityColor"
-                text-color="white"
-                icon="flag"
-                dense
-              />
-              <q-chip
-                :label="`⏱ ${refinedDraft.estimatedMinutes} min`"
-                color="grey-8"
-                text-color="white"
-                dense
-              />
+        <div class="row justify-end q-mb-md">
+          <q-btn
+            color="primary"
+            unelevated
+            rounded
+            icon="auto_awesome"
+            label="GENERA STRUTTURA TASK CON IA"
+            :loading="taskStore.isRefiningTaskDraft"
+            :disable="rawDraft.trim().length < 5"
+            @click="handleRefine"
+          />
+        </div>
+
+        <!-- FASE 2: Anteprima Scheda Task Generata -->
+        <template v-if="refinedDraft">
+          <q-separator class="q-my-md" />
+          <div class="text-subtitle1 text-weight-bold text-navy q-mb-sm row items-center">
+            <q-icon name="preview" class="q-mr-xs" color="secondary" />
+            Anteprima Scheda Task Generata
+          </div>
+
+          <!-- Categoria & Priorità -->
+          <div class="row q-col-gutter-md q-mb-md">
+            <div class="col-12 col-md-6">
+              <q-card flat bordered class="q-pa-sm bg-grey-1">
+                <div class="text-caption text-grey-6 text-uppercase text-weight-bold">
+                  Categoria Suggerita
+                </div>
+                <div class="row q-gutter-xs q-mt-xs">
+                  <q-chip
+                    v-for="cat in [
+                      'general',
+                      'admin',
+                      'clinical',
+                      'marketing',
+                      'research',
+                      'dev',
+                    ] as const"
+                    :key="cat"
+                    clickable
+                    :outline="editableCategory !== cat"
+                    :color="editableCategory === cat ? 'primary' : 'grey-7'"
+                    :text-color="editableCategory === cat ? 'white' : 'dark'"
+                    size="sm"
+                    @click="editableCategory = cat"
+                  >
+                    {{ categoryLabels[cat] }}
+                  </q-chip>
+                </div>
+              </q-card>
             </div>
 
-            <!-- Editable Title -->
-            <div class="section-label q-mb-xs">Titolo</div>
+            <div class="col-12 col-md-6">
+              <q-card flat bordered class="q-pa-sm bg-grey-1">
+                <div class="text-caption text-grey-6 text-uppercase text-weight-bold">
+                  Priorità & Stima Durata
+                </div>
+                <div class="row items-center justify-between q-mt-xs">
+                  <div class="row q-gutter-xs">
+                    <q-chip
+                      v-for="p in ['low', 'medium', 'high'] as const"
+                      :key="p"
+                      clickable
+                      :outline="editablePriority !== p"
+                      :color="editablePriority === p ? priorityChipColor(p) : 'grey-7'"
+                      :text-color="editablePriority === p ? 'white' : 'dark'"
+                      size="sm"
+                      @click="editablePriority = p"
+                    >
+                      {{ { low: "Bassa", medium: "Media", high: "Alta" }[p] }}
+                    </q-chip>
+                  </div>
+                  <q-badge color="grey-8" text-color="white" class="q-pa-xs">
+                    ⏱ {{ refinedDraft.estimatedMinutes }} min
+                  </q-badge>
+                </div>
+              </q-card>
+            </div>
+          </div>
+
+          <!-- Titolo & Descrizione -->
+          <div class="q-mb-md">
+            <div class="text-caption text-grey-7 text-weight-bold q-mb-xs">Titolo Task:</div>
             <q-input
               v-model="editableTitle"
               outlined
               dense
-              dark
-              color="gold"
-              class="q-mb-md"
-              :rules="[(v) => !!v.trim() || 'Titolo obbligatorio']"
+              class="q-mb-sm bg-white"
+              :rules="[(v) => !!v.trim() || 'Il titolo è obbligatorio']"
             />
-
-            <!-- Editable Description -->
-            <div class="section-label q-mb-xs">Descrizione</div>
+            <div class="text-caption text-grey-7 text-weight-bold q-mb-xs">
+              Descrizione Operativa:
+            </div>
             <q-input
               v-model="editableDescription"
-              outlined
-              autogrow
-              dark
-              color="gold"
               type="textarea"
-              :rows="3"
-              class="q-mb-lg"
+              rows="2"
+              outlined
+              dense
+              class="bg-white"
             />
-
-            <!-- Priority selector -->
-            <div class="section-label q-mb-xs">Priorità</div>
-            <div class="row q-gutter-sm q-mb-lg">
-              <q-chip
-                v-for="p in ['low', 'medium', 'high'] as const"
-                :key="p"
-                clickable
-                :selected="editablePriority === p"
-                :color="editablePriority === p ? priorityColor : 'grey-8'"
-                text-color="white"
-                class="priority-chip"
-                @click="editablePriority = p"
-              >
-                {{ { low: "Bassa", medium: "Media", high: "Alta" }[p] }}
-              </q-chip>
-            </div>
-
-            <!-- Category selector -->
-            <div class="section-label q-mb-xs">Categoria</div>
-            <div class="row q-gutter-sm q-mb-lg flex-wrap">
-              <q-chip
-                v-for="cat in [
-                  'general',
-                  'admin',
-                  'clinical',
-                  'marketing',
-                  'research',
-                  'dev',
-                ] as const"
-                :key="cat"
-                clickable
-                :selected="editableCategory === cat"
-                :color="editableCategory === cat ? 'primary' : 'grey-8'"
-                text-color="white"
-                class="category-chip"
-                @click="editableCategory = cat"
-              >
-                {{
-                  {
-                    general: "Generale",
-                    admin: "Admin",
-                    clinical: "🏥 Sanitario",
-                    marketing: "Marketing",
-                    research: "Ricerca",
-                    dev: "Dev",
-                  }[cat]
-                }}
-              </q-chip>
-            </div>
-
-            <!-- Subtasks Checklist -->
-            <div class="section-label q-mb-md">Sotto-Task (deseleziona per escludere)</div>
-            <div class="subtasks-list">
-              <div
-                v-for="st in editableSubtasks"
-                :key="st.order"
-                class="subtask-item q-pa-md q-mb-sm"
-                :class="{ 'subtask-disabled': !st.selected }"
-              >
-                <div class="row items-start gap-md">
-                  <q-checkbox v-model="st.selected" color="gold" />
-                  <div class="col">
-                    <div class="subtask-title">{{ st.order }}. {{ st.title }}</div>
-                    <div class="subtask-desc">{{ st.description }}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
 
-          <!-- Confirm CTA -->
-          <q-btn
-            class="confirm-btn full-width q-py-sm"
-            :loading="isSaving"
-            :disable="!editableTitle.trim()"
-            icon="check_circle"
-            label="Crea Task nel Workspace"
-            no-caps
-            size="lg"
-            @click="handleCreateTask"
-          >
-            <template #loading>
-              <q-spinner-oval color="white" size="24px" />
-              <span class="q-ml-sm">Salvataggio in corso…</span>
-            </template>
-          </q-btn>
-        </div>
+          <!-- Checklist Sotto-task -->
+          <div class="q-mb-md">
+            <div class="text-caption text-grey-7 text-weight-bold q-mb-xs">
+              📋 Sotto-task Operative Generate (seleziona / deseleziona):
+            </div>
+            <q-list bordered dense separator class="rounded-borders bg-grey-1">
+              <q-item
+                v-for="st in editableSubtasks"
+                :key="st.order"
+                tag="label"
+                v-ripple
+                class="q-py-xs"
+                :class="{ 'text-strike text-grey-6': !st.selected }"
+              >
+                <q-item-section side top>
+                  <q-checkbox v-model="st.selected" color="primary" dense />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label class="text-weight-bold text-navy text-body2">
+                    {{ st.order }}. {{ st.title }}
+                  </q-item-label>
+                  <q-item-label caption class="text-grey-7">
+                    {{ st.description }}
+                  </q-item-label>
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </div>
+        </template>
       </q-card-section>
+
+      <!-- ── Footer Azioni ─────────────────────────────────────────────── -->
+      <q-card-actions align="right" class="bg-grey-2 q-pa-md">
+        <q-btn flat label="Annulla" color="grey-8" @click="handleClose" />
+        <q-btn
+          v-if="refinedDraft"
+          flat
+          label="Modifica Appunto"
+          color="primary"
+          @click="refinedDraft = null"
+        />
+        <q-btn
+          v-if="refinedDraft"
+          color="positive"
+          unelevated
+          rounded
+          icon="rocket_launch"
+          label="Crea Task nel Workspace"
+          :loading="isSaving"
+          :disable="!editableTitle.trim()"
+          @click="handleCreateTask"
+        />
+      </q-card-actions>
     </q-card>
   </q-dialog>
 </template>
 
 <style scoped lang="scss">
-// ── Design System Elite: Royal Navy + Gold + Off-White ────────────────────────
-$navy: #0a2342;
-$gold: #c5a065;
-$off-white: #f9f7f2;
-
-.ai-architect-modal {
-  background: linear-gradient(160deg, #0d2b4e 0%, $navy 50%, #071830 100%);
-  color: $off-white;
-  display: flex;
-  flex-direction: column;
-  height: 100dvh;
+.bg-navy {
+  background-color: #0a2342;
 }
-
-.architect-header {
-  background: linear-gradient(90deg, rgba($gold, 0.12) 0%, transparent 100%);
-  border-bottom: 1px solid rgba($gold, 0.2);
+.text-navy {
+  color: #0a2342;
 }
-
-.architect-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: rgba($gold, 0.15);
-  border: 1px solid rgba($gold, 0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.text-gold {
+  color: #c5a065;
 }
-
-.architect-title {
-  font-family: "Playfair Display", Georgia, serif;
-  font-size: 1.4rem;
-  font-weight: 700;
-  color: $off-white;
-  letter-spacing: 0.02em;
-}
-
-.architect-subtitle {
-  font-family: "Mulish", sans-serif;
-  font-size: 0.82rem;
-  color: rgba($gold, 0.8);
-  margin-top: 2px;
-}
-
-.architect-body {
-  flex: 1;
-  padding: 32px;
-  max-width: 720px;
-  margin: 0 auto;
-  width: 100%;
-}
-
-.section-label {
-  font-family: "Mulish", sans-serif;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: rgba($gold, 0.7);
-}
-
-.preset-chip {
-  border-color: rgba($gold, 0.4) !important;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: rgba($gold, 0.12) !important;
-    transform: translateY(-1px);
-  }
-}
-
-.draft-input {
-  :deep(.q-field__control) {
-    background: rgba(255, 255, 255, 0.04);
-    border-color: rgba($gold, 0.3);
-    border-radius: 12px;
-    font-family: "Mulish", sans-serif;
-    font-size: 0.95rem;
-    color: $off-white;
-    transition: border-color 0.2s;
-
-    &:hover {
-      border-color: rgba($gold, 0.5);
-    }
-  }
-
-  :deep(.q-field__hint) {
-    color: rgba($off-white, 0.4);
-    font-size: 0.75rem;
-  }
-}
-
-.refine-btn {
-  background: linear-gradient(135deg, $gold 0%, darken($gold, 15%) 100%);
-  color: $navy;
-  font-family: "Mulish", sans-serif;
-  font-weight: 700;
-  border-radius: 12px;
-  letter-spacing: 0.03em;
-  box-shadow: 0 4px 20px rgba($gold, 0.3);
-  transition: all 0.2s ease;
-
-  &:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 30px rgba($gold, 0.4);
-  }
-
-  &:disabled {
-    opacity: 0.4;
-  }
-}
-
-.preview-card {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba($gold, 0.2);
-  border-radius: 16px;
-  backdrop-filter: blur(12px);
-}
-
-.priority-chip,
-.category-chip {
-  cursor: pointer;
-  transition: all 0.15s ease;
-  font-family: "Mulish", sans-serif;
-  font-size: 0.8rem;
-
-  &:hover {
-    transform: translateY(-1px);
-  }
-}
-
-.subtasks-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.subtask-item {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba($gold, 0.15);
-  border-radius: 10px;
-  transition: all 0.2s ease;
-
-  &:hover {
-    border-color: rgba($gold, 0.3);
-    background: rgba($gold, 0.06);
-  }
-
-  &.subtask-disabled {
-    opacity: 0.4;
-    text-decoration: line-through;
-  }
-}
-
-.subtask-title {
-  font-family: "Mulish", sans-serif;
-  font-weight: 700;
-  font-size: 0.9rem;
-  color: $off-white;
-  margin-bottom: 2px;
-}
-
-.subtask-desc {
-  font-family: "Mulish", sans-serif;
-  font-size: 0.8rem;
-  color: rgba($off-white, 0.6);
-  line-height: 1.4;
-}
-
-.confirm-btn {
-  background: linear-gradient(135deg, #1a6b3c 0%, #0d4a28 100%);
-  color: #fff;
-  font-family: "Mulish", sans-serif;
-  font-weight: 700;
-  border-radius: 12px;
-  letter-spacing: 0.03em;
-  box-shadow: 0 4px 20px rgba(26, 107, 60, 0.4);
-  transition: all 0.2s ease;
-
-  &:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 30px rgba(26, 107, 60, 0.5);
-  }
-}
-
-.gap-md {
-  gap: 12px;
+.text-gold-light {
+  color: #e5c898;
 }
 </style>
