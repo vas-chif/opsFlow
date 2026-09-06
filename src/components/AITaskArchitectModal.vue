@@ -66,20 +66,20 @@ const editableSubtasks = ref<
 // ── Preset Templates ─────────────────────────────────────────────────────────
 const presetTemplates = [
   {
-    label: "🏥 Visita Domiciliare",
-    text: "Visita paziente a domicilio, valutazione parametri vitali, medicazione e aggiornamento diario clinico.",
+    label: "🏥 Home Visit",
+    text: "Patient home visit, vital signs assessment, wound dressing, and clinical diary update.",
   },
   {
-    label: "📋 Follow-up Paziente",
-    text: "Chiamata di follow-up paziente post-dimissione, verifica aderenza terapia, eventuale richiesta visita.",
+    label: "📋 Patient Follow-up",
+    text: "Post-discharge patient follow-up call, verify therapy adherence, schedule home visit if needed.",
   },
   {
-    label: "🧾 Fatturazione",
-    text: "Emettere fattura per prestazione infermieristica domiciliare, registrare nel gestionale e inviare al paziente.",
+    label: "🧾 Invoicing",
+    text: "Issue invoice for home nursing service, log into accounting software, and send receipt to patient.",
   },
   {
-    label: "💊 Somministrazione Terapia",
-    text: "Somministrazione terapia endovenosa, preparazione farmaci, monitoraggio reazione e documentazione.",
+    label: "💊 Therapy Administration",
+    text: "Administer intravenous therapy, prepare medications, monitor for adverse reactions, and document.",
   },
 ];
 
@@ -90,12 +90,12 @@ const isOpen = computed({
 }); /*end isOpen*/
 
 const categoryLabels: Record<string, string> = {
-  general: "Generale",
+  general: "General",
   marketing: "Marketing",
-  research: "Ricerca",
-  admin: "Amministrazione",
-  dev: "Sviluppo",
-  clinical: "🏥 Sanitario",
+  research: "Research",
+  admin: "Administration",
+  dev: "Development",
+  clinical: "🏥 Clinical",
 };
 
 const categoryLabel = computed(() => {
@@ -107,7 +107,7 @@ const priorityColor = computed(() => {
 }); /*end priorityColor*/
 
 const priorityLabel = computed(() => {
-  return { high: "Alta", medium: "Media", low: "Bassa" }[editablePriority.value] ?? "";
+  return { high: "High", medium: "Medium", low: "Low" }[editablePriority.value] ?? "";
 }); /*end priorityLabel*/
 
 function priorityChipColor(p: "low" | "medium" | "high"): string {
@@ -149,15 +149,15 @@ async function handleRefine(): Promise<void> {
 
     $q.notify({
       type: "positive",
-      message: "Task strutturato da Gemini! Rivedi e conferma.",
+      message: "Task structured by Gemini! Review and confirm.",
       icon: "auto_awesome",
     });
   } catch {
     // rawDraft.value is intentionally NOT reset (fail-safe §3.2)
     $q.notify({
       type: "negative",
-      message: "Errore di rete. Riprova o crea il task manualmente.",
-      caption: "Il testo inserito è stato preservato.",
+      message: "Network error. Please try again or create the task manually.",
+      caption: "Your entered text has been preserved.",
       icon: "wifi_off",
     });
   }
@@ -165,7 +165,7 @@ async function handleRefine(): Promise<void> {
 
 async function handleCreateTask(): Promise<void> {
   if (!editableTitle.value.trim()) {
-    $q.notify({ type: "warning", message: "Il titolo del task è obbligatorio." });
+    $q.notify({ type: "warning", message: "Task title is required." });
     return;
   }
 
@@ -198,7 +198,7 @@ async function handleCreateTask(): Promise<void> {
 
     $q.notify({
       type: "positive",
-      message: `Task "${editableTitle.value}" creato nel workspace!`,
+      message: `Task "${editableTitle.value}" created in workspace!`,
       icon: "check_circle",
     });
 
@@ -206,7 +206,7 @@ async function handleCreateTask(): Promise<void> {
     emit("update:modelValue", false);
     resetModal();
   } catch {
-    $q.notify({ type: "negative", message: "Errore durante la creazione del task." });
+    $q.notify({ type: "negative", message: "Error creating task." });
   } finally {
     isSaving.value = false;
   }
@@ -235,26 +235,26 @@ function handleClose(): void {
           <div>
             <div class="text-h6 text-weight-bold">✨ AI Task Architect</div>
             <div class="text-caption text-gold-light">
-              Scomposizione Intelligente & Scheda Operativa (Gemini 3.6 Flash)
+              Intelligent Decomposition &amp; Operational Sheet (Gemini 3.6 Flash)
             </div>
           </div>
         </div>
         <q-btn flat round dense icon="close" color="white" @click="handleClose" />
       </q-card-section>
 
-      <!-- ── Card Body Chiaro ─────────────────────────────────────────── -->
+      <!-- ── Card Body Light ─────────────────────────────────────────── -->
       <q-card-section class="q-pa-md">
         <div class="text-body2 text-grey-8 q-mb-md">
-          Descrivi con parole tue il task da svolgere (anche un appunto veloce o informale). Gemini
-          estrarrà automaticamente il <strong>Titolo</strong>, la <strong>Categoria</strong>, la
-          <strong>Priorità</strong> e la <strong>Checklist di sotto-task</strong> operative in base
-          alla Costituzione del tuo Workspace.
+          Describe in your own words the task to perform (even a quick or informal draft). Gemini
+          will automatically extract the <strong>Title</strong>, <strong>Category</strong>,
+          <strong>Priority</strong>, and operational <strong>Subtask Checklist</strong> based on
+          your Workspace Constitution.
         </div>
 
-        <!-- Modelli Rapidi -->
+        <!-- Quick Templates -->
         <div class="q-mb-md">
           <div class="text-caption text-weight-bold text-grey-7 q-mb-xs">
-            Oppure seleziona un modello veloce:
+            Or select a quick template:
           </div>
           <div class="row q-gutter-xs">
             <q-chip
@@ -271,14 +271,14 @@ function handleClose(): void {
           </div>
         </div>
 
-        <!-- Input Appunto -->
+        <!-- Draft Input -->
         <q-input
           v-model="rawDraft"
           type="textarea"
           rows="3"
           outlined
           dense
-          placeholder="Es: 'medicazione paziente a Forte dei Marmi martedì mattina, verificare bende sterili e mandare fattura...'"
+          placeholder="e.g. 'Patient wound dressing on Tuesday morning, check sterile bandages and send invoice...'"
           class="q-mb-md"
         />
 
@@ -288,7 +288,7 @@ function handleClose(): void {
             unelevated
             rounded
             icon="auto_awesome"
-            label="GENERA STRUTTURA TASK CON IA"
+            label="GENERATE TASK STRUCTURE WITH AI"
             :loading="taskStore.isRefiningTaskDraft"
             :disable="rawDraft.trim().length < 5"
             @click="handleRefine"
@@ -300,15 +300,15 @@ function handleClose(): void {
           <q-separator class="q-my-md" />
           <div class="text-subtitle1 text-weight-bold text-navy q-mb-sm row items-center">
             <q-icon name="preview" class="q-mr-xs" color="secondary" />
-            Anteprima Scheda Task Generata
+            Generated Task Preview
           </div>
 
-          <!-- Categoria & Priorità -->
+          <!-- Category & Priority -->
           <div class="row q-col-gutter-md q-mb-md">
             <div class="col-12 col-md-6">
               <q-card flat bordered class="q-pa-sm bg-grey-1">
                 <div class="text-caption text-grey-6 text-uppercase text-weight-bold">
-                  Categoria Suggerita
+                  Suggested Category
                 </div>
                 <div class="row q-gutter-xs q-mt-xs">
                   <q-chip
@@ -337,7 +337,7 @@ function handleClose(): void {
             <div class="col-12 col-md-6">
               <q-card flat bordered class="q-pa-sm bg-grey-1">
                 <div class="text-caption text-grey-6 text-uppercase text-weight-bold">
-                  Priorità & Stima Durata
+                  Priority &amp; Estimated Duration
                 </div>
                 <div class="row items-center justify-between q-mt-xs">
                   <div class="row q-gutter-xs">
@@ -351,7 +351,7 @@ function handleClose(): void {
                       size="sm"
                       @click="editablePriority = p"
                     >
-                      {{ { low: "Bassa", medium: "Media", high: "Alta" }[p] }}
+                      {{ { low: "Low", medium: "Medium", high: "High" }[p] }}
                     </q-chip>
                   </div>
                   <q-badge color="grey-8" text-color="white" class="q-pa-xs">
@@ -362,18 +362,18 @@ function handleClose(): void {
             </div>
           </div>
 
-          <!-- Titolo & Descrizione -->
+          <!-- Title & Description -->
           <div class="q-mb-md">
-            <div class="text-caption text-grey-7 text-weight-bold q-mb-xs">Titolo Task:</div>
+            <div class="text-caption text-grey-7 text-weight-bold q-mb-xs">Task Title:</div>
             <q-input
               v-model="editableTitle"
               outlined
               dense
               class="q-mb-sm bg-white"
-              :rules="[(v) => !!v.trim() || 'Il titolo è obbligatorio']"
+              :rules="[(v) => !!v.trim() || 'Title is required']"
             />
             <div class="text-caption text-grey-7 text-weight-bold q-mb-xs">
-              Descrizione Operativa:
+              Operational Description:
             </div>
             <q-input
               v-model="editableDescription"
@@ -385,10 +385,10 @@ function handleClose(): void {
             />
           </div>
 
-          <!-- Checklist Sotto-task -->
+          <!-- Generated Subtasks Checklist -->
           <div class="q-mb-md">
             <div class="text-caption text-grey-7 text-weight-bold q-mb-xs">
-              📋 Sotto-task Operative Generate (seleziona / deseleziona):
+              📋 Generated Operational Subtasks (select / deselect):
             </div>
             <q-list bordered dense separator class="rounded-borders bg-grey-1">
               <q-item
@@ -416,13 +416,13 @@ function handleClose(): void {
         </template>
       </q-card-section>
 
-      <!-- ── Footer Azioni ─────────────────────────────────────────────── -->
+      <!-- ── Footer Actions ─────────────────────────────────────────────── -->
       <q-card-actions align="right" class="bg-grey-2 q-pa-md">
-        <q-btn flat label="Annulla" color="grey-8" @click="handleClose" />
+        <q-btn flat label="Cancel" color="grey-8" @click="handleClose" />
         <q-btn
           v-if="refinedDraft"
           flat
-          label="Modifica Appunto"
+          label="Edit Draft"
           color="primary"
           @click="refinedDraft = null"
         />
@@ -432,7 +432,7 @@ function handleClose(): void {
           unelevated
           rounded
           icon="rocket_launch"
-          label="Crea Task nel Workspace"
+          label="Create Task in Workspace"
           :loading="isSaving"
           :disable="!editableTitle.trim()"
           @click="handleCreateTask"

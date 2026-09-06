@@ -332,36 +332,35 @@ const isSaving = ref(false);
 
 const presetTemplates = [
   {
-    title: "🎯 Commerciale / Lead Scout",
+    title: "🎯 Commercial / Lead Scout",
     prompt:
-      "Il tuo ruolo è cercare clienti IT, profilare prospect su LinkedIn/Indeed, generare bozze email e gestire gli stati dei contatti (Contattato, Risposta Positiva, Follow-up 30gg).",
-    industryScope: "Commerciale / B2B Sales",
-    tone: "professionale, sintetico, orientato al ROI",
+      "Your role is to search for IT clients, profile prospects on LinkedIn/Indeed, generate email drafts, and manage contact statuses (Contacted, Positive Response, Follow-up 30 Days).",
+    industryScope: "Commercial / B2B Sales",
+    tone: "professional, concise, ROI-focused",
     skills: ["Lead Scouting", "Email Outreach", "ROI Analysis"],
     doRules:
-      "Cita sempre i link LinkedIn e il Match Score %\nUsa sempre createGmailDraftTool per le bozze",
-    dontRules: "Non inviare mai email direttamente\nNon loggare dati PII in chiaro",
+      "Always cite LinkedIn links and Match Score %\nAlways use createGmailDraftTool for drafts",
+    dontRules: "Never send emails directly\nNever log PII in plain text",
   },
   {
-    title: "📊 Amministrazione & Fogli",
+    title: "📊 Administration & Sheets",
     prompt:
-      "Il tuo ruolo è leggere e scrivere dati su Google Sheets, spostare informazioni tra fogli, riassumere email di sistema e filtrare la spam.",
-    industryScope: "Amministrazione & Contabilità",
-    tone: "formale, preciso, analitico",
-    skills: ["Google Sheets Sync", "Report Sintesi", "Data Validation"],
-    doRules:
-      "Aggiorna il foglio Google Sheets predefinito\nRichiedi approvazione prima di modificare",
-    dontRules: "Non sovrascrivere dati esistenti senza conferma",
+      "Your role is to read and write data to Google Sheets, move info between spreadsheets, summarize system emails, and filter spam.",
+    industryScope: "Administration & Accounting",
+    tone: "formal, precise, analytical",
+    skills: ["Google Sheets Sync", "Summary Reports", "Data Validation"],
+    doRules: "Update the default Google Sheets spreadsheet\nRequest approval before modifying",
+    dontRules: "Never overwrite existing data without confirmation",
   },
   {
     title: "🧠 Prompt Optimization Hub",
     prompt:
-      "Il tuo ruolo è analizzare i prompt inviati negli altri workspace, rilevare inefficienze o ambiguità e suggerire versioni ottimizzate per ridurre gli errori allo 0%.",
+      "Your role is to analyze prompts sent in other workspaces, detect inefficiencies or ambiguities, and suggest optimized versions to reduce error rates to 0%.",
     industryScope: "AI Operations & Compliance",
-    tone: "operativo, rigoroso, tecnico",
+    tone: "operational, rigorous, technical",
     skills: ["Prompt Architecture", "Anti-Hallucination Audit", "GDPR Compliance"],
-    doRules: "Analizza la chiarezza delle istruzioni\nFormatta i risultati in tabelle pulite",
-    dontRules: "Non modificare il comportamento base di sicurezza",
+    doRules: "Analyze clarity of instructions\nFormat results in clean tables",
+    dontRules: "Do not modify core security behavior",
   },
 ];
 
@@ -501,7 +500,7 @@ const handleSave = async (): Promise<void> => {
 
     q.notify({
       type: "positive",
-      message: "Atteggiamento IA & Skill Matrix salvati con successo!",
+      message: "AI Attitude & Skill Matrix saved successfully!",
       position: "top",
     });
     emit("saved");
@@ -509,7 +508,7 @@ const handleSave = async (): Promise<void> => {
   } catch {
     q.notify({
       type: "negative",
-      message: "Errore durante il salvataggio della configurazione Workspace",
+      message: "Error saving Workspace configuration",
       position: "top",
     });
   } finally {
@@ -525,9 +524,7 @@ const handleSave = async (): Promise<void> => {
         <div class="row items-center q-gutter-sm">
           <q-avatar icon="psychology" color="amber-8" text-color="white" />
           <div>
-            <div class="text-h6 text-weight-bold text-navy">
-              Atteggiamento IA & Risorse Collegate
-            </div>
+            <div class="text-h6 text-weight-bold text-navy">AI Attitude &amp; Linked Resources</div>
             <div class="text-caption text-grey-7">Workspace: {{ workspace?.name }}</div>
           </div>
         </div>
@@ -545,9 +542,9 @@ const handleSave = async (): Promise<void> => {
           align="justify"
           narrow-indicator
         >
-          <q-tab name="behavior" icon="tune" label="1. Comportamento" />
-          <q-tab name="resources" icon="cloud_sync" label="2. Risorse Google" />
-          <q-tab name="agents" icon="smart_toy" label="3. Agenti IA" />
+          <q-tab name="behavior" icon="tune" label="1. Behavior" />
+          <q-tab name="resources" icon="cloud_sync" label="2. Google Resources" />
+          <q-tab name="agents" icon="smart_toy" label="3. AI Agents" />
           <q-tab name="sandbox" icon="science" label="4. Sandbox Test" />
         </q-tabs>
 
@@ -559,7 +556,7 @@ const handleSave = async (): Promise<void> => {
             <!-- Preset Buttons -->
             <div class="q-mb-md">
               <div class="text-caption text-weight-bold text-grey-7 q-mb-xs">
-                Template Rapidi Pronti all'Uso:
+                Ready-to-use Quick Templates:
               </div>
               <div class="row q-gutter-xs">
                 <q-btn
@@ -578,31 +575,31 @@ const handleSave = async (): Promise<void> => {
             <div class="row q-col-gutter-md q-mb-md">
               <div class="col-12 col-md-6">
                 <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
-                  Dominio / Settore Professionale:
+                  Domain / Professional Sector:
                 </div>
                 <q-input
                   v-model="industryScope"
                   outlined
                   dense
-                  placeholder="Es: Parrucchiere, Ingegneria Edile, Avvocato..."
+                  placeholder="e.g. Healthcare, Engineering, Legal, Consulting..."
                 />
               </div>
               <div class="col-12 col-md-6">
                 <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
-                  Tono di Voce e Stile:
+                  Tone of Voice &amp; Style:
                 </div>
                 <q-input
                   v-model="tone"
                   outlined
                   dense
-                  placeholder="Es: operativo e conciso, clinico, creativo, formale..."
+                  placeholder="e.g. concise &amp; operational, clinical, creative, formal..."
                 />
               </div>
             </div>
 
             <div class="q-mb-md">
               <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
-                🧠 Skill Matrix (Competenze IA Attive):
+                🧠 Skill Matrix (Active AI Skills):
               </div>
               <q-select
                 v-model="skills"
@@ -613,12 +610,12 @@ const handleSave = async (): Promise<void> => {
                 new-value-mode="add-unique"
                 outlined
                 dense
-                placeholder="Premi Invio per aggiungere nuove competenze..."
+                placeholder="Press Enter to add new skills..."
               />
             </div>
 
             <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
-              System Prompt (Istruzioni aggiuntive):
+              System Prompt (Additional Instructions):
             </div>
             <q-input
               v-model="systemPrompt"
@@ -627,13 +624,13 @@ const handleSave = async (): Promise<void> => {
               outlined
               dense
               class="q-mb-md"
-              placeholder="Es: Il tuo ruolo è cercare clienti IT, profilare prospect su LinkedIn e preparare bozze email su Gmail..."
+              placeholder="e.g. Your role is to search for IT clients, profile prospects on LinkedIn, and prepare email drafts on Gmail..."
             />
 
             <div class="row q-col-gutter-md q-mb-md">
               <div class="col-12 col-md-6">
                 <div class="text-caption text-weight-bold text-positive q-mb-xs">
-                  ✅ Regole Vincolanti (Do List):
+                  ✅ Binding Rules (Do List):
                 </div>
                 <q-input
                   v-model="doListInput"
@@ -641,12 +638,12 @@ const handleSave = async (): Promise<void> => {
                   rows="3"
                   outlined
                   dense
-                  placeholder="Una regola per riga (es. Cita sempre i link)"
+                  placeholder="One rule per line (e.g. Always cite links)"
                 />
               </div>
               <div class="col-12 col-md-6">
                 <div class="text-caption text-weight-bold text-negative q-mb-xs">
-                  🚫 Divieti Tassativi (Don't List):
+                  🚫 Strict Restrictions (Don't List):
                 </div>
                 <q-input
                   v-model="dontListInput"
@@ -654,7 +651,7 @@ const handleSave = async (): Promise<void> => {
                   rows="3"
                   outlined
                   dense
-                  placeholder="Una regola per riga (es. Non inviare mail dirette)"
+                  placeholder="One rule per line (e.g. Never send direct emails)"
                 />
               </div>
             </div>
@@ -675,20 +672,19 @@ const handleSave = async (): Promise<void> => {
                     <div class="text-subtitle2 text-weight-bold text-navy">
                       {{
                         isOAuthConnected
-                          ? "Stato Connessione Google OAuth2: ATTIVO"
-                          : "Account Google Non Autorizzato"
+                          ? "Google OAuth2 Connection Status: ACTIVE"
+                          : "Google Account Not Authorized"
                       }}
                     </div>
                     <div class="text-caption text-grey-8">
-                      Permette all'IA di interagire con le tue mail Gmail, Google Sheets e Google
-                      Drive.
+                      Allows AI to interact with your Gmail, Google Sheets, and Google Drive.
                     </div>
                   </div>
                 </div>
                 <q-btn
                   :color="isOAuthConnected ? 'positive' : 'primary'"
                   :icon="isOAuthConnected ? 'verified' : 'login'"
-                  :label="isOAuthConnected ? 'Autorizzato OAuth2' : 'Connetti Google OAuth2'"
+                  :label="isOAuthConnected ? 'OAuth2 Authorized' : 'Connect Google OAuth2'"
                   no-caps
                   dense
                   class="q-px-sm"
@@ -845,14 +841,14 @@ const handleSave = async (): Promise<void> => {
           <!-- TAB 4: Sandbox Test -->
           <q-tab-panel name="sandbox" class="q-pa-none">
             <div class="text-body2 text-grey-8 q-mb-sm">
-              Prova la risposta dell'IA con l'atteggiamento e le risorse collegate prima di salvare:
+              Test the AI response with the attitude and linked resources before saving:
             </div>
 
             <q-input
               v-model="testInput"
               outlined
               dense
-              placeholder="Scrivi un'istruzione di prova (es. Cerca cliniche private e salva nel foglio)..."
+              placeholder="Type a test instruction (e.g. Find private clinics and save to spreadsheet)..."
               class="q-mb-sm"
               @keyup.enter="runSandboxTest"
             >
@@ -860,7 +856,7 @@ const handleSave = async (): Promise<void> => {
                 <q-btn
                   color="secondary"
                   icon="play_arrow"
-                  label="Testa Prompt"
+                  label="Test Prompt"
                   no-caps
                   :loading="isTesting"
                   @click="runSandboxTest"
@@ -876,11 +872,11 @@ const handleSave = async (): Promise<void> => {
       </q-card-section>
 
       <q-card-actions align="right" class="q-pt-none">
-        <q-btn flat label="Annulla" v-close-popup />
+        <q-btn flat label="Cancel" v-close-popup />
         <q-btn
           color="primary"
           icon="save"
-          label="Salva Configurazione"
+          label="Save Configuration"
           :loading="isSaving"
           @click="handleSave"
         />

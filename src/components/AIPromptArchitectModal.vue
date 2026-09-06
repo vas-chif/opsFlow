@@ -36,24 +36,24 @@ const generatedAttitude = ref<WorkspaceAttitude | null>(null);
 
 const presetPromptExamples = [
   {
-    label: "💇‍♀️ Salone Parrucchiera",
+    label: "💇‍♀️ Hair Salon",
     prompt:
-      "Gestione appuntamenti, formule colorazione capelli, solleciti richiami clienti per ricrescita, vendita prodotti styling e promozioni stagionali.",
+      "Appointment scheduling, hair coloring formulas, client regrowth reminders, styling product sales, and seasonal promotions.",
   },
   {
-    label: "🏗️ Ingegneria Edile",
+    label: "🏗️ Civil Engineering",
     prompt:
-      "Calcolo computi metrici estimativi, verifica capitolati d'appalto, conformità normative urbanistiche ed edili, gestione scadenze cantiere.",
+      "Bill of quantities calculation, tender specification verification, building regulation compliance, and construction site timeline management.",
   },
   {
-    label: "⚖️ Studio Legale",
+    label: "⚖️ Law Firm",
     prompt:
-      "Sintesi memorie difensive, monitoraggio scadenze processuali e termini di deposito, bozze perizie stragiudiziali, corrispondenza formale assistiti.",
+      "Defense memo synthesis, court deadlines and filing schedule monitoring, out-of-court appraisal drafts, and formal client correspondence.",
   },
   {
-    label: "💆‍♀️ Centro Estetico",
+    label: "💆‍♀️ Wellness Clinic",
     prompt:
-      "Schede trattamenti viso/corpo, gestione pacchetti abbonamento, consensi informati, richiami periodici manutenzione e promozioni estetici.",
+      "Face and body treatment records, subscription package management, informed consents, periodic recall visits, and seasonal beauty offers.",
   },
 ];
 
@@ -65,7 +65,7 @@ async function handleGenerate(): Promise<void> {
   if (!userPrompt.value.trim()) {
     $q.notify({
       type: "warning",
-      message: "Inserisci una breve descrizione delle tue attività lavorative.",
+      message: "Please enter a short description of your business activities.",
     });
     return;
   }
@@ -75,13 +75,13 @@ async function handleGenerate(): Promise<void> {
     generatedAttitude.value = res;
     $q.notify({
       type: "positive",
-      message: "Atteggiamento IA generato con successo!",
+      message: "AI Attitude successfully generated!",
       icon: "auto_awesome",
     });
   } catch {
     $q.notify({
       type: "negative",
-      message: "Errore durante la generazione dell'Atteggiamento IA.",
+      message: "Error generating AI Attitude.",
     });
   }
 } /*end handleGenerate*/
@@ -93,7 +93,7 @@ async function handleApply(): Promise<void> {
     await taskStore.updateWorkspaceAttitude(props.workspaceId, generatedAttitude.value);
     $q.notify({
       type: "positive",
-      message: "Atteggiamento applicato al Workspace con successo!",
+      message: "Attitude successfully applied to Workspace!",
       icon: "check_circle",
     });
     emit("applied", generatedAttitude.value);
@@ -128,7 +128,7 @@ function handleClose(): void {
           <div>
             <div class="text-h6 text-weight-bold">✨ AI Prompt Architect</div>
             <div class="text-caption text-gold-light">
-              Configuratore No-Code Atteggiamento & Skill Matrix (Framework DBS)
+              No-Code Attitude &amp; Skill Matrix Configurator (DBS Framework)
             </div>
           </div>
         </div>
@@ -137,15 +137,15 @@ function handleClose(): void {
 
       <q-card-section class="q-pa-md">
         <div class="text-body2 text-grey-8 q-mb-md">
-          Descrivi con parole tue di cosa ti occupi nel tuo lavoro. Gemini estrarrà automaticamente
-          il <strong>Settore</strong>, il <strong>Tono</strong>, la <strong>Skill Matrix</strong> e
-          le regole ferree <strong>DO / DON'T</strong> anti-allucinazione.
+          Describe in your own words what you do in your business. Gemini will automatically extract
+          the <strong>Industry</strong>, <strong>Tone</strong>, <strong>Skill Matrix</strong>, and
+          strict <strong>DO / DON'T</strong> anti-hallucination rules.
         </div>
 
-        <!-- Esempi veloci -->
+        <!-- Quick Examples -->
         <div class="q-mb-md">
           <div class="text-caption text-weight-bold text-grey-7 q-mb-xs">
-            Oppure seleziona un modello veloce:
+            Or select a quick example:
           </div>
           <div class="row q-gutter-xs">
             <q-chip
@@ -169,7 +169,7 @@ function handleClose(): void {
           rows="3"
           outlined
           dense
-          placeholder="Es: 'Gestisco una palestra. Mi occupo di schede allenamento, rinnovo abbonamenti, solleciti e promozioni...'"
+          placeholder="e.g. 'I run a fitness gym. I handle workout cards, membership renewals, reminders, and seasonal promotions...'"
           class="q-mb-md"
         />
 
@@ -179,7 +179,7 @@ function handleClose(): void {
             unelevated
             rounded
             icon="auto_awesome"
-            label="Genera Atteggiamento DBS"
+            label="Generate DBS Attitude"
             :loading="taskStore.isGeneratingAttitude"
             @click="handleGenerate"
           />
@@ -190,15 +190,15 @@ function handleClose(): void {
           <q-separator class="q-my-md" />
           <div class="text-subtitle1 text-weight-bold text-navy q-mb-sm row items-center">
             <q-icon name="preview" class="q-mr-xs" color="secondary" />
-            Anteprima Costituzione Generata
+            Generated Constitution Preview
           </div>
 
           <div class="row q-col-gutter-md q-mb-md">
-            <!-- Settore & Tono -->
+            <!-- Sector & Tone -->
             <div class="col-12 col-md-6">
               <q-card flat bordered class="q-pa-sm bg-grey-1">
                 <div class="text-caption text-grey-6 text-uppercase text-weight-bold">
-                  Domain / Settore
+                  Domain / Sector
                 </div>
                 <div class="text-body1 text-weight-bold text-navy">
                   {{ generatedAttitude.industryScope }}
@@ -208,7 +208,7 @@ function handleClose(): void {
             <div class="col-12 col-md-6">
               <q-card flat bordered class="q-pa-sm bg-grey-1">
                 <div class="text-caption text-grey-6 text-uppercase text-weight-bold">
-                  Tono Consigliato
+                  Recommended Tone
                 </div>
                 <div class="text-body1 text-weight-bold text-secondary">
                   {{ generatedAttitude.tone }}
@@ -220,7 +220,7 @@ function handleClose(): void {
           <!-- Skill Matrix -->
           <div class="q-mb-md">
             <div class="text-caption text-grey-7 text-weight-bold q-mb-xs">
-              🧠 Skill Matrix Estratta:
+              🧠 Extracted Skill Matrix:
             </div>
             <div class="row q-gutter-xs">
               <q-chip
@@ -240,7 +240,7 @@ function handleClose(): void {
           <div class="row q-col-gutter-md q-mb-md">
             <div class="col-12 col-md-6">
               <div class="text-caption text-positive text-weight-bold q-mb-xs">
-                ✅ Regole Vincolanti (DO):
+                ✅ Binding Rules (DO):
               </div>
               <q-list bordered dense separator class="rounded-borders bg-green-1">
                 <q-item v-for="item in generatedAttitude.rules.doList" :key="item">
@@ -254,7 +254,7 @@ function handleClose(): void {
 
             <div class="col-12 col-md-6">
               <div class="text-caption text-negative text-weight-bold q-mb-xs">
-                🚫 Divieti Tassativi (DON'T):
+                🚫 Strict Restrictions (DON'T):
               </div>
               <q-list bordered dense separator class="rounded-borders bg-red-1">
                 <q-item v-for="item in generatedAttitude.rules.dontList" :key="item">
@@ -271,14 +271,14 @@ function handleClose(): void {
 
       <!-- Actions -->
       <q-card-actions align="right" class="bg-grey-2 q-pa-md">
-        <q-btn flat label="Annulla" color="grey-8" @click="handleClose" />
+        <q-btn flat label="Cancel" color="grey-8" @click="handleClose" />
         <q-btn
           v-if="generatedAttitude"
           color="positive"
           unelevated
           rounded
           icon="rocket_launch"
-          label="Applica all'Atteggiamento IA"
+          label="Apply to AI Attitude"
           :loading="taskStore.isLoading"
           @click="handleApply"
         />

@@ -26,26 +26,51 @@ graph TD
 
 ---
 
-## 📋 2. Creazione Task & Trigger Agente Automatica
+## 📋 2. Creazione Task & Integrazione AI Task Architect
 
-### Sequence Diagram: Task Creation & AgentePlanner Decomposition
+### Distinzione di Dominio: Prompt Architect vs Task Architect
+
+OpsFlow separa nettamente gli ambiti agentici:
+
+- **AI Prompt Architect (`AIPromptArchitectModal.vue`):** Agisce a **livello Workspace** per definire Costituzione, Atteggiamento, regole DO/DON'T e Skill Matrix.
+- **AI Task Architect (`AITaskArchitectModal.vue`):** Agisce a **livello Task-Scoped**. È integrato direttamente all'interno del dialogo _"Nuovo Task Operativo per IA"_ (`showCreateTaskModal`) e nel dialogo _"Modifica Task"_ (`showEditTaskModal`).
+
+```mermaid
+graph TD
+    A[Dialog: Nuovo Task Operativo per IA] -->|Compilazione Manuale| B[Crea & Attiva Agente IA]
+    A -->|Click: ✨ AI Task Architect| C[AITaskArchitectModal.vue]
+    C -->|Bozza Grezza / Preset Templates| D[Cloud Function: refineTaskDraft]
+    D -->|Gemini 3.6 Flash + DBS Context| E[Scheda Task Strutturata]
+    E -->|Revisione Human-in-the-Loop| F[Salvataggio Firestore con SubTask già approvate]
+    B -->|Flow 03 Trigger Standard| G[Firestore Trigger: onTaskCreated]
+    G -->|AgentePlanner Scomposizione Asincrona| H[Firestore Update Subtasks]
+```
+
+### Sequence Diagram: Flusso Integrato Task Creation
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Utente
-    participant UI as TaskManager (Quasar UI)
+    participant UI as Dialog Nuovo Task (showCreateTaskModal)
+    participant Arch as AI Task Architect (AITaskArchitectModal)
+    participant CF as Cloud Function (refineTaskDraft)
     participant FS as Firestore DB
-    participant Trigger as Firestore Trigger (onTaskCreated)
-    participant AI as AgentePlanner (Genkit)
 
-    Utente->>UI: Crea Nuovo Task ("Pianifica campagna lead Q4")
-    UI->>FS: Write tenants/{tenantId}/workspaces/{wsId}/tasks/{taskId} (status: 'pending')
-    FS-->>Trigger: Evento onCreate intercettato
-    Trigger->>AI: Analisi Titolo & Descrizione (Sanitizzati)
-    AI-->>AI: Generazione 3-5 SubTask + Complexity Score (1-10)
-    AI->>FS: Update task doc with subtasks, complexityScore, suggestedCategory
-    FS-->>UI: Sync Reattivo Firestore -> Task visualizzato con sotto-task generate
+    alt Modalità Scomposizione Guidata AI
+        Utente->>UI: Clicca "AI Task Architect" (passa bozza digitata)
+        UI->>Arch: Apertura Modale con initialDraft precompilato
+        Utente->>Arch: Clicca "Genera Struttura Task con IA"
+        Arch->>CF: Invocazione refineTaskDraft(wsId, rawDraft)
+        CF-->>Arch: Titolo, Categoria, Priorità e Sotto-task strutturate
+        Utente->>Arch: Revisione & Conferma
+        Arch->>FS: Write task (modelVersion: 'gemini-3.6-flash')
+    else Modalità Diretta
+        Utente->>UI: Inserisce Titolo & Prompt
+        Utente->>UI: Clicca "Crea & Attiva Agente IA"
+        UI->>FS: Write task (status: 'pending', modelVersion: 'manual')
+        FS-->>FS: onTaskCreated -> AgentePlanner genera sotto-task in background
+    end
 ```
 
 ---

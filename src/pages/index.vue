@@ -29,6 +29,7 @@ import MainLayout from "@/layouts/MainLayout.vue";
 import { useUiStore } from "@/stores/uiStore";
 import { useTaskStore } from "@/stores/taskStore";
 import { useTaskChatStore } from "@/stores/taskChatStore";
+import { useAuthStore } from "@/stores/authStore";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 import type { Task, Workspace, TaskStatus } from "@/types/models";
@@ -43,6 +44,7 @@ import AITaskArchitectModal from "@/components/AITaskArchitectModal.vue";
 const q = useQuasar();
 const uiStore = useUiStore();
 const taskStore = useTaskStore();
+const authStore = useAuthStore();
 
 const selectedWorkspace = computed(() => taskStore.activeWorkspace);
 const selectedTask = inject<Ref<Task | null>>("selectedTask", ref(null));
@@ -63,12 +65,12 @@ const showTaskArchitectModal = ref(false);
 const rawDraftFromInline = ref("");
 
 const categoryOptions = [
-  { label: "Generale / Operativo", value: "general" },
+  { label: "General / Operational", value: "general" },
   { label: "Marketing & Lead Gen", value: "marketing" },
-  { label: "Ricerca & Sourcing", value: "research" },
-  { label: "Amministrazione & Email", value: "admin" },
-  { label: "Sviluppo & Tech", value: "dev" },
-  { label: "Assistenza Sanitaria / Clinica", value: "clinical" },
+  { label: "Research & Sourcing", value: "research" },
+  { label: "Administration & Email", value: "admin" },
+  { label: "Development & Tech", value: "dev" },
+  { label: "Healthcare / Clinical Assistance", value: "clinical" },
 ];
 
 // Modal states for SubTask Inspector
@@ -112,6 +114,51 @@ const openCreateTaskModal = (): void => {
   showCreateTaskModal.value = true;
 }; /*end openCreateTaskModal*/
 
+const openTaskArchitectFromDialog = (): void => {
+  const parts: string[] = [];
+  if (newTaskTitle.value.trim()) parts.push(newTaskTitle.value.trim());
+  if (newTaskPrompt.value.trim()) parts.push(newTaskPrompt.value.trim());
+  rawDraftFromInline.value = parts.join(" — ");
+  showCreateTaskModal.value = false;
+  showTaskArchitectModal.value = true;
+}; /*end openTaskArchitectFromDialog*/
+
+const openNewWorkspaceModal = (): void => {
+  q.dialog({
+    title: "New Workspace",
+    message: "Enter the name for the new workspace:",
+    prompt: {
+      model: "",
+      type: "text",
+      placeholder: "e.g. Q4 Outreach Campaign...",
+    },
+    cancel: true,
+    persistent: true,
+  }).onOk(async (name: string) => {
+    if (!name.trim()) return;
+    try {
+      const newId = await taskStore.createWorkspace({
+        name: name.trim(),
+        description: "",
+      });
+      const ws = taskStore.workspaces.find((w: Workspace) => w.id === newId);
+      if (ws) {
+        await taskStore.setActiveWorkspace(ws);
+      }
+      q.notify({
+        type: "positive",
+        message: `Workspace "${name.trim()}" created successfully!`,
+        icon: "check_circle",
+      });
+    } catch {
+      q.notify({
+        type: "negative",
+        message: "Error creating workspace",
+      });
+    }
+  });
+}; /*end openNewWorkspaceModal*/
+
 const handleAttitudeApplied = async (): Promise<void> => {
   await taskStore.fetchWorkspaces();
 }; /*end handleAttitudeApplied*/
@@ -135,7 +182,8 @@ const confirmCreateTask = async (): Promise<void> => {
 
     q.notify({
       type: "positive",
-      message: "Task creato con successo! AgentePlanner in sottofondo per la scomposizione.",
+      message:
+        "Task created successfully! AgentePlanner is decomposing subtasks in the background.",
       position: "top",
       icon: "smart_toy",
     });
@@ -143,7 +191,7 @@ const confirmCreateTask = async (): Promise<void> => {
   } catch (err) {
     q.notify({
       type: "negative",
-      message: err instanceof Error ? err.message : "Errore durante la creazione del task",
+      message: err instanceof Error ? err.message : "Error creating task",
       position: "top",
     });
   }
@@ -167,13 +215,13 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
     });
     q.notify({
       type: "positive",
-      message: "Stato sotto-task aggiornato",
+      message: "Subtask status updated",
       position: "top",
     });
   } catch {
     q.notify({
       type: "negative",
-      message: "Errore durante l'aggiornamento della sotto-task",
+      message: "Error updating subtask",
       position: "top",
     });
   }
@@ -196,14 +244,14 @@ const confirmEditTask = async (): Promise<void> => {
     });
     q.notify({
       type: "positive",
-      message: "Task aggiornato con successo",
+      message: "Task updated successfully",
       position: "top",
     });
     showEditTaskModal.value = false;
   } catch (err) {
     q.notify({
       type: "negative",
-      message: err instanceof Error ? err.message : "Errore durante l'aggiornamento del task",
+      message: err instanceof Error ? err.message : "Error updating task",
       position: "top",
     });
   }
@@ -214,13 +262,13 @@ const handleStatusChange = async (task: Task, status: TaskStatus): Promise<void>
     await taskStore.updateTaskStatus(task.workspaceId, task.id, status);
     q.notify({
       type: "positive",
-      message: `Stato task aggiornato a ${status}`,
+      message: `Task status updated to ${status}`,
       position: "top",
     });
   } catch (err) {
     q.notify({
       type: "negative",
-      message: err instanceof Error ? err.message : "Errore durante il cambio di stato",
+      message: err instanceof Error ? err.message : "Error updating status",
       position: "top",
     });
   }
@@ -240,14 +288,14 @@ const confirmDeleteTask = async (): Promise<void> => {
     await taskStore.deleteTask(deletingTask.value.workspaceId, deletingTask.value.id);
     q.notify({
       type: "positive",
-      message: "Task eliminato definitivamente",
+      message: "Task permanently deleted",
       position: "top",
     });
     showDeleteTaskModal.value = false;
   } catch (err) {
     q.notify({
       type: "negative",
-      message: err instanceof Error ? err.message : "Errore durante l'eliminazione del task",
+      message: err instanceof Error ? err.message : "Error deleting task",
       position: "top",
     });
   }
@@ -291,18 +339,30 @@ onMounted(async () => {
       <!-- Workspace header -->
       <div v-if="selectedWorkspace" class="q-mb-xl">
         <div class="row items-center justify-between">
-          <div>
-            <h2
-              class="text-h4 text-weight-bold q-my-none"
+          <div class="row items-center q-gutter-md">
+            <q-btn
+              flat
+              round
+              dense
+              icon="arrow_back"
               :class="uiStore.darkMode ? 'text-white' : 'text-navy'"
+              @click="taskStore.setActiveWorkspace(null)"
             >
-              {{ selectedWorkspace.name }}
-            </h2>
-            <div
-              class="text-body2 q-mt-xs"
-              :class="uiStore.darkMode ? 'text-slate-light' : 'text-slate-dark'"
-            >
-              {{ currentWorkspaceTasks.length }} active tasks in this workspace
+              <q-tooltip>Back to Home Dashboard</q-tooltip>
+            </q-btn>
+            <div>
+              <h2
+                class="text-h4 text-weight-bold q-my-none"
+                :class="uiStore.darkMode ? 'text-white' : 'text-navy'"
+              >
+                {{ selectedWorkspace.name }}
+              </h2>
+              <div
+                class="text-body2 q-mt-xs"
+                :class="uiStore.darkMode ? 'text-slate-light' : 'text-slate-dark'"
+              >
+                {{ currentWorkspaceTasks.length }} active tasks in this workspace
+              </div>
             </div>
           </div>
           <div class="row items-center q-gutter-sm">
@@ -317,7 +377,7 @@ onMounted(async () => {
               @click="showPromptArchitectModal = true"
             >
               <q-tooltip
-                >Configuratore No-Code per generare automaticamente Atteggiamento &amp; Skill Matrix
+                >No-Code configuration wizard to automatically generate Attitude &amp; Skill Matrix
                 (DBS)</q-tooltip
               >
             </q-btn>
@@ -325,63 +385,240 @@ onMounted(async () => {
             <q-btn
               outline
               icon="psychology"
-              label="Atteggiamento IA"
+              label="AI Attitude"
               no-caps
               color="amber-7"
               class="create-task-btn"
               :disabled="!selectedWorkspace"
               @click="showAttitudeModal = true"
             >
-              <q-tooltip
-                >Modifica il System Prompt ed il comportamento dell'IA per questo
-                Workspace</q-tooltip
-              >
+              <q-tooltip>Modify the System Prompt and AI behavior for this Workspace</q-tooltip>
             </q-btn>
 
             <q-btn
               icon="add"
-              label="New Task (Prompt Guidato)"
+              label="New Task (Prompt Driven)"
               no-caps
               class="create-task-btn"
               :class="uiStore.darkMode ? 'dark-btn' : 'light-btn'"
               :disabled="!selectedWorkspace"
               @click="openCreateTaskModal"
             />
-
-            <!-- AI Task Architect button (Step 17) — workspace-scoped -->
-            <q-btn
-              id="ai-task-architect-btn"
-              unelevated
-              icon="architecture"
-              label="AI Task Architect"
-              no-caps
-              color="secondary"
-              class="create-task-btn"
-              :disabled="!selectedWorkspace"
-              @click="showTaskArchitectModal = true"
-            >
-              <q-tooltip
-                >Trasforma un appunto grezzo in un task strutturato con Gemini 3.6 Flash</q-tooltip
-              >
-            </q-btn>
           </div>
         </div>
       </div>
 
-      <!-- Default state: no workspace selected -->
-      <div v-if="!selectedWorkspace" class="text-center q-pa-xl empty-state">
-        <q-icon
-          name="folder_open"
-          size="72px"
-          class="q-mb-md"
-          :class="uiStore.darkMode ? 'text-gold' : 'text-navy'"
-        />
-        <h3 class="text-h5 text-weight-bold" :class="uiStore.darkMode ? 'text-white' : 'text-navy'">
-          Seleziona un workspace per iniziare
-        </h3>
-        <p class="text-body1" :class="uiStore.darkMode ? 'text-slate-light' : 'text-slate-dark'">
-          Scegli un workspace dal pannello sinistro o creane uno nuovo.
-        </p>
+      <!-- Home Dashboard / Overview Profile & Workspaces (when no workspace is active) -->
+      <div v-if="!selectedWorkspace" class="dashboard-overview">
+        <!-- Hero Profile & Welcome -->
+        <div class="q-mb-xl">
+          <div class="row items-center justify-between q-col-gutter-md">
+            <div>
+              <div class="row items-center q-gutter-sm q-mb-xs">
+                <q-icon
+                  name="dashboard"
+                  size="32px"
+                  :color="uiStore.darkMode ? 'amber-5' : 'primary'"
+                />
+                <h1
+                  class="text-h4 text-weight-bold q-my-none"
+                  :class="uiStore.darkMode ? 'text-white' : 'text-navy'"
+                >
+                  Overview &amp; Dashboard
+                </h1>
+                <q-badge color="primary" class="q-ml-sm text-caption">Master Owner</q-badge>
+              </div>
+              <div
+                class="text-body1"
+                :class="uiStore.darkMode ? 'text-slate-light' : 'text-slate-dark'"
+              >
+                Welcome back,
+                <strong class="text-primary">{{
+                  authStore.user?.displayName || authStore.user?.email || "User"
+                }}</strong
+                >. Select an operational workspace or create a new one.
+              </div>
+            </div>
+
+            <div>
+              <q-btn
+                unelevated
+                icon="add"
+                label="New Workspace"
+                no-caps
+                color="secondary"
+                class="create-task-btn"
+                @click="openNewWorkspaceModal"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Metric KPI Cards -->
+        <div class="row q-col-gutter-md q-mb-xl">
+          <div class="col-12 col-sm-4">
+            <q-card
+              flat
+              class="q-pa-md metric-card rounded-borders"
+              :class="uiStore.darkMode ? 'bg-grey-9 text-white' : 'bg-white text-navy shadow-1'"
+            >
+              <div class="row items-center justify-between">
+                <div>
+                  <div class="text-caption text-grey-6 text-uppercase text-weight-bold">
+                    Active Workspaces
+                  </div>
+                  <div class="text-h4 text-weight-bold q-mt-xs">
+                    {{ taskStore.workspaces.length }}
+                  </div>
+                </div>
+                <q-avatar icon="folder_open" color="blue-1" text-color="primary" size="48px" />
+              </div>
+            </q-card>
+          </div>
+
+          <div class="col-12 col-sm-4">
+            <q-card
+              flat
+              class="q-pa-md metric-card rounded-borders"
+              :class="uiStore.darkMode ? 'bg-grey-9 text-white' : 'bg-white text-navy shadow-1'"
+            >
+              <div class="row items-center justify-between">
+                <div>
+                  <div class="text-caption text-grey-6 text-uppercase text-weight-bold">
+                    Total Operational Tasks
+                  </div>
+                  <div class="text-h4 text-weight-bold q-mt-xs">{{ taskStore.tasks.length }}</div>
+                </div>
+                <q-avatar icon="assignment" color="amber-1" text-color="amber-9" size="48px" />
+              </div>
+            </q-card>
+          </div>
+
+          <div class="col-12 col-sm-4">
+            <q-card
+              flat
+              class="q-pa-md metric-card rounded-borders"
+              :class="uiStore.darkMode ? 'bg-grey-9 text-white' : 'bg-white text-navy shadow-1'"
+            >
+              <div class="row items-center justify-between">
+                <div>
+                  <div class="text-caption text-grey-6 text-uppercase text-weight-bold">
+                    Completed Tasks
+                  </div>
+                  <div class="text-h4 text-weight-bold q-mt-xs text-positive">
+                    {{ taskStore.tasks.filter((t: Task) => t.status === "completed").length }}
+                  </div>
+                </div>
+                <q-avatar icon="check_circle" color="green-1" text-color="positive" size="48px" />
+              </div>
+            </q-card>
+          </div>
+        </div>
+
+        <!-- Workspaces Grid -->
+        <div class="q-mb-md row items-center justify-between">
+          <div
+            class="text-h6 text-weight-bold"
+            :class="uiStore.darkMode ? 'text-white' : 'text-navy'"
+          >
+            Your Operational Workspaces
+          </div>
+          <div class="text-caption text-grey-6">
+            Click a workspace to open the operational board
+          </div>
+        </div>
+
+        <div v-if="taskStore.workspaces.length === 0" class="text-center q-pa-xl">
+          <q-icon name="folder_open" size="64px" color="grey-5" class="q-mb-md" />
+          <div class="text-h6 text-grey-7">No workspaces found</div>
+          <p class="text-caption text-grey-5 q-mb-md">
+            Create your first workspace to start orchestrating AI tasks.
+          </p>
+          <q-btn
+            unelevated
+            color="primary"
+            label="Create Workspace"
+            icon="add"
+            no-caps
+            @click="openNewWorkspaceModal"
+          />
+        </div>
+
+        <div v-else class="row q-col-gutter-lg">
+          <div v-for="ws in taskStore.workspaces" :key="ws.id" class="col-12 col-sm-6 col-md-4">
+            <q-card
+              flat
+              class="q-pa-lg cursor-pointer task-card workspace-overview-card"
+              :class="uiStore.darkMode ? 'dark-task-card' : 'light-task-card'"
+              @click="taskStore.setActiveWorkspace(ws)"
+            >
+              <div class="row items-center justify-between q-mb-sm">
+                <div class="row items-center q-gutter-sm">
+                  <q-icon
+                    :name="ws.isPinned ? 'push_pin' : ws.icon || 'folder'"
+                    :color="ws.isPinned ? 'amber-9' : 'primary'"
+                    size="sm"
+                  />
+                  <div
+                    class="text-h6 text-weight-bold"
+                    :class="uiStore.darkMode ? 'text-white' : 'text-navy'"
+                  >
+                    {{ ws.name }}
+                  </div>
+                </div>
+                <q-badge
+                  v-if="ws.googleIntegration?.connected"
+                  color="positive"
+                  class="text-caption"
+                  outline
+                >
+                  Google Active
+                </q-badge>
+              </div>
+
+              <p class="text-body2 text-grey-7 q-mb-md" style="min-height: 40px">
+                {{ ws.description || "No description set for this workspace." }}
+              </p>
+
+              <div class="row justify-between items-center q-pt-sm border-top-subtle">
+                <q-badge color="secondary" outline>
+                  {{ taskStore.tasks.filter((t: Task) => t.workspaceId === ws.id).length }} Tasks
+                </q-badge>
+                <div class="row items-center text-primary text-weight-bold text-caption">
+                  <span>Open Workspace</span>
+                  <q-icon name="arrow_forward" size="xs" class="q-ml-xs" />
+                </div>
+              </div>
+            </q-card>
+          </div>
+
+          <!-- Add Workspace Card in the Grid -->
+          <div class="col-12 col-sm-6 col-md-4">
+            <q-card
+              flat
+              class="q-pa-lg cursor-pointer task-card workspace-overview-card new-workspace-dash-card column items-center justify-center text-center"
+              :class="uiStore.darkMode ? 'dark-add-card' : 'light-add-card'"
+              @click="openNewWorkspaceModal"
+            >
+              <q-avatar
+                icon="add"
+                color="primary"
+                text-color="white"
+                size="52px"
+                class="q-mb-md shadow-2"
+              />
+              <div
+                class="text-h6 text-weight-bold"
+                :class="uiStore.darkMode ? 'text-white' : 'text-navy'"
+              >
+                Create New Workspace
+              </div>
+              <p class="text-caption text-grey-6 q-mt-xs q-mb-none">
+                Add a new operational environment to organize tasks and AI agents
+              </p>
+            </q-card>
+          </div>
+        </div>
       </div>
 
       <!-- Task cards grid -->
@@ -414,12 +651,12 @@ onMounted(async () => {
               >
                 <q-menu auto-close class="notebook-menu">
                   <q-list style="min-width: 180px">
-                    <!-- Ispeziona Sotto-Task IA -->
+                    <!-- Inspect AI SubTasks -->
                     <q-item clickable @click="selectTask(task)">
                       <q-item-section avatar>
                         <q-icon name="analytics" size="xs" color="secondary" />
                       </q-item-section>
-                      <q-item-section>Ispeziona Sotto-Task IA</q-item-section>
+                      <q-item-section>Inspect AI SubTasks</q-item-section>
                     </q-item>
 
                     <!-- Edit Task -->
@@ -427,7 +664,7 @@ onMounted(async () => {
                       <q-item-section avatar>
                         <q-icon name="edit" size="xs" color="primary" />
                       </q-item-section>
-                      <q-item-section>Modifica Task</q-item-section>
+                      <q-item-section>Edit Task</q-item-section>
                     </q-item>
 
                     <!-- Change Status -->
@@ -435,7 +672,7 @@ onMounted(async () => {
                       <q-item-section avatar>
                         <q-icon name="sync" size="xs" color="warning" />
                       </q-item-section>
-                      <q-item-section>Cambia Stato</q-item-section>
+                      <q-item-section>Change Status</q-item-section>
                       <q-item-section side>
                         <q-icon name="chevron_right" size="xs" />
                       </q-item-section>
@@ -470,7 +707,7 @@ onMounted(async () => {
                       <q-item-section avatar>
                         <q-icon name="delete" size="xs" color="negative" />
                       </q-item-section>
-                      <q-item-section>Elimina Task</q-item-section>
+                      <q-item-section>Delete Task</q-item-section>
                     </q-item>
                   </q-list>
                 </q-menu>
@@ -503,7 +740,7 @@ onMounted(async () => {
             </div>
             <div v-else class="q-mb-md row items-center text-caption text-grey-6">
               <q-spinner-dots color="amber-9" size="1.2em" class="q-mr-xs" />
-              <span>Analisi Complessità IA in corso...</span>
+              <span>Analyzing AI Complexity...</span>
             </div>
 
             <!-- Footer Badge & Bubble -->
@@ -541,16 +778,16 @@ onMounted(async () => {
         </div>
       </div>
 
-      <!-- Prompt-Driven Create Task Modal -->
+      <!-- Prompt-Driven Create Task Modal with integrated AI Task Architect -->
       <q-dialog v-model="showCreateTaskModal" persistent backdrop-filter="blur(10px)">
-        <q-card style="width: 480px; max-width: 90vw; border-radius: 20px" class="q-pa-md">
+        <q-card style="width: 520px; max-width: 92vw; border-radius: 20px" class="q-pa-md">
           <q-card-section>
             <div class="row items-center no-wrap">
               <q-avatar icon="smart_toy" color="primary" text-color="white" class="q-mr-md" />
               <div>
-                <div class="text-h6 text-weight-bold text-navy">Nuovo Task Operativo per IA</div>
+                <div class="text-h6 text-weight-bold text-navy">New Operational Task for AI</div>
                 <div class="text-caption text-grey-7">
-                  Inserisci l'obiettivo: AgentePlanner lo scomporrà in sotto-task per te.
+                  Enter the objective: AgentePlanner will decompose it into subtasks for you.
                 </div>
               </div>
             </div>
@@ -559,8 +796,8 @@ onMounted(async () => {
           <q-card-section class="q-pt-none">
             <q-input
               v-model="newTaskTitle"
-              label="Titolo Task / Progetto"
-              placeholder="Es: Campagna Outreach Clienti IT"
+              label="Task / Project Title"
+              placeholder="e.g. IT Client Outreach Campaign"
               outlined
               dense
               class="q-mb-md"
@@ -570,7 +807,7 @@ onMounted(async () => {
             <q-select
               v-model="newTaskCategory"
               :options="categoryOptions"
-              label="Categoria Operativa"
+              label="Operational Category"
               outlined
               dense
               emit-value
@@ -580,44 +817,55 @@ onMounted(async () => {
 
             <q-input
               v-model="newTaskPrompt"
-              label="Prompt / Descrizione Obiettivo per l'Agente IA"
-              placeholder="Es: Cercami prospect nel settore sanitario per soluzioni IT, genera le bozze email su Gmail e compila un foglio spese..."
+              label="Prompt / Goal Description for AI Agent"
+              placeholder="e.g. Find prospects in healthcare sector for IT solutions, generate draft emails on Gmail and compile expense sheet..."
               outlined
               dense
               type="textarea"
               rows="4"
-            />
+            >
+              <template #append>
+                <q-btn
+                  round
+                  dense
+                  flat
+                  icon="auto_awesome"
+                  color="secondary"
+                  @click="openTaskArchitectFromDialog"
+                >
+                  <q-tooltip
+                    >Refine and structure this prompt with AI Task Architect (Gemini
+                    Flash)</q-tooltip
+                  >
+                </q-btn>
+              </template>
+            </q-input>
           </q-card-section>
 
-          <q-card-actions align="right" class="q-pt-none">
-            <!-- Chip inline: Rifinisci con AI Task Architect (Step 17 §4.2) -->
-            <q-chip
-              v-if="selectedWorkspace && newTaskTitle.trim().length > 0"
-              clickable
-              dense
-              icon="auto_awesome"
-              color="secondary"
-              text-color="white"
-              class="q-mr-auto"
-              @click="
-                () => {
-                  rawDraftFromInline = newTaskTitle + ' ' + newTaskPrompt;
-                  showCreateTaskModal = false;
-                  showTaskArchitectModal = true;
-                }
-              "
-            >
-              ✨ Rifinisci con IA
-            </q-chip>
-            <q-btn v-close-popup flat label="Annulla" no-caps />
+          <q-card-actions align="between" class="q-pt-sm q-px-md">
+            <!-- AI Task Architect button always visible -->
             <q-btn
-              color="primary"
-              icon="smart_toy"
-              label="Crea & Attiva Agente IA"
+              outline
+              icon="auto_awesome"
+              label="AI Task Architect"
               no-caps
-              :disabled="!newTaskTitle.trim() || !newTaskPrompt.trim()"
-              @click="confirmCreateTask"
-            />
+              color="secondary"
+              @click="openTaskArchitectFromDialog"
+            >
+              <q-tooltip>Decompose and generate full task card with AI</q-tooltip>
+            </q-btn>
+
+            <div class="row q-gutter-sm items-center">
+              <q-btn v-close-popup flat label="Cancel" no-caps />
+              <q-btn
+                color="primary"
+                icon="smart_toy"
+                label="Create &amp; Activate AI Agent"
+                no-caps
+                :disabled="!newTaskTitle.trim() || !newTaskPrompt.trim()"
+                @click="confirmCreateTask"
+              />
+            </div>
           </q-card-actions>
         </q-card>
       </q-dialog>
@@ -631,7 +879,9 @@ onMounted(async () => {
                 <q-avatar icon="analytics" color="secondary" text-color="white" class="q-mr-sm" />
                 <div>
                   <div class="text-h6 text-weight-bold text-navy">AI SubTask Inspector</div>
-                  <div class="text-caption text-grey-7">Analisi & Scomposizione AgentePlanner</div>
+                  <div class="text-caption text-grey-7">
+                    AgentePlanner Analysis &amp; Decomposition
+                  </div>
                 </div>
               </div>
               <q-btn flat round dense icon="close" v-close-popup />
@@ -656,7 +906,7 @@ onMounted(async () => {
               <div
                 class="row items-center justify-between text-body2 text-weight-bold text-amber-10"
               >
-                <span>Score Complessità Agente:</span>
+                <span>Agent Complexity Score:</span>
                 <span>{{ inspectorTask.aiMetadata.complexityScore }} / 10</span>
               </div>
               <q-linear-progress
@@ -669,14 +919,14 @@ onMounted(async () => {
 
             <!-- SubTasks List Checklist -->
             <div class="text-subtitle2 text-weight-bold q-mb-xs text-navy">
-              Sotto-Task Assegnate (AgentePlanner):
+              Assigned SubTasks (AgentePlanner):
             </div>
 
             <div
               v-if="!inspectorTask.aiMetadata?.subtasks?.length"
               class="text-caption text-grey-7 q-my-sm"
             >
-              ℹ️ L'AgentePlanner sta elaborando le sotto-task in background...
+              ℹ️ AgentePlanner is processing subtasks in the background...
             </div>
 
             <q-list v-else separator class="q-mb-md bg-grey-1 rounded-borders">
@@ -714,7 +964,7 @@ onMounted(async () => {
             >
               <div class="row items-center">
                 <q-icon name="verified" size="sm" class="q-mr-sm" />
-                <span class="text-weight-bold">Audit AgenteIspettore Superato</span>
+                <span class="text-weight-bold">AgenteIspettore Quality Audit Passed</span>
               </div>
               <div class="text-caption q-mt-xs">
                 {{ inspectorTask.aiMetadata.qualityAudit.summary }}
@@ -723,7 +973,7 @@ onMounted(async () => {
           </q-card-section>
 
           <q-card-actions align="right" class="q-pt-md">
-            <q-btn color="primary" label="Chiudi Inspector" no-caps v-close-popup />
+            <q-btn color="primary" label="Close Inspector" no-caps v-close-popup />
           </q-card-actions>
         </q-card>
       </q-dialog>
@@ -732,13 +982,13 @@ onMounted(async () => {
       <q-dialog v-model="showEditTaskModal" persistent>
         <q-card style="min-width: 400px; border-radius: 16px" class="q-pa-md">
           <q-card-section>
-            <div class="text-h6 text-weight-bold text-navy">Modifica Task</div>
+            <div class="text-h6 text-weight-bold text-navy">Edit Task</div>
           </q-card-section>
 
           <q-card-section class="q-pt-none">
             <q-input
               v-model="editTaskTitle"
-              label="Titolo Task"
+              label="Task Title"
               outlined
               dense
               class="q-mb-md"
@@ -746,7 +996,7 @@ onMounted(async () => {
             />
             <q-input
               v-model="editTaskDescription"
-              label="Descrizione Task"
+              label="Task Description"
               outlined
               dense
               type="textarea"
@@ -754,15 +1004,34 @@ onMounted(async () => {
             />
           </q-card-section>
 
-          <q-card-actions align="right">
-            <q-btn v-close-popup flat label="Annulla" no-caps />
+          <q-card-actions align="between">
             <q-btn
-              color="primary"
-              label="Salva Modifiche"
+              flat
+              dense
+              icon="auto_awesome"
+              label="Refine with AI"
+              color="secondary"
               no-caps
-              :disabled="!editTaskTitle.trim()"
-              @click="confirmEditTask"
-            />
+              @click="
+                () => {
+                  rawDraftFromInline = editTaskTitle + ' — ' + editTaskDescription;
+                  showEditTaskModal = false;
+                  showTaskArchitectModal = true;
+                }
+              "
+            >
+              <q-tooltip>Refine and structure this task with Gemini Flash</q-tooltip>
+            </q-btn>
+            <div class="row q-gutter-sm">
+              <q-btn v-close-popup flat label="Cancel" no-caps />
+              <q-btn
+                color="primary"
+                label="Save Changes"
+                no-caps
+                :disabled="!editTaskTitle.trim()"
+                @click="confirmEditTask"
+              />
+            </div>
           </q-card-actions>
         </q-card>
       </q-dialog>
@@ -773,14 +1042,14 @@ onMounted(async () => {
           <q-card-section>
             <div class="row items-center no-wrap">
               <q-icon name="warning" color="negative" size="md" class="q-mr-sm" />
-              <div class="text-h6 text-weight-bold text-negative">Elimina Task</div>
+              <div class="text-h6 text-weight-bold text-negative">Delete Task</div>
             </div>
           </q-card-section>
 
           <q-card-section class="q-pt-none">
             <p class="text-body2 text-slate-dark q-mb-md">
-              Questa azione è **irreversibile**. Per confermare l'eliminazione definitiva del task,
-              digita il suo titolo esatto:
+              This action is **irreversible**. To confirm permanent deletion of the task, type its
+              exact title:
             </p>
 
             <div class="q-pa-sm bg-grey-2 rounded-borders text-weight-bold text-navy q-mb-md">
@@ -789,7 +1058,7 @@ onMounted(async () => {
 
             <q-input
               v-model="confirmDeleteTitle"
-              placeholder="Digita il titolo esatto del task"
+              placeholder="Type the exact task title"
               outlined
               dense
               autofocus
@@ -797,10 +1066,10 @@ onMounted(async () => {
           </q-card-section>
 
           <q-card-actions align="right">
-            <q-btn v-close-popup flat label="Annulla" no-caps />
+            <q-btn v-close-popup flat label="Cancel" no-caps />
             <q-btn
               color="negative"
-              label="Elimina Definitivamente"
+              label="Delete Permanently"
               no-caps
               :disabled="!deletingTask || confirmDeleteTitle.trim() !== deletingTask.title.trim()"
               @click="confirmDeleteTask"
@@ -961,5 +1230,49 @@ onMounted(async () => {
   border-radius: 8px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.metric-card {
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+  &:hover {
+    transform: translateY(-2px);
+  }
+}
+
+.workspace-overview-card {
+  min-height: 180px;
+  height: auto;
+}
+
+.border-top-subtle {
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.light-add-card {
+  background: rgba(255, 255, 255, 0.7);
+  border: 2px dashed rgba(10, 35, 66, 0.25);
+  box-shadow: 0 4px 16px rgba(10, 35, 66, 0.04);
+
+  &:hover {
+    transform: translateY(-4px);
+    border-color: #0a2342;
+    background: #ffffff;
+    box-shadow: 0 12px 28px rgba(10, 35, 66, 0.1);
+  }
+}
+
+.dark-add-card {
+  background: rgba(21, 34, 56, 0.5);
+  border: 2px dashed rgba(197, 160, 101, 0.35);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+
+  &:hover {
+    transform: translateY(-4px);
+    border-color: #c5a065;
+    background: #152238;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  }
 }
 </style>

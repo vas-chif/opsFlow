@@ -96,19 +96,19 @@ const activeSession = computed(() => {
 });
 
 const statusOptions: { label: string; value: TaskStatus; color: string; icon: string }[] = [
-  { label: "In Attesa", value: "pending", color: "warning", icon: "schedule" },
-  { label: "In Corso", value: "in-progress", color: "primary", icon: "play_arrow" },
-  { label: "Contattato", value: "contacted", color: "info", icon: "mail" },
-  { label: "Risposta Positiva", value: "positive-response", color: "positive", icon: "thumb_up" },
-  { label: "Risposta Negativa", value: "negative-response", color: "negative", icon: "thumb_down" },
+  { label: "Pending", value: "pending", color: "warning", icon: "schedule" },
+  { label: "In Progress", value: "in-progress", color: "primary", icon: "play_arrow" },
+  { label: "Contacted", value: "contacted", color: "info", icon: "mail" },
+  { label: "Positive Response", value: "positive-response", color: "positive", icon: "thumb_up" },
+  { label: "Negative Response", value: "negative-response", color: "negative", icon: "thumb_down" },
   {
-    label: "Follow-up 30gg",
+    label: "Follow-up 30 Days",
     value: "follow-up-30-days",
     color: "deep-orange",
     icon: "event_repeat",
   },
-  { label: "Completato", value: "completed", color: "positive", icon: "check_circle" },
-  { label: "Annullato", value: "cancelled", color: "grey", icon: "cancel" },
+  { label: "Completed", value: "completed", color: "positive", icon: "check_circle" },
+  { label: "Cancelled", value: "cancelled", color: "grey", icon: "cancel" },
 ];
 
 const defaultStatusObj = statusOptions[0]!;
@@ -223,13 +223,13 @@ const handleStatusChange = async (newStatus: TaskStatus): Promise<void> => {
     await taskStore.updateTaskStatus(workspace.value.id, task.value.id, newStatus);
     q.notify({
       type: "positive",
-      message: `Stato aggiornato a "${newStatus}"`,
+      message: `Status updated to "${newStatus}"`,
       position: "top",
     });
   } catch {
     q.notify({
       type: "negative",
-      message: "Errore nell'aggiornamento dello stato",
+      message: "Error updating status",
       position: "top",
     });
   }
@@ -546,12 +546,12 @@ const handleExecuteTaskAI = async (): Promise<void> => {
                   size="sm"
                   color="secondary"
                   icon="search"
-                  label="Cerca Lead"
+                  label="Search Leads"
                   no-caps
                   class="full-width q-py-xs text-weight-bold"
                   :disabled="isSending"
                   @click="
-                    handleSendCustomPrompt('Trova lead e prospect rilevanti per questo task.')
+                    handleSendCustomPrompt('Find relevant leads and prospects for this task.')
                   "
                 />
               </div>
@@ -562,14 +562,12 @@ const handleExecuteTaskAI = async (): Promise<void> => {
                   size="sm"
                   color="positive"
                   icon="mail"
-                  label="Bozza Email"
+                  label="Draft Email"
                   no-caps
                   class="full-width q-py-xs text-weight-bold"
                   :disabled="isSending"
                   @click="
-                    handleSendCustomPrompt(
-                      'Genera una bozza email di presentazione per i prospect trovati.',
-                    )
+                    handleSendCustomPrompt('Generate an email intro draft for the found prospects.')
                   "
                 />
               </div>
@@ -586,7 +584,7 @@ const handleExecuteTaskAI = async (): Promise<void> => {
                   :disabled="isSending"
                   @click="
                     handleSendCustomPrompt(
-                      'Salva ed organizza i dati estratti nel foglio Google Sheets predefinito.',
+                      'Save and organize extracted data into the default Google Sheets.',
                     )
                   "
                 />
@@ -618,7 +616,7 @@ const handleExecuteTaskAI = async (): Promise<void> => {
         <div ref="chatScrollRef" class="col scroll q-mb-xs q-px-xs" style="overflow-y: auto">
           <div v-for="msg in activeSession.messages" :key="msg.id" class="q-mb-xs">
             <q-chat-message
-              :name="msg.sender === 'user' ? 'Tu' : msg.agentName || 'Agente AI'"
+              :name="msg.sender === 'user' ? 'You' : msg.agentName || 'AI Agent'"
               :stamp="msg.timestamp"
               :sent="msg.sender === 'user'"
               :bg-color="msg.sender === 'user' ? 'primary' : 'grey-3'"
@@ -641,7 +639,7 @@ const handleExecuteTaskAI = async (): Promise<void> => {
                   @click="handleSpeakMessage(msg.text)"
                 >
                   <q-tooltip>{{
-                    isSpeaking ? "Fermia audio" : "Ascolta risposta vocale"
+                    isSpeaking ? "Stop audio" : "Listen to voice response"
                   }}</q-tooltip>
                 </q-btn>
               </div>
@@ -667,7 +665,7 @@ const handleExecuteTaskAI = async (): Promise<void> => {
             </q-chat-message>
           </div>
 
-          <q-chat-message v-if="isSending" name="Agente AI" bg-color="grey-3">
+          <q-chat-message v-if="isSending" name="AI Agent" bg-color="grey-3">
             <q-spinner-dots size="1.4rem" color="primary" />
           </q-chat-message>
         </div>
@@ -701,7 +699,7 @@ const handleExecuteTaskAI = async (): Promise<void> => {
             v-model="chatMessage"
             outlined
             dense
-            placeholder="Scrivi direttiva o detta..."
+            placeholder="Type instruction or dictate..."
             :disabled="isSending"
             style="font-size: 0.85rem"
             @keyup.enter="handleSendChatMessage"
@@ -716,7 +714,7 @@ const handleExecuteTaskAI = async (): Promise<void> => {
                 :disabled="isSending"
                 @click="triggerFileInput"
               >
-                <q-tooltip>Allega documento PDF / testo per Document Understanding</q-tooltip>
+                <q-tooltip>Attach PDF / text document for Document Understanding</q-tooltip>
               </q-btn>
               <q-btn
                 flat
@@ -729,7 +727,7 @@ const handleExecuteTaskAI = async (): Promise<void> => {
                 @click="toggleVoiceDictation"
               >
                 <q-tooltip>{{
-                  isListening ? "Interrompi dettatura" : "Dettatura vocale nativa (€0)"
+                  isListening ? "Stop dictation" : "Native voice dictation (€0)"
                 }}</q-tooltip>
               </q-btn>
             </template>

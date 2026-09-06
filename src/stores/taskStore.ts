@@ -146,24 +146,19 @@ export const useTaskStore = defineStore("tasks", {
   getters: {
     /**
      * Active workspace object resolved reactively from activeWorkspaceId.
+     * Returns null when on the Home Dashboard (no active workspace selected).
      */
     activeWorkspace: (state): Workspace | null => {
-      if (state.workspaces.length === 0) return null;
-      if (!state.activeWorkspaceId) return state.workspaces[0] || null;
-      return (
-        state.workspaces.find((w) => w.id === state.activeWorkspaceId) ||
-        state.workspaces[0] ||
-        null
-      );
+      if (!state.activeWorkspaceId || state.workspaces.length === 0) return null;
+      return state.workspaces.find((w) => w.id === state.activeWorkspaceId) || null;
     },
 
     /**
      * Active workspace DBS attitude constitution (Step 10).
      */
     activeWorkspaceAttitude: (state): WorkspaceAttitude | null => {
-      if (state.workspaces.length === 0) return null;
-      const active =
-        state.workspaces.find((w) => w.id === state.activeWorkspaceId) || state.workspaces[0];
+      if (!state.activeWorkspaceId || state.workspaces.length === 0) return null;
+      const active = state.workspaces.find((w) => w.id === state.activeWorkspaceId);
       return active?.attitude || null;
     },
 
