@@ -3,15 +3,22 @@
   @description Editor dialog with 4-Tab Guided No-Code Form for Workspace System Prompt & Google Linked Resources.
   @author Vasile Chifeac
   @created 2026-07-30
-  @modified 2026-07-31
+  @modified 2026-09-06
 -->
 
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+// ── Vue & Framework ──────────────────────────────────────────────────────────
+import { ref, computed, watch, onUnmounted } from "vue";
 import { useQuasar } from "quasar";
-import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+
+// ── Stores ───────────────────────────────────────────────────────────────────
 import { useTaskStore } from "../stores/taskStore";
+import { useAuthStore } from "../stores/authStore";
+
+// ── Composables ──────────────────────────────────────────────────────────────
 import { useSecureLogger } from "../composables/useSecureLogger";
+
+// ── Types ────────────────────────────────────────────────────────────────────
 import type { Workspace, WorkspaceLinkedResources } from "../types/models";
 
 const props = defineProps<{
@@ -26,7 +33,28 @@ const emit = defineEmits<{
 
 const q = useQuasar();
 const taskStore = useTaskStore();
+const authStore = useAuthStore();
 const logger = useSecureLogger();
+
+/**
+ * Allowed origins for incoming postMessage events (Step 18 §4.1).
+ * Mirror of the backend ALLOWED_CLIENT_ORIGINS whitelist.
+ */
+const ALLOWED_MESSAGE_ORIGINS: ReadonlySet<string> = new Set([
+  "http://localhost:9000",
+  "https://opsflow-88of.web.app",
+  "https://opsflow-88of.firebaseapp.com",
+]);
+
+/** Google OAuth callback function URL (Cloud Function redirect endpoint). */
+const OAUTH_CALLBACK_URL =
+  "https://europe-west1-opsflow-88of.cloudfunctions.net/googleOAuthCallback";
+
+/** Reference to the OAuth popup window for cleanup. */
+let oauthPopup: Window | null = null;
+
+/** postMessage event listener reference for cleanup. */
+let messageListener: ((event: MessageEvent) => void) | null = null;
 
 const isOpen = computed({
   get: () => props.modelValue,
@@ -83,53 +111,176 @@ const removeEmail = (email: string): void => {
   linkedEmails.value = linkedEmails.value.filter((e) => e !== email);
 }; /*end removeEmail*/
 
-const handleConnectGoogle = async (): Promise<void> => {
+/**
+ * Handles Google OAuth 2.0 connection for the workspace.
+ *
+ * Step 18 Implementation — No Session Swap (CWE-384 eliminated):
+ * 1. Opens a popup synchronously on `about:blank` BEFORE any await (anti-popup-blocker).
+ * 2. Builds the Google OAuth URL with `state` payload (tenantId, workspaceId, userId, origin, nonce).
+ * 3. Redirects the popup to Google consent screen.
+ * 4. Listens for `postMessage` from the Cloud Function callback page.
+ * 5. Validates `event.origin` against whitelist — never trusts wildcard `*`.
+ * 6. On OPSFLOW_GOOGLE_LINKED: updates local state reactively WITHOUT touching Firebase Auth.
+ *
+ * @security Firebase Auth (authStore.currentUser) is NEVER altered by this function.
+ */
+const handleConnectGoogle = (): void => {
+  if (!props.workspace) return;
+
+  // Validate required auth context from JWT claims (§5 AGENTS.md)
+  const user = authStore.user;
+  const tenantId = authStore.tenantId;
+  if (!user || !tenantId) {
+    q.notify({
+      type: "negative",
+      message: "Sessione non valida. Effettua il login e riprova.",
+      position: "top",
+    });
+    return;
+  }
+
+  // ── 1. Open popup SYNCHRONOUSLY before any await (anti-popup-blocker) ─────
+  oauthPopup = window.open(
+    "about:blank",
+    "opsflow_google_auth",
+    "width=520,height=650,status=no,toolbar=no,menubar=no",
+  );
+
+  if (!oauthPopup) {
+    q.notify({
+      type: "warning",
+      message: "Il popup è stato bloccato dal browser. Consenti i popup per questo sito.",
+      position: "top",
+      icon: "block",
+    });
+    return;
+  }
+
   isConnectingGoogle.value = true;
-  try {
-    const auth = getAuth();
-    const provider = new GoogleAuthProvider();
-    provider.addScope("https://www.googleapis.com/auth/gmail.compose");
-    provider.addScope("https://www.googleapis.com/auth/spreadsheets");
-    provider.addScope("https://www.googleapis.com/auth/drive.readonly");
 
-    const result = await signInWithPopup(auth, provider);
-    const user = result.user;
+  // ── 2. Build state payload (Base64 encoded — CSRF nonce included) ──────────
+  const statePayload = {
+    tenantId,
+    workspaceId: props.workspace.id,
+    userId: user.uid,
+    clientOrigin: window.location.origin,
+    nonce: crypto.randomUUID(),
+  };
+  const state = btoa(JSON.stringify(statePayload))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "");
 
-    if (user && user.email) {
-      googleEmail.value = user.email;
-      if (!linkedEmails.value.includes(user.email)) {
-        linkedEmails.value.push(user.email);
+  // ── 3. Build Google OAuth URL and redirect the popup ──────────────────────
+  const scopes = [
+    "https://www.googleapis.com/auth/gmail.compose",
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive.readonly",
+  ].join(" ");
+
+  const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  authUrl.searchParams.set("client_id", import.meta.env.VITE_GOOGLE_CLIENT_ID ?? "");
+  authUrl.searchParams.set("redirect_uri", OAUTH_CALLBACK_URL);
+  authUrl.searchParams.set("response_type", "code");
+  authUrl.searchParams.set("scope", scopes);
+  authUrl.searchParams.set("access_type", "offline");
+  authUrl.searchParams.set("prompt", "consent");
+  authUrl.searchParams.set("state", state);
+
+  oauthPopup.location.href = authUrl.toString();
+
+  // ── 4. Register postMessage listener with strict origin validation ──────────
+  if (messageListener) {
+    window.removeEventListener("message", messageListener);
+  }
+
+  messageListener = (event: MessageEvent): void => {
+    // ── 5. Validate origin against whitelist (zero wildcard *) ─────────────
+    if (!ALLOWED_MESSAGE_ORIGINS.has(event.origin)) {
+      logger.info(
+        "WorkspaceOAuth",
+        "Ignored postMessage from untrusted origin",
+        { origin: event.origin }, // No PII
+      );
+      return;
+    }
+
+    const data = event.data as {
+      type?: string;
+      email?: string;
+      workspaceId?: string;
+      message?: string;
+    };
+
+    if (data.type === "OPSFLOW_GOOGLE_LINKED" && data.workspaceId === props.workspace?.id) {
+      // ── 6. Update UI state reactively — Firebase Auth NOT touched ──────
+      const email = data.email ?? "";
+      googleEmail.value = email;
+      if (email && !linkedEmails.value.includes(email)) {
+        linkedEmails.value.push(email);
       }
       isOAuthConnected.value = true;
-      logger.success("GoogleOAuth2", "Account Google autorizzato via Firebase Auth Popup", {
-        email: user.email,
-      });
+      isConnectingGoogle.value = false;
+
+      logger.success(
+        "WorkspaceOAuth",
+        "Google Workspace account linked successfully via OAuth 2.0",
+        { workspaceId: data.workspaceId }, // No PII — email not logged
+      );
+
       q.notify({
         type: "positive",
-        message: `Account Google (${user.email}) autorizzato con successo! Scope Gmail/Sheets attivi.`,
+        message: `✅ Account Google (${email}) collegato con successo al Workspace!`,
         position: "top",
         icon: "verified_user",
+        timeout: 5000,
       });
+
+      // Cleanup listener
+      window.removeEventListener("message", messageListener!);
+      messageListener = null;
+    } else if (data.type === "OPSFLOW_GOOGLE_ERROR") {
+      isConnectingGoogle.value = false;
+      logger.info("WorkspaceOAuth", "OAuth error received from popup", {});
+      q.notify({
+        type: "negative",
+        message: data.message ?? "Errore durante l'autorizzazione Google.",
+        position: "top",
+        icon: "error_outline",
+      });
+      window.removeEventListener("message", messageListener!);
+      messageListener = null;
     }
-  } catch (err) {
-    logger.info("GoogleOAuth2", "Fallback autorizzazione Google locale per ambiente dev", err);
-    isOAuthConnected.value = true;
-    if (!googleEmail.value) {
-      googleEmail.value = "studio.opsflow@gmail.com";
+  };
+
+  window.addEventListener("message", messageListener);
+
+  // ── Timeout: cleanup if popup is closed/abandoned ─────────────────────────
+  const popupCheckInterval = setInterval(() => {
+    if (oauthPopup?.closed) {
+      clearInterval(popupCheckInterval);
+      if (isConnectingGoogle.value) {
+        isConnectingGoogle.value = false;
+        if (messageListener) {
+          window.removeEventListener("message", messageListener);
+          messageListener = null;
+        }
+      }
     }
-    if (!linkedEmails.value.includes(googleEmail.value)) {
-      linkedEmails.value.push(googleEmail.value);
-    }
-    q.notify({
-      type: "info",
-      message: `Account Google (${googleEmail.value}) collegato ed autorizzato per questo Workspace!`,
-      position: "top",
-      icon: "mark_email_read",
-    });
-  } finally {
-    isConnectingGoogle.value = false;
-  }
+  }, 800);
 }; /*end handleConnectGoogle*/
+
+/** Cleanup OAuth listener and popup on component unmount. */
+onUnmounted(() => {
+  if (messageListener) {
+    window.removeEventListener("message", messageListener);
+    messageListener = null;
+  }
+  if (oauthPopup && !oauthPopup.closed) {
+    oauthPopup.close();
+    oauthPopup = null;
+  }
+}); /*end onUnmounted*/
 
 const handleConnectDriveFolder = (): void => {
   if (!defaultDriveFolderId.value.trim()) return;
@@ -238,15 +389,23 @@ const syncFromWorkspace = (newWs: Workspace | null): void => {
     systemPrompt.value = newWs.systemPrompt || "";
   }
   const res = newWs.linkedResources || {};
-  googleEmail.value = res.googleEmail || "";
+
+  // Step 18: Prefer googleIntegration (workspace-scoped vault) over legacy linkedResources
+  if (newWs.googleIntegration?.connected) {
+    googleEmail.value = newWs.googleIntegration.connectedEmail || res.googleEmail || "";
+    isOAuthConnected.value = true;
+  } else {
+    googleEmail.value = res.googleEmail || "";
+    isOAuthConnected.value = res.isOAuthConnected || false;
+  }
+
   linkedEmails.value = res.linkedEmails
     ? [...res.linkedEmails]
-    : res.googleEmail
-      ? [res.googleEmail]
+    : googleEmail.value
+      ? [googleEmail.value]
       : [];
   defaultSheetId.value = res.defaultSheetId || "";
   defaultDriveFolderId.value = res.defaultDriveFolderId || "";
-  isOAuthConnected.value = res.isOAuthConnected || false;
   if (res.assignedAgents) {
     assignedAgents.value = [...res.assignedAgents];
   }

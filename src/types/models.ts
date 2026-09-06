@@ -260,6 +260,22 @@ export interface WorkspaceLinkedResources {
 }
 
 /**
+ * Public (non-confidential) metadata for a Google Workspace integration.
+ * Stored directly on the workspace document — never contains tokens or PII.
+ * The encrypted refresh_token lives in: tenants/{tenantId}/workspaces/{workspaceId}/integrations/google
+ *
+ * @see Step 18 — Workspace-Scoped Token Vault
+ */
+export interface GoogleWorkspaceIntegration {
+  /** Whether a Google account is currently linked and authorized. */
+  connected: boolean;
+  /** The Google email address that was authorized (e.g. versiliacare@gmail.com). */
+  connectedEmail: string;
+  /** ISO 8601 timestamp of when the connection was established. */
+  connectedAt: string;
+} /*end GoogleWorkspaceIntegration*/
+
+/**
  * Workspace entity for grouping tasks.
  * Follows multi-tenant isolation with tenantId.
  */
@@ -278,6 +294,12 @@ export interface Workspace {
   category?: string;
   linkedResources?: WorkspaceLinkedResources;
   attitude?: WorkspaceAttitude;
+  /**
+   * Public Google Workspace integration metadata (Step 18).
+   * Set by the `googleOAuthCallback` Cloud Function after a successful OAuth consent.
+   * Does NOT contain tokens — those are in the encrypted workspace-scoped vault.
+   */
+  googleIntegration?: GoogleWorkspaceIntegration;
 } /*end Workspace*/
 
 /**

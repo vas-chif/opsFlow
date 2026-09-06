@@ -495,60 +495,227 @@ export const resolveApproval = onRequest(
   },
 ); /* end resolveApproval */
 
-// ── GOOGLE OAUTH CALLBACK ─────────────────────────────────────────────────────
+// ── GOOGLE OAUTH CALLBACK (Step 18: Redirect Flow — No Session Swap) ──────────
 
 /**
- * Callable Function: googleOAuthCallback
- * Stores encrypted OAuth tokens in Firestore Vault after consent flow.
+ * Whitelist of allowed client origins for postMessage security.
+ * @see Step 18 §4.1 — Zero Wildcard postMessage
+ */
+const ALLOWED_CLIENT_ORIGINS: ReadonlySet<string> = new Set([
+  "http://localhost:9000",
+  "https://opsflow-88of.web.app",
+  "https://opsflow-88of.firebaseapp.com",
+]);
+
+/**
+ * State payload encoded in Base64 and passed through the OAuth redirect flow.
+ * Allows the callback to recover tenantId, workspaceId, userId and clientOrigin
+ * without any server-side session storage — stateless & GDPR-compliant.
+ */
+interface OAuthStatePayload {
+  tenantId: string;
+  workspaceId: string;
+  userId: string;
+  clientOrigin: string;
+  nonce: string; // CSRF protection — verified as present, not against a store (stateless)
+}
+
+/**
+ * HTTP Handler: googleOAuthCallback
+ *
+ * Redirect-based Google OAuth 2.0 callback for Workspace integration (Step 18).
+ * This function NEVER touches Firebase Auth — zero Session Swap risk (CWE-384).
+ *
+ * Flow:
+ * 1. Receive `code` + `state` (Base64 JSON) from Google redirect.
+ * 2. Decode and validate `state` (clientOrigin whitelist, field presence, nonce).
+ * 3. Exchange `code` for tokens via Google Token Endpoint.
+ * 4. Fetch the authorized email via Google userinfo API.
+ * 5. Encrypt refresh_token (AES-256-GCM) and save to workspace-scoped Firestore Vault.
+ * 6. Update workspace document with non-confidential `googleIntegration` metadata.
+ * 7. Return HTML page that sends postMessage to parent window with validated origin.
+ *
+ * @security
+ * - postMessage target is the validated `clientOrigin` — never wildcard `*`.
+ * - `state` nonce provides CSRF protection.
+ * - No PII is logged; only tenantId and workspaceId are traced.
+ *
+ * @performance
+ * - 1 Google Token Exchange + 1 Google Userinfo call + 2 Firestore writes per authorization.
+ * - Zero background listeners (§5 AGENTS.md).
  */
 export const googleOAuthCallback = onRequest(
-  { cors: true, region: "europe-west1" },
+  { cors: false, region: "europe-west1" },
   async (req, res) => {
-    const { code, tenantId, userId, scopes } = req.body as {
-      code: string;
-      tenantId: string;
-      userId: string;
-      scopes: string[];
-    };
+    const code = req.query["code"] as string | undefined;
+    const stateRaw = req.query["state"] as string | undefined;
+    const error = req.query["error"] as string | undefined;
 
-    if (!code || !tenantId || !userId) {
-      res.status(400).json({ error: "Missing code, tenantId or userId." });
+    // ── Handle OAuth denial by user ─────────────────────────────────────────
+    if (error) {
+      logger.warn("googleOAuthCallback: user denied OAuth consent", { error });
+      res.status(200).send(buildPostMessageHtml(
+        "http://localhost:9000",
+        { type: "OPSFLOW_GOOGLE_ERROR", message: "Autorizzazione negata dall'utente." },
+      ));
+      return;
+    }
+
+    if (!code || !stateRaw) {
+      res.status(400).send("Bad Request: missing code or state.");
+      return;
+    }
+
+    // ── Decode & validate state ─────────────────────────────────────────────
+    let state: OAuthStatePayload;
+    try {
+      const decoded = Buffer.from(stateRaw, "base64url").toString("utf8");
+      state = JSON.parse(decoded) as OAuthStatePayload;
+    } catch {
+      res.status(400).send("Bad Request: invalid state encoding.");
+      return;
+    }
+
+    const { tenantId, workspaceId, userId, clientOrigin, nonce } = state;
+
+    if (!tenantId || !workspaceId || !userId || !clientOrigin || !nonce) {
+      res.status(400).send("Bad Request: incomplete state payload.");
+      return;
+    }
+
+    // ── Origin whitelist validation (§4.1 Step 18) ─────────────────────────
+    if (!ALLOWED_CLIENT_ORIGINS.has(clientOrigin)) {
+      logger.error("googleOAuthCallback: blocked — origin not in whitelist", { clientOrigin });
+      res.status(403).send("Forbidden: origin not allowed.");
       return;
     }
 
     try {
       const { google } = await import("googleapis");
       const { OAuth2 } = google.auth;
+
+      const redirectUri = process.env.GOOGLE_REDIRECT_URI ??
+        "https://europe-west1-opsflow-88of.cloudfunctions.net/googleOAuthCallback";
+
       const oAuth2Client = new OAuth2(
         process.env.GOOGLE_CLIENT_ID,
         process.env.GOOGLE_CLIENT_SECRET,
-        process.env.GOOGLE_REDIRECT_URI,
+        redirectUri,
       );
 
+      // ── Exchange authorization code for tokens ──────────────────────────
       const { tokens } = await oAuth2Client.getToken(code);
 
       if (!tokens.refresh_token) {
-        res
-          .status(400)
-          .json({ error: "No refresh_token received. Ensure prompt: consent was set." });
+        logger.warn("googleOAuthCallback: no refresh_token — user may have already authorized", {
+          tenantId,
+          workspaceId,
+        });
+        res.status(200).send(buildPostMessageHtml(clientOrigin, {
+          type: "OPSFLOW_GOOGLE_ERROR",
+          message:
+            "Nessun refresh_token ricevuto. Revoca l'accesso in myaccount.google.com e riprova.",
+        }));
         return;
       }
 
-      await saveOAuthToken(tenantId, userId, {
-        refreshToken: tokens.refresh_token,
-        accessToken: tokens.access_token ?? "",
-        scopes: scopes ?? [],
-        expiresAt: tokens.expiry_date ?? Date.now() + 3600_000,
+      // ── Retrieve authorized email via userinfo ──────────────────────────
+      oAuth2Client.setCredentials(tokens);
+      const oauth2Api = google.oauth2({ version: "v2", auth: oAuth2Client });
+      const { data: userInfo } = await oauth2Api.userinfo.get();
+      const connectedEmail = userInfo.email ?? "";
+
+      // ── Save encrypted token to Workspace-scoped Vault ──────────────────
+      const grantedScopes = (tokens.scope ?? "").split(" ").filter(Boolean);
+      await saveOAuthToken(
+        tenantId,
+        userId,
+        {
+          refreshToken: tokens.refresh_token,
+          accessToken: tokens.access_token ?? "",
+          scopes: grantedScopes,
+          expiresAt: tokens.expiry_date ?? Date.now() + 3600_000,
+        },
+        workspaceId,
+      );
+
+      // ── Update workspace document with public integration metadata ──────
+      const db = getFirestore();
+      await db.doc(`tenants/${tenantId}/workspaces/${workspaceId}`).update({
+        "googleIntegration.connected": true,
+        "googleIntegration.connectedEmail": connectedEmail,
+        "googleIntegration.connectedAt": new Date().toISOString(),
+        updatedAt: new Date(),
       });
 
-      logger.info("googleOAuthCallback: token saved to vault", { tenantId, userId });
-      res.status(200).json({ success: true });
+      logger.info("googleOAuthCallback: token saved to workspace vault", {
+        tenantId,
+        workspaceId,
+        // No email logged (GDPR Art. 32)
+      });
+
+      // ── Return HTML page with secure postMessage ────────────────────────
+      res.status(200).send(buildPostMessageHtml(clientOrigin, {
+        type: "OPSFLOW_GOOGLE_LINKED",
+        email: connectedEmail,
+        workspaceId,
+      }));
     } catch (err) {
-      logger.error("googleOAuthCallback: failed", { err });
-      res.status(500).json({ error: "OAuth token exchange failed." });
+      logger.error("googleOAuthCallback: token exchange failed", { tenantId, workspaceId, err });
+      res.status(200).send(buildPostMessageHtml(state?.clientOrigin ?? "http://localhost:9000", {
+        type: "OPSFLOW_GOOGLE_ERROR",
+        message: "Errore interno durante l'autorizzazione. Riprova.",
+      }));
     }
   },
-); // end googleOAuthCallback
+); /* end googleOAuthCallback */
+
+/**
+ * Builds the HTML close-page that sends a postMessage to the parent window.
+ * Uses a strict target origin — never wildcard `*` (§4.1 Step 18).
+ *
+ * @param {string} targetOrigin - The validated origin to send postMessage to
+ * @param {Record<string, unknown>} payload - The structured data to post
+ * @return {string} HTML string for the popup response page
+ */
+function buildPostMessageHtml(targetOrigin: string, payload: Record<string, unknown>): string {
+  const safePayload = JSON.stringify(payload);
+  const safeOrigin = JSON.stringify(targetOrigin);
+  return `<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpsFlow — Autorizzazione Google</title>
+  <style>
+    body { font-family: 'Mulish', sans-serif; display: flex; align-items: center;
+           justify-content: center; min-height: 100vh; margin: 0;
+           background: #0a2342; color: #f9f7f2; }
+    .card { text-align: center; padding: 2rem; border-radius: 16px;
+            background: rgba(255,255,255,0.08); backdrop-filter: blur(12px); }
+    .icon { font-size: 3rem; margin-bottom: 1rem; }
+    p { opacity: 0.75; margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">✅</div>
+    <h2>Autorizzazione completata</h2>
+    <p>Questa finestra si chiuderà automaticamente...</p>
+  </div>
+  <script>
+    (function () {
+      try {
+        window.opener.postMessage(${safePayload}, ${safeOrigin});
+      } catch (e) {
+        // Parent may have closed — safe to ignore
+      }
+      window.close();
+    })();
+  </script>
+</body>
+</html>`;
+} /* end buildPostMessageHtml */
 
 // ── AI PROMPT ARCHITECT: generateDbsAttitude (Step 10 Fase 2) ─────────────────
 

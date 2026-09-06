@@ -1,15 +1,18 @@
 /**
  * @file googleOAuthHandler.ts
  * @description Server-side Google OAuth Token Vault with AES-256-GCM encryption and auto-refresh.
+ *   Supports both user-scoped (legacy) and workspace-scoped (Step 18) token storage paths.
  * @author Vasile Chifeac
  * @created 2026-08-14
- * @modified 2026-08-14
+ * @modified 2026-09-06
  *
  * @notes
  * - Token Vault Pattern: Refresh Tokens stored encrypted in Firestore, never in client memory.
  * - Auto-Refresh: Proactively rotates Access Token 5 minutes before expiration.
  * - Typed Errors: TOKEN_EXPIRED, INSUFFICIENT_SCOPES, TOKEN_NOT_FOUND raised explicitly.
  * - GDPR Art. 32: AES-256-GCM encryption at rest, no PII in logs.
+ * - Step 18 (Workspace-Scoped): Path: tenants/{tenantId}/workspaces/{workspaceId}/integrations/google
+ * - Session Isolation: This module NEVER touches Firebase Auth — no Session Swap risk (CWE-384).
  *
  * @dependencies
  * - firebase-admin/firestore
@@ -151,13 +154,39 @@ async function buildOAuth2Client(): Promise<GoogleOAuth2Client> {
   );
 } /* end buildOAuth2Client */
 
+// ── Vault Path Helpers ────────────────────────────────────────────────────────
+
+/**
+ * Resolves the Firestore path for the OAuth token vault.
+ * - Workspace-scoped (Step 18): tenants/{tenantId}/workspaces/{workspaceId}/integrations/google
+ * - User-scoped (legacy): tenants/{tenantId}/users/{userId}/tokens/google
+ *
+ * @param {string} tenantId - Multi-tenant isolation identifier
+ * @param {string} userId - Firebase Auth user ID
+ * @param {string} [workspaceId] - If provided, uses workspace-scoped path (Step 18)
+ * @return {FirebaseFirestore.DocumentReference} The Firestore document reference
+ */
+function resolveVaultRef(
+  tenantId: string,
+  userId: string,
+  workspaceId?: string,
+): FirebaseFirestore.DocumentReference {
+  const db = getFirestore();
+  if (workspaceId) {
+    // Step 18: Workspace-scoped path — token belongs to the workspace, not the user
+    return db.doc(`tenants/${tenantId}/workspaces/${workspaceId}/integrations/google`);
+  }
+  // Legacy: User-scoped path (kept for backward compatibility with existing tools)
+  return db.doc(`tenants/${tenantId}/users/${userId}/tokens/google`);
+} /* end resolveVaultRef */
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
- * Returns an authenticated OAuth2Client for a given user.
+ * Returns an authenticated OAuth2Client for a given user or workspace.
  *
  * Flow:
- * 1. Read encrypted token from Firestore Vault.
+ * 1. Read encrypted token from Firestore Vault (workspace-scoped if workspaceId provided).
  * 2. Decrypt using AES-256-GCM.
  * 3. If Access Token expires within 5 min, refresh it and re-write to Vault.
  * 4. Return a ready-to-use OAuth2Client.
@@ -165,6 +194,7 @@ async function buildOAuth2Client(): Promise<GoogleOAuth2Client> {
  * @param {string} tenantId - Multi-tenant isolation identifier
  * @param {string} userId - Firebase Auth user ID
  * @param {string[]} requiredScopes - Scopes needed for the operation
+ * @param {string} [workspaceId] - If provided, reads from workspace-scoped vault (Step 18)
  * @return {Promise<GoogleOAuth2Client>} Authenticated OAuth2 client
  * @throws {OAuthVaultError} If token is missing, expired or lacks required scopes
  */
@@ -172,9 +202,9 @@ export async function getAuthenticatedOAuth2Client(
   tenantId: string,
   userId: string,
   requiredScopes: string[],
+  workspaceId?: string,
 ): Promise<GoogleOAuth2Client> {
-  const db = getFirestore();
-  const tokenRef = db.doc(`tenants/${tenantId}/users/${userId}/tokens/google`);
+  const tokenRef = resolveVaultRef(tenantId, userId, workspaceId);
 
   const snap = await tokenRef.get();
   if (!snap.exists) {
@@ -242,21 +272,25 @@ export async function getAuthenticatedOAuth2Client(
 } /* end getAuthenticatedOAuth2Client */
 
 /**
- * Stores a new OAuth token for a user in the encrypted Firestore Vault.
+ * Stores a new OAuth token in the encrypted Firestore Vault.
  * Called after the initial OAuth consent flow.
+ *
+ * - Workspace-scoped (Step 18): saved under workspaces/{workspaceId}/integrations/google
+ * - User-scoped (legacy): saved under users/{userId}/tokens/google
  *
  * @param {string} tenantId - Multi-tenant isolation identifier
  * @param {string} userId - Firebase Auth user ID
  * @param {TokenData} tokenData - Raw token data from OAuth consent
+ * @param {string} [workspaceId] - If provided, uses workspace-scoped vault path (Step 18)
  * @return {Promise<void>}
  */
 export async function saveOAuthToken(
   tenantId: string,
   userId: string,
   tokenData: TokenData,
+  workspaceId?: string,
 ): Promise<void> {
-  const db = getFirestore();
-  const tokenRef = db.doc(`tenants/${tenantId}/users/${userId}/tokens/google`);
+  const tokenRef = resolveVaultRef(tenantId, userId, workspaceId);
 
   const encrypted = encryptToken(tokenData.refreshToken);
 
