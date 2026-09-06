@@ -38,13 +38,29 @@ const logger = useSecureLogger();
 
 /**
  * Allowed origins for incoming postMessage events (Step 18 §4.1).
- * Mirror of the backend ALLOWED_CLIENT_ORIGINS whitelist.
+ * Whitelist includes the Google OAuth callback Cloud Function and supported frontend origins.
  */
 const ALLOWED_MESSAGE_ORIGINS: ReadonlySet<string> = new Set([
   "http://localhost:9000",
+  "http://localhost:9001",
+  "http://localhost:9002",
   "https://opsflow-88of.web.app",
   "https://opsflow-88of.firebaseapp.com",
+  "https://europe-west1-opsflow-88of.cloudfunctions.net",
 ]);
+
+function isAllowedMessageOrigin(origin: string): boolean {
+  if (ALLOWED_MESSAGE_ORIGINS.has(origin)) return true;
+  if (typeof window !== "undefined" && origin === window.location.origin) return true;
+  try {
+    const url = new URL(origin);
+    return (
+      (url.hostname === "localhost" || url.hostname === "127.0.0.1") && url.protocol === "http:"
+    );
+  } catch {
+    return false;
+  }
+}
 
 /** Google OAuth callback function URL (Cloud Function redirect endpoint). */
 const OAUTH_CALLBACK_URL =
@@ -208,9 +224,27 @@ const handleConnectGoogle = (): void => {
     window.removeEventListener("message", messageListener);
   }
 
+  let popupCheckInterval: ReturnType<typeof setInterval> | null = null;
+  let popupTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  const cleanupPopupTracking = (): void => {
+    if (popupCheckInterval) {
+      clearInterval(popupCheckInterval);
+      popupCheckInterval = null;
+    }
+    if (popupTimeout) {
+      clearTimeout(popupTimeout);
+      popupTimeout = null;
+    }
+    if (messageListener) {
+      window.removeEventListener("message", messageListener);
+      messageListener = null;
+    }
+  };
+
   messageListener = (event: MessageEvent): void => {
     // ── 5. Validate origin against whitelist (zero wildcard *) ─────────────
-    if (!ALLOWED_MESSAGE_ORIGINS.has(event.origin)) {
+    if (!isAllowedMessageOrigin(event.origin)) {
       logger.info(
         "WorkspaceOAuth",
         "Ignored postMessage from untrusted origin",
@@ -250,9 +284,7 @@ const handleConnectGoogle = (): void => {
         timeout: 5000,
       });
 
-      // Cleanup listener
-      window.removeEventListener("message", messageListener!);
-      messageListener = null;
+      cleanupPopupTracking();
     } else if (data.type === "OPSFLOW_GOOGLE_ERROR") {
       isConnectingGoogle.value = false;
       logger.info("WorkspaceOAuth", "OAuth error received from popup", {});
@@ -262,26 +294,33 @@ const handleConnectGoogle = (): void => {
         position: "top",
         icon: "error_outline",
       });
-      window.removeEventListener("message", messageListener!);
-      messageListener = null;
+      cleanupPopupTracking();
     }
   };
 
   window.addEventListener("message", messageListener);
 
   // ── Timeout: cleanup if popup is closed/abandoned ─────────────────────────
-  const popupCheckInterval = setInterval(() => {
-    if (oauthPopup?.closed) {
-      clearInterval(popupCheckInterval);
-      if (isConnectingGoogle.value) {
-        isConnectingGoogle.value = false;
-        if (messageListener) {
-          window.removeEventListener("message", messageListener);
-          messageListener = null;
+  popupCheckInterval = setInterval(() => {
+    try {
+      if (oauthPopup && oauthPopup.closed) {
+        cleanupPopupTracking();
+        if (isConnectingGoogle.value) {
+          isConnectingGoogle.value = false;
         }
       }
+    } catch {
+      // Cross-origin COOP policy restricts reading oauthPopup.closed while cross-origin
     }
-  }, 800);
+  }, 1000);
+
+  // Maximum 3 minutes before auto-canceling tracking
+  popupTimeout = setTimeout(() => {
+    cleanupPopupTracking();
+    if (isConnectingGoogle.value) {
+      isConnectingGoogle.value = false;
+    }
+  }, 180_000);
 }; /*end handleConnectGoogle*/
 
 /** Cleanup OAuth listener and popup on component unmount. */

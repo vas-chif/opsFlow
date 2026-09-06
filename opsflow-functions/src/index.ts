@@ -503,9 +503,31 @@ export const resolveApproval = onRequest(
  */
 const ALLOWED_CLIENT_ORIGINS: ReadonlySet<string> = new Set([
   "http://localhost:9000",
+  "http://localhost:9001",
+  "http://localhost:9002",
   "https://opsflow-88of.web.app",
   "https://opsflow-88of.firebaseapp.com",
 ]);
+
+/**
+ * Validates whether the given client origin is permitted for OAuth redirects and postMessage.
+ * Allows production domains and any local development loopback origin (http://localhost:* or http://127.0.0.1:*).
+ *
+ * @param {string} origin - The origin string to validate
+ * @return {boolean} True if the origin is permitted, false otherwise
+ */
+function isAllowedClientOrigin(origin: string): boolean {
+  if (ALLOWED_CLIENT_ORIGINS.has(origin)) return true;
+  try {
+    const url = new URL(origin);
+    return (
+      (url.hostname === "localhost" || url.hostname === "127.0.0.1") &&
+      url.protocol === "http:"
+    );
+  } catch {
+    return false;
+  }
+} /* end isAllowedClientOrigin */
 
 /**
  * State payload encoded in Base64 and passed through the OAuth redirect flow.
@@ -554,8 +576,20 @@ export const googleOAuthCallback = onRequest(
     // ── Handle OAuth denial by user ─────────────────────────────────────────
     if (error) {
       logger.warn("googleOAuthCallback: user denied OAuth consent", { error });
+      let targetOrigin = "http://localhost:9000";
+      if (stateRaw) {
+        try {
+          const decoded = Buffer.from(stateRaw, "base64url").toString("utf8");
+          const parsed = JSON.parse(decoded) as OAuthStatePayload;
+          if (parsed.clientOrigin && isAllowedClientOrigin(parsed.clientOrigin)) {
+            targetOrigin = parsed.clientOrigin;
+          }
+        } catch {
+          // Keep default targetOrigin
+        }
+      }
       res.status(200).send(buildPostMessageHtml(
-        "http://localhost:9000",
+        targetOrigin,
         { type: "OPSFLOW_GOOGLE_ERROR", message: "Autorizzazione negata dall'utente." },
       ));
       return;
@@ -584,7 +618,7 @@ export const googleOAuthCallback = onRequest(
     }
 
     // ── Origin whitelist validation (§4.1 Step 18) ─────────────────────────
-    if (!ALLOWED_CLIENT_ORIGINS.has(clientOrigin)) {
+    if (!isAllowedClientOrigin(clientOrigin)) {
       logger.error("googleOAuthCallback: blocked — origin not in whitelist", { clientOrigin });
       res.status(403).send("Forbidden: origin not allowed.");
       return;
