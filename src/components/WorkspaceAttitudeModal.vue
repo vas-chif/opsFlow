@@ -133,8 +133,22 @@ const handleConnectGoogle = (): void => {
   if (!user || !tenantId) {
     q.notify({
       type: "negative",
-      message: "Sessione non valida. Effettua il login e riprova.",
+      message: "Invalid session. Please sign in again.",
       position: "top",
+    });
+    return;
+  }
+
+  const clientId =
+    (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)?.trim() ||
+    "348805838247-8p7qa4j09bfaa0f7neun7qg0lk6f7le1.apps.googleusercontent.com";
+
+  if (!clientId) {
+    q.notify({
+      type: "negative",
+      message: "Google Client ID is not configured. Check your .env file.",
+      position: "top",
+      icon: "error_outline",
     });
     return;
   }
@@ -149,7 +163,7 @@ const handleConnectGoogle = (): void => {
   if (!oauthPopup) {
     q.notify({
       type: "warning",
-      message: "Il popup è stato bloccato dal browser. Consenti i popup per questo sito.",
+      message: "The popup was blocked by the browser. Please allow popups for this site.",
       position: "top",
       icon: "block",
     });
@@ -179,12 +193,12 @@ const handleConnectGoogle = (): void => {
   ].join(" ");
 
   const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-  authUrl.searchParams.set("client_id", import.meta.env.VITE_GOOGLE_CLIENT_ID ?? "");
+  authUrl.searchParams.set("client_id", clientId);
   authUrl.searchParams.set("redirect_uri", OAUTH_CALLBACK_URL);
   authUrl.searchParams.set("response_type", "code");
   authUrl.searchParams.set("scope", scopes);
   authUrl.searchParams.set("access_type", "offline");
-  authUrl.searchParams.set("prompt", "consent");
+  authUrl.searchParams.set("prompt", "select_account consent");
   authUrl.searchParams.set("state", state);
 
   oauthPopup.location.href = authUrl.toString();
@@ -230,7 +244,7 @@ const handleConnectGoogle = (): void => {
 
       q.notify({
         type: "positive",
-        message: `✅ Account Google (${email}) collegato con successo al Workspace!`,
+        message: `✅ Google Account (${email}) successfully linked to the Workspace!`,
         position: "top",
         icon: "verified_user",
         timeout: 5000,
@@ -244,7 +258,7 @@ const handleConnectGoogle = (): void => {
       logger.info("WorkspaceOAuth", "OAuth error received from popup", {});
       q.notify({
         type: "negative",
-        message: data.message ?? "Errore durante l'autorizzazione Google.",
+        message: data.message ?? "Google authorization failed.",
         position: "top",
         icon: "error_outline",
       });

@@ -94,8 +94,12 @@ export function useGoogleOAuth() {
       const idTokenResult = await user.getIdTokenResult();
       const tenantId = (idTokenResult.claims["tenantId"] as string | undefined) ?? user.uid;
 
-      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
-      const redirectUri = import.meta.env.VITE_GOOGLE_REDIRECT_URI as string;
+      const clientId =
+        (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)?.trim() ||
+        "348805838247-8p7qa4j09bfaa0f7neun7qg0lk6f7le1.apps.googleusercontent.com";
+      const redirectUri =
+        (import.meta.env.VITE_GOOGLE_REDIRECT_URI as string | undefined)?.trim() ||
+        "https://europe-west1-opsflow-88of.cloudfunctions.net/googleOAuthCallback";
 
       const params = new URLSearchParams({
         client_id: clientId,
@@ -103,7 +107,7 @@ export function useGoogleOAuth() {
         response_type: "code",
         scope: ALL_GOOGLE_SCOPES.join(" "),
         access_type: "offline",
-        prompt: "consent",
+        prompt: "select_account consent",
         state: user.uid,
       });
 

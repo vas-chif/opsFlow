@@ -37,7 +37,9 @@ const {
   stopSpeaking,
 } = useWebSpeech();
 
-const task = computed(() => props.windowState.task);
+const task = computed(
+  () => taskStore.tasks.find((t) => t.id === props.windowState.taskId) ?? props.windowState.task,
+);
 const workspace = computed(
   () => taskStore.workspaces.find((w) => w.id === props.windowState.workspaceId) ?? null,
 );
@@ -408,11 +410,111 @@ const handleSendCustomPrompt = async (customText: string): Promise<void> => {
   await handleSendChatMessage();
 }; /*end handleSendCustomPrompt*/
 
+const isDecomposing = ref(false);
+
 const handleExecuteTaskAI = async (): Promise<void> => {
   if (!task.value) return;
-  const prompt = `Avvia esecuzione task: "${task.value.title}". Descrizione: "${task.value.description || "Nessuna"}". Analizza i requisiti, cerca le risorse e procedi.`;
+  let prompt = `Avvia esecuzione task: "${task.value.title}". Descrizione: "${task.value.description || "Nessuna"}".`;
+  if (task.value.aiMetadata?.subtasks && task.value.aiMetadata.subtasks.length > 0) {
+    const subtaskLines = task.value.aiMetadata.subtasks
+      .map(
+        (s, i) =>
+          `${i + 1}. [${s.completed ? "COMPLETATO" : "DA FARE"}] ${s.title}: ${s.description}`,
+      )
+      .join("\n");
+    prompt += `\n\nSotto-task operative pianificate da AI Task Architect:\n${subtaskLines}\n\nProcedi con l'esecuzione delle sotto-task pendenti.`;
+  } else {
+    prompt += " Analizza i requisiti, cerca le risorse e procedi.";
+  }
   await handleSendCustomPrompt(prompt);
 }; /*end handleExecuteTaskAI*/
+
+const handleDecomposeExistingTask = async (): Promise<void> => {
+  const currentTask = task.value;
+  if (!currentTask) return;
+  isDecomposing.value = true;
+  try {
+    const rawDraft = `${currentTask.title}. ${currentTask.description || ""}`.trim();
+    const result = await taskStore.refineTaskDraft(props.windowState.workspaceId, rawDraft);
+    if (result?.subtasks && result.subtasks.length > 0) {
+      const generatedSubtasks = result.subtasks.map((st) => ({
+        id: `st_${st.order}`,
+        order: st.order,
+        title: st.title,
+        description: st.description,
+        completed: false,
+        createdAt: new Date() as Date | null,
+      }));
+
+      await taskStore.updateTask(props.windowState.workspaceId, currentTask.id, {
+        aiMetadata: {
+          ...currentTask.aiMetadata,
+          subtasks: generatedSubtasks,
+          suggestedCategory: result.suggestedCategory || currentTask.aiMetadata?.suggestedCategory,
+          complexityScore: currentTask.aiMetadata?.complexityScore || 6,
+          modelVersion: "gemini-3.6-flash",
+          lastAnalyzed: new Date(),
+        },
+      });
+
+      if (props.windowState.task) {
+        props.windowState.task.aiMetadata = {
+          ...props.windowState.task.aiMetadata,
+          subtasks: generatedSubtasks,
+        };
+      }
+
+      q.notify({
+        type: "positive",
+        message: `${generatedSubtasks.length} sotto-task generate con successo!`,
+        icon: "auto_awesome",
+      });
+    }
+  } catch {
+    q.notify({
+      type: "negative",
+      message: "Impossibile decomporre il task con AI. Riprova.",
+      icon: "error",
+    });
+  } finally {
+    isDecomposing.value = false;
+  }
+}; /*end handleDecomposeExistingTask*/
+
+const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
+  const currentTask = task.value;
+  if (!currentTask || !currentTask.aiMetadata?.subtasks) return;
+
+  const subtasks = [...currentTask.aiMetadata.subtasks];
+  const targetSub = subtasks[subtaskIndex];
+  if (!targetSub) return;
+
+  targetSub.completed = !targetSub.completed;
+
+  try {
+    await taskStore.updateTask(props.windowState.workspaceId, currentTask.id, {
+      aiMetadata: {
+        ...currentTask.aiMetadata,
+        subtasks,
+      },
+    });
+    if (props.windowState.task?.aiMetadata) {
+      props.windowState.task.aiMetadata.subtasks = subtasks;
+    }
+    q.notify({
+      type: "positive",
+      message: targetSub.completed ? "Subtask marked completed" : "Subtask marked pending",
+      position: "top",
+      timeout: 1500,
+    });
+  } catch {
+    q.notify({
+      type: "negative",
+      message: "Error updating subtask status",
+      position: "top",
+    });
+  }
+}; /*end toggleSubTask*/
 </script>
 
 <template>
@@ -512,6 +614,77 @@ const handleExecuteTaskAI = async (): Promise<void> => {
             {{ task.description || "Nessuna descrizione." }}
           </div>
 
+          <!-- Fallback button: Decompose with AI Architect if task has no subtasks -->
+          <div
+            v-if="!task.aiMetadata?.subtasks || task.aiMetadata.subtasks.length === 0"
+            class="q-mb-sm"
+          >
+            <q-btn
+              outline
+              dense
+              size="sm"
+              color="amber-9"
+              icon="auto_awesome"
+              label="✨ Scomponi in Sotto-Task con AI Architect"
+              class="full-width rounded-borders text-caption text-weight-bold"
+              :loading="isDecomposing"
+              @click="handleDecomposeExistingTask"
+            >
+              <q-tooltip
+                >Analizza e genera automaticamente le sotto-task operative con Gemini</q-tooltip
+              >
+            </q-btn>
+          </div>
+
+          <!-- AI Operational SubTasks Checklist (AgentePlanner / AI Task Architect) -->
+          <q-expansion-item
+            v-if="task.aiMetadata?.subtasks && task.aiMetadata.subtasks.length > 0"
+            dense
+            icon="checklist"
+            :label="`Sotto-Task Operative (${task.aiMetadata.subtasks.filter((s) => s.completed).length}/${task.aiMetadata.subtasks.length})`"
+            header-class="text-caption text-weight-bold text-primary q-pa-xs bg-blue-1 rounded-borders"
+            class="q-mb-sm task-subtasks-expansion rounded-borders"
+            style="border: 1px solid rgba(10, 35, 66, 0.15)"
+            default-opened
+          >
+            <q-list dense separator class="q-pa-xs bg-white rounded-borders">
+              <q-item
+                v-for="(sub, idx) in task.aiMetadata.subtasks"
+                :key="sub.id || idx"
+                clickable
+                dense
+                class="rounded-borders q-py-xs q-px-xs"
+                @click="toggleSubTask(idx)"
+              >
+                <q-item-section avatar style="min-width: 28px" class="q-pr-xs">
+                  <q-checkbox
+                    :model-value="sub.completed"
+                    color="positive"
+                    dense
+                    size="sm"
+                    @update:model-value="toggleSubTask(idx)"
+                  />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label
+                    :class="{ 'text-strike text-grey-6': sub.completed }"
+                    class="text-weight-bold text-caption text-primary"
+                  >
+                    {{ sub.order ? `${sub.order}. ` : "" }}{{ sub.title }}
+                  </q-item-label>
+                  <q-item-label
+                    v-if="sub.description"
+                    caption
+                    class="text-caption text-grey-8 q-mt-xs"
+                    style="font-size: 0.74rem; line-height: 1.3"
+                  >
+                    {{ sub.description }}
+                  </q-item-label>
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </q-expansion-item>
+
           <!-- Task Key Points Panel (Working Memory Rolling Summary) -->
           <q-expansion-item
             dense
@@ -522,7 +695,7 @@ const handleExecuteTaskAI = async (): Promise<void> => {
             default-opened
           >
             <div class="q-px-xs q-pb-xs">
-              <TaskKeyPointsCard :task-id="task.id" />
+              <TaskKeyPointsCard :task-id="task.id" :task="task" />
             </div>
           </q-expansion-item>
 
