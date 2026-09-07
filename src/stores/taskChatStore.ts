@@ -38,6 +38,7 @@ export interface FloatingWindow {
   size: { width: number; height: number };
   zIndex: number;
   isMinimized: boolean;
+  isFullscreen?: boolean;
 }
 
 export const useTaskChatStore = defineStore("taskChat", () => {
@@ -243,6 +244,25 @@ export const useTaskChatStore = defineStore("taskChat", () => {
     }
   } /*end toggleMinimizeWindow*/
 
+  function toggleFullscreenWindow(taskId: string): void {
+    const win = floatingWindows.value.find((w) => w.taskId === taskId);
+    if (win) {
+      win.isFullscreen = !win.isFullscreen;
+      if (win.isFullscreen) {
+        highestZIndex.value += 1;
+        win.zIndex = highestZIndex.value;
+      }
+    }
+  } /*end toggleFullscreenWindow*/
+
+  function sendToBack(taskId: string): void {
+    const win = floatingWindows.value.find((w) => w.taskId === taskId);
+    if (win && floatingWindows.value.length > 1) {
+      const lowestZ = Math.min(...floatingWindows.value.map((w) => w.zIndex));
+      win.zIndex = Math.max(10, lowestZ - 1);
+    }
+  } /*end sendToBack*/
+
   /**
    * Appends or updates an ApprovalRecord in the session.
    * Called by the Firestore onSnapshot listener for /approvals/.
@@ -358,6 +378,8 @@ export const useTaskChatStore = defineStore("taskChat", () => {
     updateWindowPosition,
     updateWindowSize,
     toggleMinimizeWindow,
+    toggleFullscreenWindow,
+    sendToBack,
     setKeyPoints,
     addKeyPoint,
     clearKeyPoints,

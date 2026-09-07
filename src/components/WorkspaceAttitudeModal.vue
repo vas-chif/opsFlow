@@ -71,6 +71,7 @@ let oauthPopup: Window | null = null;
 
 /** postMessage event listener reference for cleanup. */
 let messageListener: ((event: MessageEvent) => void) | null = null;
+let focusListener: (() => void) | null = null;
 
 const isOpen = computed({
   get: () => props.modelValue,
@@ -243,6 +244,10 @@ const handleConnectGoogle = (): void => {
       window.removeEventListener("message", messageListener);
       messageListener = null;
     }
+    if (focusListener) {
+      window.removeEventListener("focus", focusListener);
+      focusListener = null;
+    }
   };
 
   messageListener = (event: MessageEvent): void => {
@@ -303,19 +308,24 @@ const handleConnectGoogle = (): void => {
 
   window.addEventListener("message", messageListener);
 
-  // ── Timeout: cleanup if popup is closed/abandoned ─────────────────────────
-  popupCheckInterval = setInterval(() => {
-    try {
-      if (oauthPopup && oauthPopup.closed) {
-        cleanupPopupTracking();
-        if (isConnectingGoogle.value) {
-          isConnectingGoogle.value = false;
+  // ── Focus & Timeout: cleanup if popup is closed or abandoned ─────────────
+  focusListener = (): void => {
+    // Delay check slightly to give the postMessage time to arrive
+    setTimeout(() => {
+      try {
+        if (oauthPopup && oauthPopup.closed) {
+          cleanupPopupTracking();
+          if (isConnectingGoogle.value) {
+            isConnectingGoogle.value = false;
+          }
         }
+      } catch {
+        // Cross-origin COOP policy safe
       }
-    } catch {
-      // Cross-origin COOP policy restricts reading oauthPopup.closed while cross-origin
-    }
-  }, 1000);
+    }, 500);
+  };
+
+  window.addEventListener("focus", focusListener);
 
   // Maximum 3 minutes before auto-canceling tracking
   popupTimeout = setTimeout(() => {
@@ -331,6 +341,10 @@ onUnmounted(() => {
   if (messageListener) {
     window.removeEventListener("message", messageListener);
     messageListener = null;
+  }
+  if (focusListener) {
+    window.removeEventListener("focus", focusListener);
+    focusListener = null;
   }
   if (oauthPopup && !oauthPopup.closed) {
     oauthPopup.close();

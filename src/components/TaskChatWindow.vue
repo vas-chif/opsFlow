@@ -93,6 +93,30 @@ const initialPos = ref({ x: 0, y: 0 });
 const isResizing = ref(false);
 const resizeStart = ref({ x: 0, y: 0, w: 0, h: 0 });
 
+// Fullscreen & Layout View Mode
+const isFullscreen = computed(() => !!props.windowState.isFullscreen);
+const viewMode = ref<"both" | "details" | "chat">("both");
+const splitterModel = ref(48); // 48% left pane, 52% right pane
+
+const setViewMode = (mode: "both" | "details" | "chat"): void => {
+  viewMode.value = mode;
+  if (mode === "details") {
+    splitterModel.value = 100;
+  } else if (mode === "chat") {
+    splitterModel.value = 0;
+  } else {
+    splitterModel.value = 48;
+  }
+}; /*end setViewMode*/
+
+const toggleFullscreen = (): void => {
+  chatStore.toggleFullscreenWindow(props.windowState.taskId);
+}; /*end toggleFullscreen*/
+
+const sendToBack = (): void => {
+  chatStore.sendToBack(props.windowState.taskId);
+}; /*end sendToBack*/
+
 const activeSession = computed(() => {
   return chatStore.openSession(props.windowState.taskId, props.windowState.workspaceId);
 });
@@ -137,6 +161,7 @@ watch(
 // ── Drag & Resize Handlers ───────────────────────────────────────────────────
 const handleHeaderMouseDown = (e: MouseEvent): void => {
   chatStore.bringToFront(props.windowState.taskId);
+  if (isFullscreen.value) return;
   isDragging.value = true;
   dragStart.value = { x: e.clientX, y: e.clientY };
   initialPos.value = { ...props.windowState.position };
@@ -520,33 +545,61 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
 <template>
   <div
     class="floating-task-window card-elevation-dark rounded-borders column no-wrap overflow-hidden"
+    :class="{ 'is-fullscreen': isFullscreen }"
     :style="{
       position: 'fixed',
-      left: `${windowState.position.x}px`,
-      top: `${windowState.position.y}px`,
-      width: `${windowState.size.width}px`,
-      height: windowState.isMinimized ? '48px' : `${windowState.size.height}px`,
+      left: isFullscreen ? '0px' : `${windowState.position.x}px`,
+      top: isFullscreen ? '0px' : `${windowState.position.y}px`,
+      width: isFullscreen ? '100vw' : `${windowState.size.width}px`,
+      height: windowState.isMinimized
+        ? '48px'
+        : isFullscreen
+          ? '100vh'
+          : `${windowState.size.height}px`,
       zIndex: windowState.zIndex,
+      borderRadius: isFullscreen ? '0px' : '12px',
     }"
     @mousedown="chatStore.bringToFront(windowState.taskId)"
   >
     <!-- Draggable Header Bar -->
     <div
       class="window-header row items-center justify-between bg-navy text-white q-px-md q-py-xs unselectable"
-      style="cursor: grab; height: 48px"
+      :style="{ cursor: isFullscreen ? 'default' : 'grab', height: '48px' }"
       @mousedown="handleHeaderMouseDown"
+      @dblclick="toggleFullscreen"
     >
-      <div class="row items-center q-gutter-sm text-ellipsis col">
-        <q-icon name="forum" color="amber-5" size="20px" />
-        <div class="text-subtitle2 text-weight-bold text-ellipsis" style="max-width: 70%">
+      <div class="row items-center q-gutter-xs text-ellipsis col">
+        <q-icon name="forum" color="amber-5" size="18px" />
+        <div class="text-subtitle2 text-weight-bold text-ellipsis" style="max-width: 45%">
           {{ task.title }}
         </div>
-        <q-badge color="amber-9" text-color="dark" size="xs">
+        <q-badge color="amber-9" text-color="dark" size="xs" class="gt-xs">
           {{ workspace?.name }}
         </q-badge>
       </div>
 
-      <div class="row items-center q-gutter-xs" @mousedown.stop>
+      <div class="row items-center q-gutter-xs no-wrap" @mousedown.stop>
+        <!-- View Mode Segmented Controls -->
+        <div v-if="!windowState.isMinimized" class="row items-center q-mr-xs">
+          <q-btn-toggle
+            v-model="viewMode"
+            dense
+            rounded
+            unelevated
+            toggle-color="amber-9"
+            toggle-text-color="dark"
+            color="navy-light"
+            text-color="grey-4"
+            size="xs"
+            :options="[
+              { label: 'Entrambi', value: 'both', icon: 'splitscreen' },
+              { label: 'Task', value: 'details', icon: 'assignment' },
+              { label: 'Chat', value: 'chat', icon: 'chat' },
+            ]"
+            @update:model-value="setViewMode"
+          />
+        </div>
+
         <!-- Status Dropdown Button -->
         <q-btn-dropdown
           dense
@@ -573,6 +626,26 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
           </q-list>
         </q-btn-dropdown>
 
+        <!-- Send To Back Button -->
+        <q-btn flat round dense size="sm" icon="flip_to_back" color="white" @click="sendToBack">
+          <q-tooltip>Sposta finestra in secondo piano (dietro le altre)</q-tooltip>
+        </q-btn>
+
+        <!-- Fullscreen Button -->
+        <q-btn
+          flat
+          round
+          dense
+          size="sm"
+          :icon="isFullscreen ? 'fullscreen_exit' : 'fullscreen'"
+          color="white"
+          @click="toggleFullscreen"
+        >
+          <q-tooltip>{{
+            isFullscreen ? "Ripristina dimensione" : "Schermo intero (Fullscreen)"
+          }}</q-tooltip>
+        </q-btn>
+
         <!-- Minimize Button -->
         <q-btn
           flat
@@ -582,7 +655,9 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
           :icon="windowState.isMinimized ? 'unfold_more' : 'minimize'"
           color="white"
           @click="chatStore.toggleMinimizeWindow(windowState.taskId)"
-        />
+        >
+          <q-tooltip>{{ windowState.isMinimized ? "Espandi" : "Riduci a icona" }}</q-tooltip>
+        </q-btn>
 
         <!-- Close Button -->
         <q-btn
@@ -593,335 +668,376 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
           icon="close"
           color="white"
           @click="chatStore.closeFloatingWindow(windowState.taskId)"
-        />
+        >
+          <q-tooltip>Chiudi finestra</q-tooltip>
+        </q-btn>
       </div>
     </div>
 
     <!-- Window Body (Rendered when NOT minimized) -->
     <div
       v-if="!windowState.isMinimized"
-      class="col row q-pa-sm overflow-hidden bg-white relative-position"
+      class="col overflow-hidden bg-white relative-position"
       style="height: calc(100% - 48px)"
     >
-      <!-- Left Pane: Info & Actions -->
-      <div
-        class="col-12 col-md-5 column justify-between border-right q-pr-sm overflow-hidden"
-        style="height: 100%"
+      <q-splitter
+        v-model="splitterModel"
+        :limits="viewMode === 'both' ? [20, 80] : [0, 100]"
+        :separator-style="viewMode === 'both' ? 'width: 5px; cursor: col-resize;' : 'display: none'"
+        separator-class="task-window-splitter-bar"
+        class="full-width full-height overflow-hidden"
       >
-        <div class="scroll col">
-          <div class="text-caption text-weight-bold text-primary q-mb-xs">📌 Descrizione Task</div>
-          <div class="text-caption text-grey-9 q-mb-sm bg-grey-2 q-pa-xs rounded-borders">
-            {{ task.description || "Nessuna descrizione." }}
-          </div>
-
-          <!-- Fallback button: Decompose with AI Architect if task has no subtasks -->
+        <!-- Before Slot: Task Details & Sotto-Task Pane -->
+        <template #before>
           <div
-            v-if="!task.aiMetadata?.subtasks || task.aiMetadata.subtasks.length === 0"
-            class="q-mb-sm"
+            v-show="splitterModel > 0"
+            class="column justify-between q-pa-sm overflow-hidden full-height"
+            style="min-width: 0"
           >
-            <q-btn
-              outline
-              dense
-              size="sm"
-              color="amber-9"
-              icon="auto_awesome"
-              label="✨ Scomponi in Sotto-Task con AI Architect"
-              class="full-width rounded-borders text-caption text-weight-bold"
-              :loading="isDecomposing"
-              @click="handleDecomposeExistingTask"
-            >
-              <q-tooltip
-                >Analizza e genera automaticamente le sotto-task operative con Gemini</q-tooltip
-              >
-            </q-btn>
-          </div>
-
-          <!-- AI Operational SubTasks Checklist (AgentePlanner / AI Task Architect) -->
-          <q-expansion-item
-            v-if="task.aiMetadata?.subtasks && task.aiMetadata.subtasks.length > 0"
-            dense
-            icon="checklist"
-            :label="`Sotto-Task Operative (${task.aiMetadata.subtasks.filter((s) => s.completed).length}/${task.aiMetadata.subtasks.length})`"
-            header-class="text-caption text-weight-bold text-primary q-pa-xs bg-blue-1 rounded-borders"
-            class="q-mb-sm task-subtasks-expansion rounded-borders"
-            style="border: 1px solid rgba(10, 35, 66, 0.15)"
-            default-opened
-          >
-            <q-list dense separator class="q-pa-xs bg-white rounded-borders">
-              <q-item
-                v-for="(sub, idx) in task.aiMetadata.subtasks"
-                :key="sub.id || idx"
-                clickable
-                dense
-                class="rounded-borders q-py-xs q-px-xs"
-                @click="toggleSubTask(idx)"
-              >
-                <q-item-section avatar style="min-width: 28px" class="q-pr-xs">
-                  <q-checkbox
-                    :model-value="sub.completed"
-                    color="positive"
-                    dense
-                    size="sm"
-                    @update:model-value="toggleSubTask(idx)"
-                  />
-                </q-item-section>
-                <q-item-section>
-                  <q-item-label
-                    :class="{ 'text-strike text-grey-6': sub.completed }"
-                    class="text-weight-bold text-caption text-primary"
-                  >
-                    {{ sub.order ? `${sub.order}. ` : "" }}{{ sub.title }}
-                  </q-item-label>
-                  <q-item-label
-                    v-if="sub.description"
-                    caption
-                    class="text-caption text-grey-8 q-mt-xs"
-                    style="font-size: 0.74rem; line-height: 1.3"
-                  >
-                    {{ sub.description }}
-                  </q-item-label>
-                </q-item-section>
-              </q-item>
-            </q-list>
-          </q-expansion-item>
-
-          <!-- Task Key Points Panel (Working Memory Rolling Summary) -->
-          <q-expansion-item
-            dense
-            icon="tips_and_updates"
-            label="Punti Chiave del Task"
-            header-class="text-caption text-weight-bold text-secondary q-pa-xs"
-            class="q-mb-sm task-kp-expansion"
-            default-opened
-          >
-            <div class="q-px-xs q-pb-xs">
-              <TaskKeyPointsCard :task-id="task.id" :task="task" />
-            </div>
-          </q-expansion-item>
-
-          <!-- Direct AI Execution & Shortcuts -->
-          <div class="q-mb-sm">
-            <q-btn
-              color="primary"
-              icon="auto_awesome"
-              label="🚀 Avvia Esecuzione IA"
-              no-caps
-              dense
-              class="full-width q-mb-xs text-weight-bold"
-              :loading="isSending"
-              @click="handleExecuteTaskAI"
-            />
-            <div class="row q-col-gutter-xs full-width">
-              <div class="col-12 col-sm-4">
-                <q-btn
-                  outline
-                  dense
-                  size="sm"
-                  color="secondary"
-                  icon="search"
-                  label="Search Leads"
-                  no-caps
-                  class="full-width q-py-xs text-weight-bold"
-                  :disabled="isSending"
-                  @click="
-                    handleSendCustomPrompt('Find relevant leads and prospects for this task.')
-                  "
-                />
+            <div class="scroll col q-pr-xs">
+              <div class="text-caption text-weight-bold text-primary q-mb-xs">
+                📌 Descrizione Task
               </div>
-              <div class="col-12 col-sm-4">
-                <q-btn
-                  outline
-                  dense
-                  size="sm"
-                  color="positive"
-                  icon="mail"
-                  label="Draft Email"
-                  no-caps
-                  class="full-width q-py-xs text-weight-bold"
-                  :disabled="isSending"
-                  @click="
-                    handleSendCustomPrompt('Generate an email intro draft for the found prospects.')
-                  "
-                />
-              </div>
-              <div class="col-12 col-sm-4">
-                <q-btn
-                  outline
-                  dense
-                  size="sm"
-                  color="amber-10"
-                  icon="table_chart"
-                  label="Sheets"
-                  no-caps
-                  class="full-width q-py-xs text-weight-bold"
-                  :disabled="isSending"
-                  @click="
-                    handleSendCustomPrompt(
-                      'Save and organize extracted data into the default Google Sheets.',
-                    )
-                  "
-                />
-              </div>
-            </div>
-          </div>
-
-          <!-- AI Complexity Score Badge -->
-          <div
-            v-if="task.aiMetadata && task.aiMetadata.complexityScore !== undefined"
-            class="q-mb-xs"
-          >
-            <div class="row items-center justify-between text-caption text-weight-bold text-grey-8">
-              <span>Complexity IA:</span>
-              <span>{{ task.aiMetadata.complexityScore }}/10</span>
-            </div>
-            <q-linear-progress
-              :value="task.aiMetadata.complexityScore / 10"
-              color="secondary"
-              size="6px"
-              rounded
-            />
-          </div>
-        </div>
-      </div>
-
-      <!-- Right Pane: Interactive Chat Thread -->
-      <div class="col-12 col-md-7 column no-wrap overflow-hidden q-pl-sm" style="height: 100%">
-        <div ref="chatScrollRef" class="col scroll q-mb-xs q-px-xs" style="overflow-y: auto">
-          <div v-for="msg in activeSession.messages" :key="msg.id" class="q-mb-xs">
-            <q-chat-message
-              :name="msg.sender === 'user' ? 'You' : msg.agentName || 'AI Agent'"
-              :stamp="msg.timestamp"
-              :sent="msg.sender === 'user'"
-              :bg-color="msg.sender === 'user' ? 'primary' : 'grey-3'"
-              :text-color="msg.sender === 'user' ? 'white' : 'dark'"
-            >
               <div
-                style="white-space: pre-wrap; font-size: 0.85rem"
-                v-html="renderFormattedMessage(msg.text)"
-              ></div>
+                class="text-caption text-grey-9 q-mb-sm bg-grey-2 q-pa-sm rounded-borders"
+                style="
+                  word-break: break-word;
+                  overflow-wrap: anywhere;
+                  white-space: pre-wrap;
+                  line-height: 1.45;
+                "
+              >
+                {{ task.description || "Nessuna descrizione." }}
+              </div>
 
-              <!-- TTS Audio Read Aloud button for agent messages -->
-              <div v-if="msg.sender === 'agent'" class="row items-center justify-end q-mt-xs">
+              <!-- Fallback button: Decompose with AI Architect if task has no subtasks -->
+              <div
+                v-if="!task.aiMetadata?.subtasks || task.aiMetadata.subtasks.length === 0"
+                class="q-mb-sm"
+              >
                 <q-btn
-                  flat
-                  round
+                  outline
                   dense
-                  size="xs"
-                  :icon="isSpeaking ? 'volume_off' : 'volume_up'"
-                  :color="isSpeaking ? 'negative' : 'grey-7'"
-                  @click="handleSpeakMessage(msg.text)"
+                  size="sm"
+                  color="amber-9"
+                  icon="auto_awesome"
+                  label="✨ Scomponi in Sotto-Task con AI Architect"
+                  class="full-width rounded-borders text-caption text-weight-bold"
+                  :loading="isDecomposing"
+                  @click="handleDecomposeExistingTask"
                 >
-                  <q-tooltip>{{
-                    isSpeaking ? "Stop audio" : "Listen to voice response"
-                  }}</q-tooltip>
+                  <q-tooltip
+                    >Analizza e genera automaticamente le sotto-task operative con Gemini</q-tooltip
+                  >
                 </q-btn>
               </div>
 
-              <div
-                v-if="msg.toolsUsed && msg.toolsUsed.length > 0"
-                class="row wrap q-gutter-xs q-mt-xs"
+              <!-- AI Operational SubTasks Checklist (AgentePlanner / AI Task Architect) -->
+              <q-expansion-item
+                v-if="task.aiMetadata?.subtasks && task.aiMetadata.subtasks.length > 0"
+                dense
+                icon="checklist"
+                :label="`Sotto-Task Operative (${task.aiMetadata.subtasks.filter((s) => s.completed).length}/${task.aiMetadata.subtasks.length})`"
+                header-class="text-caption text-weight-bold text-primary q-pa-xs bg-blue-1 rounded-borders"
+                class="q-mb-sm task-subtasks-expansion rounded-borders"
+                style="border: 1px solid rgba(10, 35, 66, 0.15)"
+                default-opened
               >
-                <q-chip
-                  v-for="tool in msg.toolsUsed"
-                  :key="tool"
+                <q-list dense separator class="q-pa-xs bg-white rounded-borders">
+                  <q-item
+                    v-for="(sub, idx) in task.aiMetadata.subtasks"
+                    :key="sub.id || idx"
+                    clickable
+                    dense
+                    class="rounded-borders q-py-xs q-px-xs"
+                    @click="toggleSubTask(idx)"
+                  >
+                    <q-item-section avatar style="min-width: 28px" class="q-pr-xs">
+                      <q-checkbox
+                        :model-value="sub.completed"
+                        color="positive"
+                        dense
+                        size="sm"
+                        @update:model-value="toggleSubTask(idx)"
+                      />
+                    </q-item-section>
+                    <q-item-section>
+                      <q-item-label
+                        :class="{ 'text-strike text-grey-6': sub.completed }"
+                        class="text-weight-bold text-caption text-primary"
+                        style="word-break: break-word; overflow-wrap: anywhere"
+                      >
+                        {{ sub.order ? `${sub.order}. ` : "" }}{{ sub.title }}
+                      </q-item-label>
+                      <q-item-label
+                        v-if="sub.description"
+                        caption
+                        class="text-caption text-grey-8 q-mt-xs"
+                        style="
+                          font-size: 0.74rem;
+                          line-height: 1.35;
+                          word-break: break-word;
+                          overflow-wrap: anywhere;
+                          white-space: pre-wrap;
+                        "
+                      >
+                        {{ sub.description }}
+                      </q-item-label>
+                    </q-item-section>
+                  </q-item>
+                </q-list>
+              </q-expansion-item>
+
+              <!-- Task Key Points Panel (Working Memory Rolling Summary) -->
+              <q-expansion-item
+                dense
+                icon="tips_and_updates"
+                label="Punti Chiave del Task"
+                header-class="text-caption text-weight-bold text-secondary q-pa-xs"
+                class="q-mb-sm task-kp-expansion"
+                default-opened
+              >
+                <div class="q-px-xs q-pb-xs">
+                  <TaskKeyPointsCard :task-id="task.id" :task="task" />
+                </div>
+              </q-expansion-item>
+
+              <!-- Direct AI Execution & Shortcuts -->
+              <div class="q-mb-sm">
+                <q-btn
+                  color="primary"
+                  icon="auto_awesome"
+                  label="🚀 Avvia Esecuzione IA"
+                  no-caps
                   dense
-                  square
-                  outline
-                  color="amber-9"
-                  text-color="dark"
-                  class="q-pa-xs text-weight-medium"
-                  style="font-size: 0.78rem; border-radius: 6px"
-                >
-                  🔧 {{ tool }}
-                </q-chip>
+                  class="full-width q-mb-xs text-weight-bold"
+                  :loading="isSending"
+                  @click="handleExecuteTaskAI"
+                />
+                <div class="row q-col-gutter-xs full-width">
+                  <div class="col-12 col-sm-4">
+                    <q-btn
+                      outline
+                      dense
+                      size="sm"
+                      color="secondary"
+                      icon="search"
+                      label="Search Leads"
+                      no-caps
+                      class="full-width q-py-xs text-weight-bold"
+                      :disabled="isSending"
+                      @click="
+                        handleSendCustomPrompt('Find relevant leads and prospects for this task.')
+                      "
+                    />
+                  </div>
+                  <div class="col-12 col-sm-4">
+                    <q-btn
+                      outline
+                      dense
+                      size="sm"
+                      color="positive"
+                      icon="mail"
+                      label="Draft Email"
+                      no-caps
+                      class="full-width q-py-xs text-weight-bold"
+                      :disabled="isSending"
+                      @click="
+                        handleSendCustomPrompt(
+                          'Generate an email intro draft for the found prospects.',
+                        )
+                      "
+                    />
+                  </div>
+                  <div class="col-12 col-sm-4">
+                    <q-btn
+                      outline
+                      dense
+                      size="sm"
+                      color="amber-10"
+                      icon="table_chart"
+                      label="Sheets"
+                      no-caps
+                      class="full-width q-py-xs text-weight-bold"
+                      :disabled="isSending"
+                      @click="
+                        handleSendCustomPrompt(
+                          'Save and organize extracted data into the default Google Sheets.',
+                        )
+                      "
+                    />
+                  </div>
+                </div>
               </div>
-            </q-chat-message>
+
+              <!-- AI Complexity Score Badge -->
+              <div
+                v-if="task.aiMetadata && task.aiMetadata.complexityScore !== undefined"
+                class="q-mb-xs"
+              >
+                <div
+                  class="row items-center justify-between text-caption text-weight-bold text-grey-8"
+                >
+                  <span>Complexity IA:</span>
+                  <span>{{ task.aiMetadata.complexityScore }}/10</span>
+                </div>
+                <q-linear-progress
+                  :value="task.aiMetadata.complexityScore / 10"
+                  color="secondary"
+                  size="6px"
+                  rounded
+                />
+              </div>
+            </div>
           </div>
+        </template>
 
-          <q-chat-message v-if="isSending" name="AI Agent" bg-color="grey-3">
-            <q-spinner-dots size="1.4rem" color="primary" />
-          </q-chat-message>
-        </div>
-
-        <!-- File Upload Hidden Input -->
-        <input
-          ref="fileInputRef"
-          type="file"
-          accept=".pdf,.doc,.docx,.txt"
-          style="display: none"
-          @change="handleFileSelected"
-        />
-
-        <!-- Attached File Chip Preview -->
-        <div v-if="selectedFile" class="q-px-xs q-pb-xs">
-          <q-chip
-            removable
-            color="primary"
-            text-color="white"
-            dense
-            icon="attach_file"
-            @remove="selectedFile = null"
+        <!-- After Slot: Interactive Chat Thread -->
+        <template #after>
+          <div
+            v-show="splitterModel < 100"
+            class="column no-wrap overflow-hidden q-pa-sm full-height"
+            style="min-width: 0"
           >
-            {{ selectedFile.name }}
-          </q-chip>
-        </div>
+            <div ref="chatScrollRef" class="col scroll q-mb-xs q-px-xs" style="overflow-y: auto">
+              <div v-for="msg in activeSession.messages" :key="msg.id" class="q-mb-xs">
+                <q-chat-message
+                  :name="msg.sender === 'user' ? 'You' : msg.agentName || 'AI Agent'"
+                  :stamp="msg.timestamp"
+                  :sent="msg.sender === 'user'"
+                  :bg-color="msg.sender === 'user' ? 'primary' : 'grey-3'"
+                  :text-color="msg.sender === 'user' ? 'white' : 'dark'"
+                >
+                  <div
+                    style="white-space: pre-wrap; font-size: 0.85rem"
+                    v-html="renderFormattedMessage(msg.text)"
+                  ></div>
 
-        <!-- Chat Input Field with Voice STT & File Attach -->
-        <div class="q-pt-xs bg-white shrink">
-          <q-input
-            v-model="chatMessage"
-            outlined
-            dense
-            placeholder="Type instruction or dictate..."
-            :disabled="isSending"
-            style="font-size: 0.85rem"
-            @keyup.enter="handleSendChatMessage"
-          >
-            <template #before>
-              <q-btn
-                flat
-                round
+                  <!-- TTS Audio Read Aloud button for agent messages -->
+                  <div v-if="msg.sender === 'agent'" class="row items-center justify-end q-mt-xs">
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      size="xs"
+                      :icon="isSpeaking ? 'volume_off' : 'volume_up'"
+                      :color="isSpeaking ? 'negative' : 'grey-7'"
+                      @click="handleSpeakMessage(msg.text)"
+                    >
+                      <q-tooltip>{{
+                        isSpeaking ? "Stop audio" : "Listen to voice response"
+                      }}</q-tooltip>
+                    </q-btn>
+                  </div>
+
+                  <div
+                    v-if="msg.toolsUsed && msg.toolsUsed.length > 0"
+                    class="row wrap q-gutter-xs q-mt-xs"
+                  >
+                    <q-chip
+                      v-for="tool in msg.toolsUsed"
+                      :key="tool"
+                      dense
+                      square
+                      outline
+                      color="amber-9"
+                      text-color="dark"
+                      class="q-pa-xs text-weight-medium"
+                      style="font-size: 0.78rem; border-radius: 6px"
+                    >
+                      🔧 {{ tool }}
+                    </q-chip>
+                  </div>
+                </q-chat-message>
+              </div>
+
+              <q-chat-message v-if="isSending" name="AI Agent" bg-color="grey-3">
+                <q-spinner-dots size="1.4rem" color="primary" />
+              </q-chat-message>
+            </div>
+
+            <!-- File Upload Hidden Input -->
+            <input
+              ref="fileInputRef"
+              type="file"
+              accept=".pdf,.doc,.docx,.txt"
+              style="display: none"
+              @change="handleFileSelected"
+            />
+
+            <!-- Attached File Chip Preview -->
+            <div v-if="selectedFile" class="q-px-xs q-pb-xs">
+              <q-chip
+                removable
+                color="primary"
+                text-color="white"
                 dense
                 icon="attach_file"
-                color="grey-7"
+                @remove="selectedFile = null"
+              >
+                {{ selectedFile.name }}
+              </q-chip>
+            </div>
+
+            <!-- Chat Input Field with Voice STT & File Attach -->
+            <div class="q-pt-xs bg-white shrink">
+              <q-input
+                v-model="chatMessage"
+                outlined
+                dense
+                placeholder="Type instruction or dictate..."
                 :disabled="isSending"
-                @click="triggerFileInput"
+                style="font-size: 0.85rem"
+                @keyup.enter="handleSendChatMessage"
               >
-                <q-tooltip>Attach PDF / text document for Document Understanding</q-tooltip>
-              </q-btn>
-              <q-btn
-                flat
-                round
-                dense
-                :icon="isListening ? 'mic_off' : 'mic'"
-                :color="isListening ? 'negative' : 'primary'"
-                :class="{ 'pulse-mic': isListening }"
-                :disabled="isSending || !isSttSupported"
-                @click="toggleVoiceDictation"
-              >
-                <q-tooltip>{{
-                  isListening ? "Stop dictation" : "Native voice dictation (€0)"
-                }}</q-tooltip>
-              </q-btn>
-            </template>
+                <template #before>
+                  <q-btn
+                    flat
+                    round
+                    dense
+                    icon="attach_file"
+                    color="grey-7"
+                    :disabled="isSending"
+                    @click="triggerFileInput"
+                  >
+                    <q-tooltip>Attach PDF / text document for Document Understanding</q-tooltip>
+                  </q-btn>
+                  <q-btn
+                    flat
+                    round
+                    dense
+                    :icon="isListening ? 'mic_off' : 'mic'"
+                    :color="isListening ? 'negative' : 'primary'"
+                    :class="{ 'pulse-mic': isListening }"
+                    :disabled="isSending || !isSttSupported"
+                    @click="toggleVoiceDictation"
+                  >
+                    <q-tooltip>{{
+                      isListening ? "Stop dictation" : "Native voice dictation (€0)"
+                    }}</q-tooltip>
+                  </q-btn>
+                </template>
 
-            <template #after>
-              <q-btn
-                round
-                dense
-                flat
-                icon="send"
-                color="primary"
-                :disabled="(!chatMessage.trim() && !selectedFile) || isSending"
-                @click="handleSendChatMessage"
-              />
-            </template>
-          </q-input>
-        </div>
-      </div>
+                <template #after>
+                  <q-btn
+                    round
+                    dense
+                    flat
+                    icon="send"
+                    color="primary"
+                    :disabled="(!chatMessage.trim() && !selectedFile) || isSending"
+                    @click="handleSendChatMessage"
+                  />
+                </template>
+              </q-input>
+            </div>
+          </div>
+        </template>
+      </q-splitter>
 
-      <!-- Mouse Resize Handle Corner -->
+      <!-- Mouse Resize Handle Corner (only when not fullscreen) -->
       <div
+        v-if="!isFullscreen"
         class="resize-handle"
         title="Trascina per ridimensionare finestra"
         @mousedown="handleResizeMouseDown"
@@ -994,5 +1110,26 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
     transform: scale(0.95);
     box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
   }
+}
+
+.task-window-splitter-bar {
+  background-color: rgba(10, 35, 66, 0.12);
+  width: 5px;
+  cursor: col-resize;
+  transition: background-color 0.2s ease;
+
+  &:hover {
+    background-color: #c5a065;
+  }
+}
+
+:deep(.bg-navy-light) {
+  background-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+.floating-task-window.is-fullscreen {
+  border-radius: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 </style>
