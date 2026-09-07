@@ -203,6 +203,9 @@ const handleConnectGoogle = (): void => {
 
   // ── 3. Build Google OAuth URL and redirect the popup ──────────────────────
   const scopes = [
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
     "https://www.googleapis.com/auth/gmail.compose",
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive.readonly",

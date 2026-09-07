@@ -35,6 +35,12 @@ import { useSecureLogger } from "./useSecureLogger";
 // ── Utils ─────────────────────────────────────────────────────────────────────
 const FUNCTIONS_BASE_URL = import.meta.env.VITE_FUNCTIONS_BASE_URL as string;
 
+const IDENTITY_SCOPES = [
+  "openid",
+  "https://www.googleapis.com/auth/userinfo.email",
+  "https://www.googleapis.com/auth/userinfo.profile",
+];
+
 const GMAIL_SCOPES = [
   "https://www.googleapis.com/auth/gmail.compose",
   "https://www.googleapis.com/auth/gmail.readonly",
@@ -46,7 +52,7 @@ const SHEETS_SCOPES = [
 ];
 
 /** All scopes required by OpsFlow for full Google Workspace integration. */
-export const ALL_GOOGLE_SCOPES = [...GMAIL_SCOPES, ...SHEETS_SCOPES];
+export const ALL_GOOGLE_SCOPES = [...IDENTITY_SCOPES, ...GMAIL_SCOPES, ...SHEETS_SCOPES];
 
 // ── Composable ────────────────────────────────────────────────────────────────
 

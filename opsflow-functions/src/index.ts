@@ -653,11 +653,40 @@ export const googleOAuthCallback = onRequest(
         return;
       }
 
-      // ── Retrieve authorized email via userinfo ──────────────────────────
-      oAuth2Client.setCredentials(tokens);
-      const oauth2Api = google.oauth2({ version: "v2", auth: oAuth2Client });
-      const { data: userInfo } = await oauth2Api.userinfo.get();
-      const connectedEmail = userInfo.email ?? "";
+      // ── Retrieve authorized email via id_token or userinfo API ───────────
+      let connectedEmail = "";
+
+      // 1. Try extracting email from id_token payload (instant, offline)
+      if (tokens.id_token) {
+        try {
+          const payloadBase64 = tokens.id_token.split(".")[1];
+          if (payloadBase64) {
+            const decodedJson = Buffer.from(payloadBase64, "base64").toString("utf8");
+            const parsed = JSON.parse(decodedJson);
+            if (typeof parsed.email === "string" && parsed.email) {
+              connectedEmail = parsed.email;
+            }
+          }
+        } catch (jwtErr) {
+          logger.warn("googleOAuthCallback: could not decode id_token", { jwtErr });
+        }
+      }
+
+      // 2. Fallback to Google userinfo API if email not in id_token
+      if (!connectedEmail) {
+        try {
+          oAuth2Client.setCredentials(tokens);
+          const oauth2Api = google.oauth2({ version: "v2", auth: oAuth2Client });
+          const { data: userInfo } = await oauth2Api.userinfo.get();
+          connectedEmail = userInfo.email ?? "";
+        } catch (userInfoErr) {
+          logger.warn("googleOAuthCallback: userinfo.get failed", { userInfoErr });
+        }
+      }
+
+      if (!connectedEmail) {
+        connectedEmail = "Google Account";
+      }
 
       // ── Save encrypted token to Workspace-scoped Vault ──────────────────
       const grantedScopes = (tokens.scope ?? "").split(" ").filter(Boolean);

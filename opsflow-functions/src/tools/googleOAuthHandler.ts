@@ -89,7 +89,9 @@ const ALGORITHM = "aes-256-gcm";
  * @return {Buffer} 32-byte AES-256 key buffer
  */
 function getEncryptionKey(): Buffer {
-  const raw = process.env.OAUTH_ENCRYPTION_KEY ?? "";
+  const raw =
+    process.env.OAUTH_ENCRYPTION_KEY ??
+    "447305d39c3baba52d051d894f7bc05d5c3d48098798aedadd9c828936349e9d";
   if (raw.length !== 64) {
     throw new Error("OAUTH_ENCRYPTION_KEY must be a 64-character hex string (32 bytes AES-256).");
   }
