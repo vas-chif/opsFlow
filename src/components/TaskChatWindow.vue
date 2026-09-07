@@ -103,12 +103,77 @@ const isFullscreen = computed(() => !!props.windowState.isFullscreen);
 const viewMode = ref<"both" | "details" | "chat" | "timeline">("both");
 const splitterModel = ref(46); // balanced default: left details, right chat + timeline
 const showTimeline = ref(true);
+const chatTimelineSplitterModel = ref(62); // 62% chat, 38% timeline
+const savedSplitterRatio = ref(62);
+
+const showNoteDialog = ref(false);
+const selectedTimelineEntry = ref<TaskTimelineEvent | null>(null);
+const currentNoteText = ref("");
 
 type TimelineLayout = "dense" | "comfortable" | "loose";
 type TimelineSide = "right" | "left";
 
 const timelineLayout = ref<TimelineLayout>("dense");
 const timelineSide = ref<TimelineSide>("right");
+
+const toggleTimeline = (): void => {
+  showTimeline.value = !showTimeline.value;
+  if (!showTimeline.value) {
+    savedSplitterRatio.value = chatTimelineSplitterModel.value;
+    chatTimelineSplitterModel.value = 100;
+  } else {
+    chatTimelineSplitterModel.value =
+      savedSplitterRatio.value < 100 ? savedSplitterRatio.value : 62;
+  }
+}; /*end toggleTimeline*/
+
+const openNoteDialog = (entry: TaskTimelineEvent): void => {
+  selectedTimelineEntry.value = entry;
+  currentNoteText.value = entry.note || "";
+  showNoteDialog.value = true;
+}; /*end openNoteDialog*/
+
+const saveNote = (): void => {
+  if (!selectedTimelineEntry.value || !task.value) return;
+  chatStore.updateTimelineEventNote(
+    task.value.id,
+    selectedTimelineEntry.value.id,
+    currentNoteText.value.trim(),
+    true,
+  );
+  showNoteDialog.value = false;
+  q.notify({
+    type: "positive",
+    message: "Nota salvata sulla timeline",
+    position: "top",
+    timeout: 1500,
+  });
+}; /*end saveNote*/
+
+const deleteNote = (): void => {
+  if (!selectedTimelineEntry.value || !task.value) return;
+  chatStore.updateTimelineEventNote(task.value.id, selectedTimelineEntry.value.id, undefined, true);
+  showNoteDialog.value = false;
+  q.notify({
+    type: "info",
+    message: "Nota rimossa dallo step",
+    position: "top",
+    timeout: 1500,
+  });
+}; /*end deleteNote*/
+
+const toggleNoteVisibility = (entry: TaskTimelineEvent): void => {
+  if (!task.value) return;
+  const newVisibility = entry.showNote === false;
+  chatStore.updateTimelineEventNote(task.value.id, entry.id, entry.note, newVisibility);
+}; /*end toggleNoteVisibility*/
+
+const handleEntryClick = (e: MouseEvent, entry: TaskTimelineEvent): void => {
+  const target = e.target as HTMLElement | null;
+  if (target && (target.closest(".q-timeline__dot") || target.closest(".q-timeline__icon"))) {
+    openNoteDialog(entry);
+  }
+}; /*end handleEntryClick*/
 
 const setViewMode = (mode: "both" | "details" | "chat" | "timeline"): void => {
   viewMode.value = mode;
@@ -845,14 +910,126 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
             <q-timeline-entry
               v-for="entry in activeSession.timelineEvents"
               :key="entry.id"
-              :title="entry.title"
               :subtitle="entry.subtitle"
               :icon="entry.icon"
               :color="entry.color"
               :side="timelineSide"
+              class="task-timeline-entry"
+              @click="handleEntryClick($event, entry)"
             >
-              <div class="text-body2 text-grey-9" style="line-height: 1.5">
+              <template #title>
+                <div
+                  class="row items-center justify-between no-wrap cursor-pointer"
+                  @click.stop="openNoteDialog(entry)"
+                >
+                  <span
+                    class="text-weight-bold text-subtitle2 text-primary"
+                    style="overflow-wrap: break-word; word-break: normal"
+                  >
+                    {{ entry.title }}
+                  </span>
+                  <div class="row items-center q-gutter-2xs" @click.stop>
+                    <q-btn
+                      v-if="entry.note"
+                      flat
+                      round
+                      dense
+                      size="xs"
+                      :icon="entry.showNote !== false ? 'visibility' : 'visibility_off'"
+                      :color="entry.showNote !== false ? 'amber-9' : 'grey-5'"
+                      @click.stop="toggleNoteVisibility(entry)"
+                    >
+                      <q-tooltip>{{
+                        entry.showNote !== false ? "Nascondi nota" : "Mostra nota"
+                      }}</q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      size="xs"
+                      icon="edit_note"
+                      color="amber-9"
+                      @click.stop="openNoteDialog(entry)"
+                    >
+                      <q-tooltip>{{
+                        entry.note ? "Modifica nota" : "Aggiungi nota allo step"
+                      }}</q-tooltip>
+                    </q-btn>
+                  </div>
+                </div>
+              </template>
+
+              <div
+                class="text-body2 text-grey-9 q-mb-xs"
+                style="line-height: 1.5; overflow-wrap: break-word; word-break: normal"
+              >
                 {{ entry.description }}
+              </div>
+
+              <!-- Note content display in full timeline view -->
+              <div
+                v-if="entry.note && entry.showNote !== false"
+                class="timeline-step-note q-pa-sm q-mt-xs rounded-borders"
+                style="
+                  border-left: 3px solid #c5a065;
+                  background: #fffdf7;
+                  overflow-wrap: break-word;
+                  word-break: normal;
+                  white-space: pre-wrap;
+                "
+              >
+                <div class="row items-center justify-between no-wrap q-mb-xs">
+                  <span
+                    class="text-caption text-weight-bold text-amber-10 row items-center q-gutter-xs"
+                  >
+                    <q-icon name="sticky_note_2" size="14px" color="amber-10" />
+                    <span>Nota Operativa</span>
+                  </span>
+                  <div class="row items-center q-gutter-2xs">
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      size="2xs"
+                      icon="edit"
+                      color="grey-7"
+                      @click.stop="openNoteDialog(entry)"
+                    >
+                      <q-tooltip>Modifica nota</q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      size="2xs"
+                      icon="visibility_off"
+                      color="grey-6"
+                      @click.stop="toggleNoteVisibility(entry)"
+                    >
+                      <q-tooltip>Nascondi nota</q-tooltip>
+                    </q-btn>
+                  </div>
+                </div>
+                <div class="text-caption text-grey-9" style="line-height: 1.4">
+                  {{ entry.note }}
+                </div>
+              </div>
+
+              <!-- Hidden note indicator -->
+              <div v-else-if="entry.note && entry.showNote === false" class="q-mt-xs">
+                <q-btn
+                  flat
+                  dense
+                  size="xs"
+                  icon="visibility"
+                  color="amber-9"
+                  label="Mostra nota nascosta"
+                  no-caps
+                  class="text-caption"
+                  style="font-size: 0.72rem; padding: 0 4px"
+                  @click.stop="toggleNoteVisibility(entry)"
+                />
               </div>
             </q-timeline-entry>
           </q-timeline>
@@ -1073,255 +1250,389 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
           </div>
         </template>
 
-        <!-- After Slot: Interactive Chat Thread + Vertical Status Timeline -->
+        <!-- After Slot: Interactive Chat Thread + Vertical Status Timeline with Splitter -->
         <template #after>
           <div
             v-show="splitterModel < 100"
-            class="row no-wrap full-height full-width overflow-hidden bg-white"
+            class="full-height full-width overflow-hidden bg-white"
             style="min-width: 0"
           >
-            <!-- Chat Main Pane -->
-            <div
-              class="col column no-wrap overflow-hidden q-pa-sm full-height"
-              style="min-width: 0"
+            <q-splitter
+              v-model="chatTimelineSplitterModel"
+              :limits="showTimeline ? [25, 80] : [100, 100]"
+              :separator-style="showTimeline ? 'width: 5px; cursor: col-resize;' : 'display: none'"
+              separator-class="task-window-splitter-bar"
+              class="full-width full-height overflow-hidden"
             >
-              <div class="row items-center justify-between q-px-xs q-pb-xs border-bottom-light">
+              <!-- Before Slot: Chat Main Pane -->
+              <template #before>
                 <div
-                  class="text-caption text-weight-bold text-primary row items-center q-gutter-xs"
+                  class="column no-wrap overflow-hidden q-pa-sm full-height"
+                  style="min-width: 0"
                 >
-                  <q-icon name="chat" size="16px" color="primary" />
-                  <span>Assistente IA & Operazioni</span>
-                </div>
-                <q-btn
-                  flat
-                  dense
-                  round
-                  size="sm"
-                  :icon="showTimeline ? 'view_sidebar' : 'history'"
-                  :color="showTimeline ? 'amber-9' : 'grey-7'"
-                  @click="showTimeline = !showTimeline"
-                >
-                  <q-tooltip>{{
-                    showTimeline ? "Nascondi Timeline Stati" : "Mostra Timeline Stati"
-                  }}</q-tooltip>
-                </q-btn>
-              </div>
-
-              <div
-                ref="chatScrollRef"
-                class="col scroll q-mb-xs q-px-xs q-pt-xs"
-                style="overflow-y: auto"
-              >
-                <div v-for="msg in activeSession.messages" :key="msg.id" class="q-mb-xs">
-                  <q-chat-message
-                    :name="msg.sender === 'user' ? 'You' : msg.agentName || 'AI Agent'"
-                    :stamp="msg.timestamp"
-                    :sent="msg.sender === 'user'"
-                    :bg-color="msg.sender === 'user' ? 'primary' : 'grey-3'"
-                    :text-color="msg.sender === 'user' ? 'white' : 'dark'"
-                  >
+                  <div class="row items-center justify-between q-px-xs q-pb-xs border-bottom-light">
                     <div
-                      style="white-space: pre-wrap; font-size: 0.85rem"
-                      v-html="renderFormattedMessage(msg.text)"
-                    ></div>
+                      class="text-caption text-weight-bold text-primary row items-center q-gutter-xs"
+                    >
+                      <q-icon name="chat" size="16px" color="primary" />
+                      <span>Assistente IA & Operazioni</span>
+                    </div>
+                    <q-btn
+                      flat
+                      dense
+                      round
+                      size="sm"
+                      :icon="showTimeline ? 'view_sidebar' : 'history'"
+                      :color="showTimeline ? 'amber-9' : 'grey-7'"
+                      @click="toggleTimeline"
+                    >
+                      <q-tooltip>{{
+                        showTimeline ? "Nascondi Timeline Stati" : "Mostra Timeline Stati"
+                      }}</q-tooltip>
+                    </q-btn>
+                  </div>
 
-                    <!-- TTS Audio Read Aloud button for agent messages -->
-                    <div v-if="msg.sender === 'agent'" class="row items-center justify-end q-mt-xs">
+                  <div
+                    ref="chatScrollRef"
+                    class="col scroll q-mb-xs q-px-xs q-pt-xs"
+                    style="overflow-y: auto"
+                  >
+                    <div v-for="msg in activeSession.messages" :key="msg.id" class="q-mb-xs">
+                      <q-chat-message
+                        :name="msg.sender === 'user' ? 'You' : msg.agentName || 'AI Agent'"
+                        :stamp="msg.timestamp"
+                        :sent="msg.sender === 'user'"
+                        :bg-color="msg.sender === 'user' ? 'primary' : 'grey-3'"
+                        :text-color="msg.sender === 'user' ? 'white' : 'dark'"
+                      >
+                        <div
+                          style="
+                            white-space: pre-wrap;
+                            font-size: 0.85rem;
+                            overflow-wrap: break-word;
+                            word-break: normal;
+                          "
+                          v-html="renderFormattedMessage(msg.text)"
+                        ></div>
+
+                        <!-- TTS Audio Read Aloud button for agent messages -->
+                        <div
+                          v-if="msg.sender === 'agent'"
+                          class="row items-center justify-end q-mt-xs"
+                        >
+                          <q-btn
+                            flat
+                            round
+                            dense
+                            size="xs"
+                            :icon="isSpeaking ? 'volume_off' : 'volume_up'"
+                            :color="isSpeaking ? 'negative' : 'grey-7'"
+                            @click="handleSpeakMessage(msg.text)"
+                          >
+                            <q-tooltip>{{
+                              isSpeaking ? "Stop audio" : "Listen to voice response"
+                            }}</q-tooltip>
+                          </q-btn>
+                        </div>
+
+                        <div
+                          v-if="msg.toolsUsed && msg.toolsUsed.length > 0"
+                          class="row wrap q-gutter-xs q-mt-xs"
+                        >
+                          <q-chip
+                            v-for="tool in msg.toolsUsed"
+                            :key="tool"
+                            dense
+                            square
+                            outline
+                            color="amber-9"
+                            text-color="dark"
+                            class="q-pa-xs text-weight-medium"
+                            style="font-size: 0.78rem; border-radius: 6px"
+                          >
+                            🔧 {{ tool }}
+                          </q-chip>
+                        </div>
+                      </q-chat-message>
+                    </div>
+
+                    <q-chat-message v-if="isSending" name="AI Agent" bg-color="grey-3">
+                      <q-spinner-dots size="1.4rem" color="primary" />
+                    </q-chat-message>
+                  </div>
+
+                  <!-- File Upload Hidden Input -->
+                  <input
+                    ref="fileInputRef"
+                    type="file"
+                    accept=".pdf,.doc,.docx,.txt"
+                    style="display: none"
+                    @change="handleFileSelected"
+                  />
+
+                  <!-- Attached File Chip Preview -->
+                  <div v-if="selectedFile" class="q-px-xs q-pb-xs">
+                    <q-chip
+                      removable
+                      color="primary"
+                      text-color="white"
+                      dense
+                      icon="attach_file"
+                      @remove="selectedFile = null"
+                    >
+                      {{ selectedFile.name }}
+                    </q-chip>
+                  </div>
+
+                  <!-- Chat Input Field with Voice STT & File Attach -->
+                  <div class="q-pt-xs bg-white shrink">
+                    <q-input
+                      v-model="chatMessage"
+                      outlined
+                      dense
+                      placeholder="Type instruction or dictate..."
+                      :disabled="isSending"
+                      style="font-size: 0.85rem"
+                      @keyup.enter="handleSendChatMessage"
+                    >
+                      <template #before>
+                        <q-btn
+                          flat
+                          round
+                          dense
+                          icon="attach_file"
+                          color="grey-7"
+                          :disabled="isSending"
+                          @click="triggerFileInput"
+                        >
+                          <q-tooltip
+                            >Attach PDF / text document for Document Understanding</q-tooltip
+                          >
+                        </q-btn>
+                        <q-btn
+                          flat
+                          round
+                          dense
+                          :icon="isListening ? 'mic_off' : 'mic'"
+                          :color="isListening ? 'negative' : 'primary'"
+                          :class="{ 'pulse-mic': isListening }"
+                          :disabled="isSending || !isSttSupported"
+                          @click="toggleVoiceDictation"
+                        >
+                          <q-tooltip>{{
+                            isListening ? "Stop dictation" : "Native voice dictation (€0)"
+                          }}</q-tooltip>
+                        </q-btn>
+                      </template>
+
+                      <template #after>
+                        <q-btn
+                          round
+                          dense
+                          flat
+                          icon="send"
+                          color="primary"
+                          :disabled="(!chatMessage.trim() && !selectedFile) || isSending"
+                          @click="handleSendChatMessage"
+                        />
+                      </template>
+                    </q-input>
+                  </div>
+                </div>
+              </template>
+
+              <!-- After Slot: Vertical Timeline Column (Resizable, Interactive Notes) -->
+              <template #after>
+                <div
+                  v-show="showTimeline"
+                  class="task-timeline-panel column no-wrap bg-grey-1 q-pa-sm full-height overflow-hidden"
+                  style="min-width: 0"
+                >
+                  <div
+                    class="row items-center justify-between q-mb-xs text-caption text-weight-bold text-primary border-bottom-light q-pb-xs"
+                  >
+                    <div class="row items-center q-gutter-xs">
+                      <q-icon name="timeline" color="primary" size="15px" />
+                      <span>Timeline Stati</span>
+                    </div>
+                    <div class="row items-center q-gutter-xs">
                       <q-btn
                         flat
                         round
                         dense
                         size="xs"
-                        :icon="isSpeaking ? 'volume_off' : 'volume_up'"
-                        :color="isSpeaking ? 'negative' : 'grey-7'"
-                        @click="handleSpeakMessage(msg.text)"
+                        :icon="
+                          timelineSide === 'right'
+                            ? 'align_horizontal_right'
+                            : 'align_horizontal_left'
+                        "
+                        :color="timelineSide === 'right' ? 'primary' : 'amber-9'"
+                        @click="timelineSide = timelineSide === 'right' ? 'left' : 'right'"
                       >
                         <q-tooltip>{{
-                          isSpeaking ? "Stop audio" : "Listen to voice response"
+                          timelineSide === "right" ? "Contenuto a sinistra" : "Contenuto a destra"
                         }}</q-tooltip>
                       </q-btn>
-                    </div>
-
-                    <div
-                      v-if="msg.toolsUsed && msg.toolsUsed.length > 0"
-                      class="row wrap q-gutter-xs q-mt-xs"
-                    >
-                      <q-chip
-                        v-for="tool in msg.toolsUsed"
-                        :key="tool"
+                      <q-btn
+                        flat
+                        round
                         dense
-                        square
-                        outline
-                        color="amber-9"
-                        text-color="dark"
-                        class="q-pa-xs text-weight-medium"
-                        style="font-size: 0.78rem; border-radius: 6px"
+                        size="xs"
+                        icon="close"
+                        color="grey-7"
+                        @click="toggleTimeline"
                       >
-                        🔧 {{ tool }}
-                      </q-chip>
+                        <q-tooltip>Nascondi Timeline</q-tooltip>
+                      </q-btn>
                     </div>
-                  </q-chat-message>
-                </div>
+                  </div>
 
-                <q-chat-message v-if="isSending" name="AI Agent" bg-color="grey-3">
-                  <q-spinner-dots size="1.4rem" color="primary" />
-                </q-chat-message>
-              </div>
-
-              <!-- File Upload Hidden Input -->
-              <input
-                ref="fileInputRef"
-                type="file"
-                accept=".pdf,.doc,.docx,.txt"
-                style="display: none"
-                @change="handleFileSelected"
-              />
-
-              <!-- Attached File Chip Preview -->
-              <div v-if="selectedFile" class="q-px-xs q-pb-xs">
-                <q-chip
-                  removable
-                  color="primary"
-                  text-color="white"
-                  dense
-                  icon="attach_file"
-                  @remove="selectedFile = null"
-                >
-                  {{ selectedFile.name }}
-                </q-chip>
-              </div>
-
-              <!-- Chat Input Field with Voice STT & File Attach -->
-              <div class="q-pt-xs bg-white shrink">
-                <q-input
-                  v-model="chatMessage"
-                  outlined
-                  dense
-                  placeholder="Type instruction or dictate..."
-                  :disabled="isSending"
-                  style="font-size: 0.85rem"
-                  @keyup.enter="handleSendChatMessage"
-                >
-                  <template #before>
-                    <q-btn
-                      flat
-                      round
-                      dense
-                      icon="attach_file"
-                      color="grey-7"
-                      :disabled="isSending"
-                      @click="triggerFileInput"
+                  <div class="col scroll q-pr-xs q-pt-xs" style="overflow-y: auto">
+                    <q-timeline
+                      :layout="timelineLayout"
+                      :side="timelineSide"
+                      color="secondary"
+                      class="q-px-xs"
                     >
-                      <q-tooltip>Attach PDF / text document for Document Understanding</q-tooltip>
-                    </q-btn>
-                    <q-btn
-                      flat
-                      round
-                      dense
-                      :icon="isListening ? 'mic_off' : 'mic'"
-                      :color="isListening ? 'negative' : 'primary'"
-                      :class="{ 'pulse-mic': isListening }"
-                      :disabled="isSending || !isSttSupported"
-                      @click="toggleVoiceDictation"
-                    >
-                      <q-tooltip>{{
-                        isListening ? "Stop dictation" : "Native voice dictation (€0)"
-                      }}</q-tooltip>
-                    </q-btn>
-                  </template>
+                      <q-timeline-entry
+                        v-for="entry in activeSession.timelineEvents"
+                        :key="entry.id"
+                        :subtitle="entry.subtitle"
+                        :icon="entry.icon"
+                        :color="entry.color"
+                        :side="timelineSide"
+                        class="task-timeline-entry"
+                        @click="handleEntryClick($event, entry)"
+                      >
+                        <template #title>
+                          <div
+                            class="row items-center justify-between no-wrap cursor-pointer"
+                            @click.stop="openNoteDialog(entry)"
+                          >
+                            <span
+                              class="text-weight-bold text-caption text-primary"
+                              style="overflow-wrap: break-word; word-break: normal"
+                            >
+                              {{ entry.title }}
+                            </span>
+                            <div class="row items-center q-gutter-2xs" @click.stop>
+                              <q-btn
+                                v-if="entry.note"
+                                flat
+                                round
+                                dense
+                                size="2xs"
+                                :icon="entry.showNote !== false ? 'visibility' : 'visibility_off'"
+                                :color="entry.showNote !== false ? 'amber-9' : 'grey-5'"
+                                @click.stop="toggleNoteVisibility(entry)"
+                              >
+                                <q-tooltip>{{
+                                  entry.showNote !== false ? "Nascondi nota" : "Mostra nota"
+                                }}</q-tooltip>
+                              </q-btn>
+                              <q-btn
+                                flat
+                                round
+                                dense
+                                size="2xs"
+                                icon="edit_note"
+                                color="amber-9"
+                                @click.stop="openNoteDialog(entry)"
+                              >
+                                <q-tooltip>{{
+                                  entry.note ? "Modifica nota" : "Aggiungi nota allo step"
+                                }}</q-tooltip>
+                              </q-btn>
+                            </div>
+                          </div>
+                        </template>
 
-                  <template #after>
-                    <q-btn
-                      round
-                      dense
-                      flat
-                      icon="send"
-                      color="primary"
-                      :disabled="(!chatMessage.trim() && !selectedFile) || isSending"
-                      @click="handleSendChatMessage"
-                    />
-                  </template>
-                </q-input>
-              </div>
-            </div>
+                        <div
+                          v-if="entry.description"
+                          class="text-caption text-grey-8 q-mt-xs"
+                          style="
+                            font-size: 0.72rem;
+                            line-height: 1.3;
+                            overflow-wrap: break-word;
+                            word-break: normal;
+                          "
+                        >
+                          {{ entry.description }}
+                        </div>
 
-            <!-- Vertical Timeline Column on the Right (Dense, simple, linear) -->
-            <div
-              v-if="showTimeline"
-              class="task-timeline-panel column no-wrap bg-grey-1 q-pa-sm"
-              style="
-                width: 270px;
-                min-width: 240px;
-                max-width: 320px;
-                border-left: 1px solid rgba(10, 35, 66, 0.12);
-                height: 100%;
-              "
-            >
-              <div
-                class="row items-center justify-between q-mb-xs text-caption text-weight-bold text-primary border-bottom-light q-pb-xs"
-              >
-                <div class="row items-center q-gutter-xs">
-                  <q-icon name="timeline" color="primary" size="15px" />
-                  <span>Timeline Stati</span>
+                        <!-- Timeline step note card -->
+                        <div
+                          v-if="entry.note && entry.showNote !== false"
+                          class="timeline-step-note q-pa-xs q-mt-xs rounded-borders"
+                          style="
+                            border-left: 3px solid #c5a065;
+                            background: #fffdf7;
+                            overflow-wrap: break-word;
+                            word-break: normal;
+                            white-space: pre-wrap;
+                          "
+                        >
+                          <div class="row items-center justify-between no-wrap q-mb-2xs">
+                            <span
+                              class="text-caption text-weight-bold text-amber-10 row items-center q-gutter-2xs"
+                            >
+                              <q-icon name="sticky_note_2" size="12px" color="amber-10" />
+                              <span style="font-size: 0.7rem">Nota</span>
+                            </span>
+                            <div class="row items-center q-gutter-2xs">
+                              <q-btn
+                                flat
+                                round
+                                dense
+                                size="2xs"
+                                icon="edit"
+                                color="grey-7"
+                                @click.stop="openNoteDialog(entry)"
+                              >
+                                <q-tooltip>Modifica nota</q-tooltip>
+                              </q-btn>
+                              <q-btn
+                                flat
+                                round
+                                dense
+                                size="2xs"
+                                icon="visibility_off"
+                                color="grey-6"
+                                @click.stop="toggleNoteVisibility(entry)"
+                              >
+                                <q-tooltip>Nascondi nota</q-tooltip>
+                              </q-btn>
+                            </div>
+                          </div>
+                          <div
+                            class="text-caption text-grey-9"
+                            style="font-size: 0.72rem; line-height: 1.35"
+                          >
+                            {{ entry.note }}
+                          </div>
+                        </div>
+
+                        <!-- Hidden note indicator -->
+                        <div v-else-if="entry.note && entry.showNote === false" class="q-mt-xs">
+                          <q-btn
+                            flat
+                            dense
+                            size="xs"
+                            icon="visibility"
+                            color="amber-9"
+                            label="Mostra nota nascosta"
+                            no-caps
+                            class="text-caption"
+                            style="font-size: 0.68rem; padding: 0 4px"
+                            @click.stop="toggleNoteVisibility(entry)"
+                          />
+                        </div>
+                      </q-timeline-entry>
+                    </q-timeline>
+                  </div>
                 </div>
-                <div class="row items-center q-gutter-xs">
-                  <q-btn
-                    flat
-                    round
-                    dense
-                    size="xs"
-                    :icon="
-                      timelineSide === 'right' ? 'align_horizontal_right' : 'align_horizontal_left'
-                    "
-                    :color="timelineSide === 'right' ? 'primary' : 'amber-9'"
-                    @click="timelineSide = timelineSide === 'right' ? 'left' : 'right'"
-                  >
-                    <q-tooltip>{{
-                      timelineSide === "right" ? "Contenuto a sinistra" : "Contenuto a destra"
-                    }}</q-tooltip>
-                  </q-btn>
-                  <q-btn
-                    flat
-                    round
-                    dense
-                    size="xs"
-                    icon="close"
-                    color="grey-7"
-                    @click="showTimeline = false"
-                  >
-                    <q-tooltip>Nascondi Timeline</q-tooltip>
-                  </q-btn>
-                </div>
-              </div>
-
-              <div class="col scroll q-pr-xs q-pt-xs" style="overflow-y: auto">
-                <q-timeline
-                  :layout="timelineLayout"
-                  :side="timelineSide"
-                  color="secondary"
-                  class="q-px-xs"
-                >
-                  <q-timeline-entry
-                    v-for="entry in activeSession.timelineEvents"
-                    :key="entry.id"
-                    :title="entry.title"
-                    :subtitle="entry.subtitle"
-                    :icon="entry.icon"
-                    :color="entry.color"
-                    :side="timelineSide"
-                    class="task-timeline-entry"
-                  >
-                    <div
-                      v-if="entry.description"
-                      class="text-caption text-grey-8 q-mt-xs"
-                      style="font-size: 0.72rem; line-height: 1.3; overflow-wrap: break-word"
-                    >
-                      {{ entry.description }}
-                    </div>
-                  </q-timeline-entry>
-                </q-timeline>
-              </div>
-            </div>
+              </template>
+            </q-splitter>
           </div>
         </template>
       </q-splitter>
@@ -1336,6 +1647,61 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
         <q-icon name="south_east" size="14px" color="grey-6" />
       </div>
     </div>
+
+    <!-- Timeline Step Note Dialog -->
+    <q-dialog v-model="showNoteDialog" persistent>
+      <q-card style="min-width: 360px; max-width: 500px; border-radius: 12px">
+        <q-card-section class="row items-center justify-between bg-navy text-white q-py-sm">
+          <div class="row items-center q-gutter-xs">
+            <q-icon name="note_alt" color="amber-5" size="20px" />
+            <div class="text-subtitle2 text-weight-bold">
+              Nota Step: {{ selectedTimelineEntry?.title }}
+            </div>
+          </div>
+          <q-btn icon="close" flat round dense size="sm" color="white" v-close-popup />
+        </q-card-section>
+
+        <q-card-section class="q-pa-md">
+          <div class="text-caption text-grey-7 q-mb-sm">
+            Aggiungi una nota o appunto personalizzato per questa specifica fase della timeline.
+          </div>
+          <q-input
+            v-model="currentNoteText"
+            type="textarea"
+            outlined
+            rows="4"
+            autofocus
+            placeholder="Inserisci note operative, osservazioni o promemoria..."
+            style="font-size: 0.85rem"
+          />
+        </q-card-section>
+
+        <q-card-actions align="between" class="q-px-md q-pb-md">
+          <q-btn
+            v-if="selectedTimelineEntry?.note"
+            flat
+            color="negative"
+            label="Elimina nota"
+            icon="delete"
+            size="sm"
+            @click="deleteNote"
+          />
+          <div v-else></div>
+
+          <div class="row items-center q-gutter-sm">
+            <q-btn flat label="Annulla" color="grey-7" v-close-popup size="sm" />
+            <q-btn
+              color="primary"
+              label="Salva Nota"
+              icon="save"
+              size="sm"
+              class="text-weight-bold"
+              @click="saveNote"
+            />
+          </div>
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </div>
 </template>
 
@@ -1435,6 +1801,13 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
 }
 
 .task-timeline-entry {
+  :deep(.q-timeline__dot) {
+    cursor: pointer;
+    transition: transform 0.15s ease;
+    &:hover {
+      transform: scale(1.15);
+    }
+  }
   :deep(.q-timeline__title) {
     font-size: 0.78rem;
     font-weight: 700;
@@ -1447,5 +1820,9 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
     text-transform: none;
     opacity: 0.85;
   }
+}
+
+.timeline-step-note {
+  box-shadow: 0 1px 4px rgba(10, 35, 66, 0.08);
 }
 </style>

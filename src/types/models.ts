@@ -37,6 +37,8 @@ export interface TaskTimelineEvent {
   title: string;
   subtitle: string;
   description?: string;
+  note?: string;
+  showNote?: boolean;
   icon: string;
   color: string;
   timestamp: string;

@@ -336,6 +336,27 @@ export const useTaskChatStore = defineStore("taskChat", () => {
     }
   } /*end appendTimelineEvent*/
 
+  function updateTimelineEventNote(
+    taskId: string,
+    eventId: string,
+    note?: string,
+    showNote?: boolean,
+  ): void {
+    const s = sessions.value.get(taskId);
+    if (s) {
+      const ev = s.timelineEvents.find((e) => e.id === eventId);
+      if (ev) {
+        if (note !== undefined) {
+          ev.note = note.trim();
+        }
+        if (showNote !== undefined) {
+          ev.showNote = showNote;
+        }
+        saveTimelineToStorage(taskId, s.timelineEvents);
+      }
+    }
+  } /*end updateTimelineEventNote*/
+
   /**
    * Appends or updates an ApprovalRecord in the session.
    * Called by the Firestore onSnapshot listener for /approvals/.
@@ -454,6 +475,7 @@ export const useTaskChatStore = defineStore("taskChat", () => {
     toggleFullscreenWindow,
     sendToBack,
     appendTimelineEvent,
+    updateTimelineEventNote,
     setKeyPoints,
     addKeyPoint,
     clearKeyPoints,
