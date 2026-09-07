@@ -100,11 +100,17 @@ const resizeStart = ref({ x: 0, y: 0, w: 0, h: 0 });
 
 // Fullscreen & Layout View Mode
 const isFullscreen = computed(() => !!props.windowState.isFullscreen);
-const viewMode = ref<"both" | "details" | "chat">("both");
+const viewMode = ref<"both" | "details" | "chat" | "timeline">("both");
 const splitterModel = ref(46); // balanced default: left details, right chat + timeline
 const showTimeline = ref(true);
 
-const setViewMode = (mode: "both" | "details" | "chat"): void => {
+type TimelineLayout = "dense" | "comfortable" | "loose";
+type TimelineSide = "right" | "left";
+
+const timelineLayout = ref<TimelineLayout>("dense");
+const timelineSide = ref<TimelineSide>("right");
+
+const setViewMode = (mode: "both" | "details" | "chat" | "timeline"): void => {
   viewMode.value = mode;
   if (mode === "details") {
     splitterModel.value = 100;
@@ -134,19 +140,19 @@ const activeSession = computed(() => {
 });
 
 const statusOptions: { label: string; value: TaskStatus; color: string; icon: string }[] = [
-  { label: "Pending", value: "pending", color: "warning", icon: "schedule" },
-  { label: "In Progress", value: "in-progress", color: "primary", icon: "play_arrow" },
-  { label: "Contacted", value: "contacted", color: "info", icon: "mail" },
+  { label: "Pending", value: "pending", color: "amber-5", icon: "schedule" },
+  { label: "In Progress", value: "in-progress", color: "cyan-4", icon: "play_arrow" },
+  { label: "Contacted", value: "contacted", color: "light-blue-3", icon: "mail" },
   { label: "Positive Response", value: "positive-response", color: "positive", icon: "thumb_up" },
   { label: "Negative Response", value: "negative-response", color: "negative", icon: "thumb_down" },
   {
     label: "Follow-up 30 Days",
     value: "follow-up-30-days",
-    color: "deep-orange",
+    color: "deep-orange-4",
     icon: "event_repeat",
   },
   { label: "Completed", value: "completed", color: "positive", icon: "check_circle" },
-  { label: "Cancelled", value: "cancelled", color: "grey", icon: "cancel" },
+  { label: "Cancelled", value: "cancelled", color: "grey-5", icon: "cancel" },
 ];
 
 const defaultStatusObj = statusOptions[0]!;
@@ -703,6 +709,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
               { label: 'Entrambi', value: 'both', icon: 'splitscreen' },
               { label: 'Task', value: 'details', icon: 'assignment' },
               { label: 'Chat', value: 'chat', icon: 'chat' },
+              { label: 'Timeline', value: 'timeline', icon: 'timeline' },
             ]"
             @update:model-value="setViewMode"
           />
@@ -716,7 +723,8 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
           :color="currentStatusObj.color"
           :label="currentStatusObj.label"
           :icon="currentStatusObj.icon"
-          class="q-px-xs"
+          class="q-px-xs text-weight-bold"
+          text-color="white"
         >
           <q-list dense style="min-width: 160px">
             <q-item
@@ -798,7 +806,62 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
       class="col overflow-hidden bg-white relative-position"
       style="height: calc(100% - 48px)"
     >
+      <!-- Dedicated Full Timeline View -->
+      <div
+        v-if="viewMode === 'timeline'"
+        class="col column no-wrap overflow-hidden bg-white full-height"
+      >
+        <div class="row q-gutter-md q-px-lg q-py-sm bg-grey-2 border-bottom-light items-center">
+          <q-option-group
+            type="radio"
+            dense
+            inline
+            v-model="timelineLayout"
+            :options="[
+              { label: 'Dense layout', value: 'dense' },
+              { label: 'Comfortable layout', value: 'comfortable' },
+              { label: 'Loose layout', value: 'loose' },
+            ]"
+            class="text-caption text-weight-medium"
+          />
+          <q-option-group
+            type="radio"
+            dense
+            inline
+            v-model="timelineSide"
+            :disable="timelineLayout === 'loose'"
+            :options="[
+              { label: 'Content on right', value: 'right' },
+              { label: 'Content on left', value: 'left' },
+            ]"
+            class="text-caption text-weight-medium"
+          />
+        </div>
+
+        <div class="col scroll q-pa-lg" style="overflow-y: auto">
+          <q-timeline :layout="timelineLayout" :side="timelineSide" color="secondary">
+            <q-timeline-entry heading>Stato e Cronologia Task</q-timeline-entry>
+
+            <q-timeline-entry
+              v-for="entry in activeSession.timelineEvents"
+              :key="entry.id"
+              :title="entry.title"
+              :subtitle="entry.subtitle"
+              :icon="entry.icon"
+              :color="entry.color"
+              :side="timelineSide"
+            >
+              <div class="text-body2 text-grey-9" style="line-height: 1.5">
+                {{ entry.description }}
+              </div>
+            </q-timeline-entry>
+          </q-timeline>
+        </div>
+      </div>
+
+      <!-- Splitter View for Both, Details, or Chat -->
       <q-splitter
+        v-else
         v-model="splitterModel"
         :limits="viewMode === 'both' ? [20, 80] : [0, 100]"
         :separator-style="viewMode === 'both' ? 'width: 5px; cursor: col-resize;' : 'display: none'"
@@ -1187,9 +1250,9 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
               v-if="showTimeline"
               class="task-timeline-panel column no-wrap bg-grey-1 q-pa-sm"
               style="
-                width: 220px;
-                min-width: 190px;
-                max-width: 240px;
+                width: 270px;
+                min-width: 240px;
+                max-width: 320px;
                 border-left: 1px solid rgba(10, 35, 66, 0.12);
                 height: 100%;
               "
@@ -1201,21 +1264,43 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                   <q-icon name="timeline" color="primary" size="15px" />
                   <span>Timeline Stati</span>
                 </div>
-                <q-btn
-                  flat
-                  round
-                  dense
-                  size="xs"
-                  icon="close"
-                  color="grey-7"
-                  @click="showTimeline = false"
-                >
-                  <q-tooltip>Nascondi Timeline</q-tooltip>
-                </q-btn>
+                <div class="row items-center q-gutter-xs">
+                  <q-btn
+                    flat
+                    round
+                    dense
+                    size="xs"
+                    :icon="
+                      timelineSide === 'right' ? 'align_horizontal_right' : 'align_horizontal_left'
+                    "
+                    :color="timelineSide === 'right' ? 'primary' : 'amber-9'"
+                    @click="timelineSide = timelineSide === 'right' ? 'left' : 'right'"
+                  >
+                    <q-tooltip>{{
+                      timelineSide === "right" ? "Contenuto a sinistra" : "Contenuto a destra"
+                    }}</q-tooltip>
+                  </q-btn>
+                  <q-btn
+                    flat
+                    round
+                    dense
+                    size="xs"
+                    icon="close"
+                    color="grey-7"
+                    @click="showTimeline = false"
+                  >
+                    <q-tooltip>Nascondi Timeline</q-tooltip>
+                  </q-btn>
+                </div>
               </div>
 
               <div class="col scroll q-pr-xs q-pt-xs" style="overflow-y: auto">
-                <q-timeline layout="dense" color="primary" class="q-px-xs">
+                <q-timeline
+                  :layout="timelineLayout"
+                  :side="timelineSide"
+                  color="secondary"
+                  class="q-px-xs"
+                >
                   <q-timeline-entry
                     v-for="entry in activeSession.timelineEvents"
                     :key="entry.id"
@@ -1223,6 +1308,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                     :subtitle="entry.subtitle"
                     :icon="entry.icon"
                     :color="entry.color"
+                    :side="timelineSide"
                     class="task-timeline-entry"
                   >
                     <div
