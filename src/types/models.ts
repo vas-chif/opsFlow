@@ -29,6 +29,19 @@ export type TaskStatus =
   | "completed"
   | "cancelled";
 
+/** UI & Session model for tracking Task status progression timeline. */
+export interface TaskTimelineEvent {
+  id: string;
+  taskId: string;
+  status: TaskStatus;
+  title: string;
+  subtitle: string;
+  description?: string;
+  icon: string;
+  color: string;
+  timestamp: string;
+}
+
 /** Timestamp format used by Firestore. */
 export type FirestoreTimestamp = Date | null;
 

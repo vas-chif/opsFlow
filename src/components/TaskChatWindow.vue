@@ -7,13 +7,18 @@
 -->
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from "vue";
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { useQuasar } from "quasar";
 import { useTaskStore } from "../stores/taskStore";
 import { useTaskChatStore, type FloatingWindow } from "../stores/taskChatStore";
 import { useSecureLogger } from "../composables/useSecureLogger";
 import { useWebSpeech } from "../composables/useWebSpeech";
-import type { TaskStatus, TaskKeyPoint, KeyPointCategory } from "../types/models";
+import type {
+  TaskStatus,
+  TaskKeyPoint,
+  KeyPointCategory,
+  TaskTimelineEvent,
+} from "../types/models";
 
 // ── Components ───────────────────────────────────────────────────────────────
 import TaskKeyPointsCard from "./TaskKeyPointsCard.vue";
@@ -96,7 +101,8 @@ const resizeStart = ref({ x: 0, y: 0, w: 0, h: 0 });
 // Fullscreen & Layout View Mode
 const isFullscreen = computed(() => !!props.windowState.isFullscreen);
 const viewMode = ref<"both" | "details" | "chat">("both");
-const splitterModel = ref(48); // 48% left pane, 52% right pane
+const splitterModel = ref(46); // balanced default: left details, right chat + timeline
+const showTimeline = ref(true);
 
 const setViewMode = (mode: "both" | "details" | "chat"): void => {
   viewMode.value = mode;
@@ -105,13 +111,19 @@ const setViewMode = (mode: "both" | "details" | "chat"): void => {
   } else if (mode === "chat") {
     splitterModel.value = 0;
   } else {
-    splitterModel.value = 48;
+    splitterModel.value = 46;
   }
 }; /*end setViewMode*/
 
 const toggleFullscreen = (): void => {
   chatStore.toggleFullscreenWindow(props.windowState.taskId);
 }; /*end toggleFullscreen*/
+
+const handleKeyDown = (e: KeyboardEvent): void => {
+  if (e.key === "Escape" && isFullscreen.value) {
+    toggleFullscreen();
+  }
+}; /*end handleKeyDown*/
 
 const sendToBack = (): void => {
   chatStore.sendToBack(props.windowState.taskId);
@@ -140,6 +152,89 @@ const statusOptions: { label: string; value: TaskStatus; color: string; icon: st
 const defaultStatusObj = statusOptions[0]!;
 const currentStatusObj = computed(() => {
   return statusOptions.find((s) => s.value === task.value.status) ?? defaultStatusObj;
+});
+
+const formatDateTime = (d: unknown): string => {
+  if (!d) {
+    return new Date().toLocaleDateString("it-IT", {
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+  try {
+    const dateObj =
+      typeof (d as { toDate?: () => Date }).toDate === "function"
+        ? (d as { toDate: () => Date }).toDate()
+        : new Date(d as string | number | Date);
+    if (isNaN(dateObj.getTime())) {
+      return new Date().toLocaleDateString("it-IT", {
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    }
+    return dateObj.toLocaleDateString("it-IT", {
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return new Date().toLocaleDateString("it-IT", {
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+}; /*end formatDateTime*/
+
+const initTaskTimeline = (): void => {
+  if (!task.value) return;
+  const taskId = task.value.id;
+  const session = activeSession.value;
+  if (!session.timelineEvents || session.timelineEvents.length === 0) {
+    const createdTime = formatDateTime(task.value.createdAt);
+    chatStore.appendTimelineEvent(taskId, {
+      id: `tle-create-${taskId}`,
+      taskId,
+      status: "pending",
+      title: "Inizializzazione Task",
+      subtitle: createdTime,
+      description: "Task creato nel workspace",
+      icon: "add_task",
+      color: "primary",
+      timestamp: createdTime,
+    });
+
+    if (task.value.status && task.value.status !== "pending") {
+      const sObj = statusOptions.find((s) => s.value === task.value?.status) ?? defaultStatusObj;
+      const updatedTime = formatDateTime(task.value.updatedAt);
+      chatStore.appendTimelineEvent(taskId, {
+        id: `tle-curr-${taskId}-${task.value.status}`,
+        taskId,
+        status: task.value.status,
+        title: sObj.label,
+        subtitle: updatedTime,
+        description: `Stato avanzato a ${sObj.label}`,
+        icon: sObj.icon,
+        color: sObj.color,
+        timestamp: updatedTime,
+      });
+    }
+  }
+}; /*end initTaskTimeline*/
+
+onMounted(() => {
+  window.addEventListener("keydown", handleKeyDown);
+  initTaskTimeline();
+});
+
+onUnmounted(() => {
+  window.removeEventListener("keydown", handleKeyDown);
 });
 
 const scrollToBottom = (): void => {
@@ -248,9 +343,22 @@ const handleStatusChange = async (newStatus: TaskStatus): Promise<void> => {
   if (!task.value || !workspace.value) return;
   try {
     await taskStore.updateTaskStatus(workspace.value.id, task.value.id, newStatus);
+    const sObj = statusOptions.find((s) => s.value === newStatus) ?? defaultStatusObj;
+    const nowStr = formatDateTime(new Date());
+    chatStore.appendTimelineEvent(task.value.id, {
+      id: `tle-status-${task.value.id}-${Date.now()}`,
+      taskId: task.value.id,
+      status: newStatus,
+      title: sObj.label,
+      subtitle: nowStr,
+      description: `Stato aggiornato a ${sObj.label}`,
+      icon: sObj.icon,
+      color: sObj.color,
+      timestamp: nowStr,
+    });
     q.notify({
       type: "positive",
-      message: `Status updated to "${newStatus}"`,
+      message: `Status updated to "${sObj.label}"`,
       position: "top",
     });
   } catch {
@@ -556,7 +664,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
         : isFullscreen
           ? '100vh'
           : `${windowState.size.height}px`,
-      zIndex: windowState.zIndex,
+      zIndex: isFullscreen ? 9999 : windowState.zIndex,
       borderRadius: isFullscreen ? '0px' : '12px',
     }"
     @mousedown="chatStore.bringToFront(windowState.taskId)"
@@ -627,7 +735,16 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
         </q-btn-dropdown>
 
         <!-- Send To Back Button -->
-        <q-btn flat round dense size="sm" icon="flip_to_back" color="white" @click="sendToBack">
+        <q-btn
+          flat
+          round
+          dense
+          size="sm"
+          icon="flip_to_back"
+          color="white"
+          @click.stop="sendToBack"
+          @mousedown.stop
+        >
           <q-tooltip>Sposta finestra in secondo piano (dietro le altre)</q-tooltip>
         </q-btn>
 
@@ -639,10 +756,11 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
           size="sm"
           :icon="isFullscreen ? 'fullscreen_exit' : 'fullscreen'"
           color="white"
-          @click="toggleFullscreen"
+          @click.stop="toggleFullscreen"
+          @mousedown.stop
         >
           <q-tooltip>{{
-            isFullscreen ? "Ripristina dimensione" : "Schermo intero (Fullscreen)"
+            isFullscreen ? "Ripristina dimensione (Esc)" : "Schermo intero (Fullscreen)"
           }}</q-tooltip>
         </q-btn>
 
@@ -691,20 +809,20 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
         <template #before>
           <div
             v-show="splitterModel > 0"
-            class="column justify-between q-pa-sm overflow-hidden full-height"
+            class="column justify-between q-pa-md overflow-hidden full-height"
             style="min-width: 0"
           >
-            <div class="scroll col q-pr-xs">
+            <div class="scroll col q-pr-sm">
               <div class="text-caption text-weight-bold text-primary q-mb-xs">
                 📌 Descrizione Task
               </div>
               <div
                 class="text-caption text-grey-9 q-mb-sm bg-grey-2 q-pa-sm rounded-borders"
                 style="
-                  word-break: break-word;
-                  overflow-wrap: anywhere;
+                  overflow-wrap: break-word;
+                  word-break: normal;
                   white-space: pre-wrap;
-                  line-height: 1.45;
+                  line-height: 1.5;
                 "
               >
                 {{ task.description || "Nessuna descrizione." }}
@@ -765,7 +883,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                       <q-item-label
                         :class="{ 'text-strike text-grey-6': sub.completed }"
                         class="text-weight-bold text-caption text-primary"
-                        style="word-break: break-word; overflow-wrap: anywhere"
+                        style="overflow-wrap: break-word; word-break: normal"
                       >
                         {{ sub.order ? `${sub.order}. ` : "" }}{{ sub.title }}
                       </q-item-label>
@@ -776,8 +894,8 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                         style="
                           font-size: 0.74rem;
                           line-height: 1.35;
-                          word-break: break-word;
-                          overflow-wrap: anywhere;
+                          overflow-wrap: break-word;
+                          word-break: normal;
                           white-space: pre-wrap;
                         "
                       >
@@ -892,144 +1010,231 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
           </div>
         </template>
 
-        <!-- After Slot: Interactive Chat Thread -->
+        <!-- After Slot: Interactive Chat Thread + Vertical Status Timeline -->
         <template #after>
           <div
             v-show="splitterModel < 100"
-            class="column no-wrap overflow-hidden q-pa-sm full-height"
+            class="row no-wrap full-height full-width overflow-hidden bg-white"
             style="min-width: 0"
           >
-            <div ref="chatScrollRef" class="col scroll q-mb-xs q-px-xs" style="overflow-y: auto">
-              <div v-for="msg in activeSession.messages" :key="msg.id" class="q-mb-xs">
-                <q-chat-message
-                  :name="msg.sender === 'user' ? 'You' : msg.agentName || 'AI Agent'"
-                  :stamp="msg.timestamp"
-                  :sent="msg.sender === 'user'"
-                  :bg-color="msg.sender === 'user' ? 'primary' : 'grey-3'"
-                  :text-color="msg.sender === 'user' ? 'white' : 'dark'"
+            <!-- Chat Main Pane -->
+            <div
+              class="col column no-wrap overflow-hidden q-pa-sm full-height"
+              style="min-width: 0"
+            >
+              <div class="row items-center justify-between q-px-xs q-pb-xs border-bottom-light">
+                <div
+                  class="text-caption text-weight-bold text-primary row items-center q-gutter-xs"
                 >
-                  <div
-                    style="white-space: pre-wrap; font-size: 0.85rem"
-                    v-html="renderFormattedMessage(msg.text)"
-                  ></div>
+                  <q-icon name="chat" size="16px" color="primary" />
+                  <span>Assistente IA & Operazioni</span>
+                </div>
+                <q-btn
+                  flat
+                  dense
+                  round
+                  size="sm"
+                  :icon="showTimeline ? 'view_sidebar' : 'history'"
+                  :color="showTimeline ? 'amber-9' : 'grey-7'"
+                  @click="showTimeline = !showTimeline"
+                >
+                  <q-tooltip>{{
+                    showTimeline ? "Nascondi Timeline Stati" : "Mostra Timeline Stati"
+                  }}</q-tooltip>
+                </q-btn>
+              </div>
 
-                  <!-- TTS Audio Read Aloud button for agent messages -->
-                  <div v-if="msg.sender === 'agent'" class="row items-center justify-end q-mt-xs">
+              <div
+                ref="chatScrollRef"
+                class="col scroll q-mb-xs q-px-xs q-pt-xs"
+                style="overflow-y: auto"
+              >
+                <div v-for="msg in activeSession.messages" :key="msg.id" class="q-mb-xs">
+                  <q-chat-message
+                    :name="msg.sender === 'user' ? 'You' : msg.agentName || 'AI Agent'"
+                    :stamp="msg.timestamp"
+                    :sent="msg.sender === 'user'"
+                    :bg-color="msg.sender === 'user' ? 'primary' : 'grey-3'"
+                    :text-color="msg.sender === 'user' ? 'white' : 'dark'"
+                  >
+                    <div
+                      style="white-space: pre-wrap; font-size: 0.85rem"
+                      v-html="renderFormattedMessage(msg.text)"
+                    ></div>
+
+                    <!-- TTS Audio Read Aloud button for agent messages -->
+                    <div v-if="msg.sender === 'agent'" class="row items-center justify-end q-mt-xs">
+                      <q-btn
+                        flat
+                        round
+                        dense
+                        size="xs"
+                        :icon="isSpeaking ? 'volume_off' : 'volume_up'"
+                        :color="isSpeaking ? 'negative' : 'grey-7'"
+                        @click="handleSpeakMessage(msg.text)"
+                      >
+                        <q-tooltip>{{
+                          isSpeaking ? "Stop audio" : "Listen to voice response"
+                        }}</q-tooltip>
+                      </q-btn>
+                    </div>
+
+                    <div
+                      v-if="msg.toolsUsed && msg.toolsUsed.length > 0"
+                      class="row wrap q-gutter-xs q-mt-xs"
+                    >
+                      <q-chip
+                        v-for="tool in msg.toolsUsed"
+                        :key="tool"
+                        dense
+                        square
+                        outline
+                        color="amber-9"
+                        text-color="dark"
+                        class="q-pa-xs text-weight-medium"
+                        style="font-size: 0.78rem; border-radius: 6px"
+                      >
+                        🔧 {{ tool }}
+                      </q-chip>
+                    </div>
+                  </q-chat-message>
+                </div>
+
+                <q-chat-message v-if="isSending" name="AI Agent" bg-color="grey-3">
+                  <q-spinner-dots size="1.4rem" color="primary" />
+                </q-chat-message>
+              </div>
+
+              <!-- File Upload Hidden Input -->
+              <input
+                ref="fileInputRef"
+                type="file"
+                accept=".pdf,.doc,.docx,.txt"
+                style="display: none"
+                @change="handleFileSelected"
+              />
+
+              <!-- Attached File Chip Preview -->
+              <div v-if="selectedFile" class="q-px-xs q-pb-xs">
+                <q-chip
+                  removable
+                  color="primary"
+                  text-color="white"
+                  dense
+                  icon="attach_file"
+                  @remove="selectedFile = null"
+                >
+                  {{ selectedFile.name }}
+                </q-chip>
+              </div>
+
+              <!-- Chat Input Field with Voice STT & File Attach -->
+              <div class="q-pt-xs bg-white shrink">
+                <q-input
+                  v-model="chatMessage"
+                  outlined
+                  dense
+                  placeholder="Type instruction or dictate..."
+                  :disabled="isSending"
+                  style="font-size: 0.85rem"
+                  @keyup.enter="handleSendChatMessage"
+                >
+                  <template #before>
                     <q-btn
                       flat
                       round
                       dense
-                      size="xs"
-                      :icon="isSpeaking ? 'volume_off' : 'volume_up'"
-                      :color="isSpeaking ? 'negative' : 'grey-7'"
-                      @click="handleSpeakMessage(msg.text)"
+                      icon="attach_file"
+                      color="grey-7"
+                      :disabled="isSending"
+                      @click="triggerFileInput"
+                    >
+                      <q-tooltip>Attach PDF / text document for Document Understanding</q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      :icon="isListening ? 'mic_off' : 'mic'"
+                      :color="isListening ? 'negative' : 'primary'"
+                      :class="{ 'pulse-mic': isListening }"
+                      :disabled="isSending || !isSttSupported"
+                      @click="toggleVoiceDictation"
                     >
                       <q-tooltip>{{
-                        isSpeaking ? "Stop audio" : "Listen to voice response"
+                        isListening ? "Stop dictation" : "Native voice dictation (€0)"
                       }}</q-tooltip>
                     </q-btn>
-                  </div>
+                  </template>
 
-                  <div
-                    v-if="msg.toolsUsed && msg.toolsUsed.length > 0"
-                    class="row wrap q-gutter-xs q-mt-xs"
-                  >
-                    <q-chip
-                      v-for="tool in msg.toolsUsed"
-                      :key="tool"
+                  <template #after>
+                    <q-btn
+                      round
                       dense
-                      square
-                      outline
-                      color="amber-9"
-                      text-color="dark"
-                      class="q-pa-xs text-weight-medium"
-                      style="font-size: 0.78rem; border-radius: 6px"
-                    >
-                      🔧 {{ tool }}
-                    </q-chip>
-                  </div>
-                </q-chat-message>
+                      flat
+                      icon="send"
+                      color="primary"
+                      :disabled="(!chatMessage.trim() && !selectedFile) || isSending"
+                      @click="handleSendChatMessage"
+                    />
+                  </template>
+                </q-input>
+              </div>
+            </div>
+
+            <!-- Vertical Timeline Column on the Right (Dense, simple, linear) -->
+            <div
+              v-if="showTimeline"
+              class="task-timeline-panel column no-wrap bg-grey-1 q-pa-sm"
+              style="
+                width: 220px;
+                min-width: 190px;
+                max-width: 240px;
+                border-left: 1px solid rgba(10, 35, 66, 0.12);
+                height: 100%;
+              "
+            >
+              <div
+                class="row items-center justify-between q-mb-xs text-caption text-weight-bold text-primary border-bottom-light q-pb-xs"
+              >
+                <div class="row items-center q-gutter-xs">
+                  <q-icon name="timeline" color="primary" size="15px" />
+                  <span>Timeline Stati</span>
+                </div>
+                <q-btn
+                  flat
+                  round
+                  dense
+                  size="xs"
+                  icon="close"
+                  color="grey-7"
+                  @click="showTimeline = false"
+                >
+                  <q-tooltip>Nascondi Timeline</q-tooltip>
+                </q-btn>
               </div>
 
-              <q-chat-message v-if="isSending" name="AI Agent" bg-color="grey-3">
-                <q-spinner-dots size="1.4rem" color="primary" />
-              </q-chat-message>
-            </div>
-
-            <!-- File Upload Hidden Input -->
-            <input
-              ref="fileInputRef"
-              type="file"
-              accept=".pdf,.doc,.docx,.txt"
-              style="display: none"
-              @change="handleFileSelected"
-            />
-
-            <!-- Attached File Chip Preview -->
-            <div v-if="selectedFile" class="q-px-xs q-pb-xs">
-              <q-chip
-                removable
-                color="primary"
-                text-color="white"
-                dense
-                icon="attach_file"
-                @remove="selectedFile = null"
-              >
-                {{ selectedFile.name }}
-              </q-chip>
-            </div>
-
-            <!-- Chat Input Field with Voice STT & File Attach -->
-            <div class="q-pt-xs bg-white shrink">
-              <q-input
-                v-model="chatMessage"
-                outlined
-                dense
-                placeholder="Type instruction or dictate..."
-                :disabled="isSending"
-                style="font-size: 0.85rem"
-                @keyup.enter="handleSendChatMessage"
-              >
-                <template #before>
-                  <q-btn
-                    flat
-                    round
-                    dense
-                    icon="attach_file"
-                    color="grey-7"
-                    :disabled="isSending"
-                    @click="triggerFileInput"
+              <div class="col scroll q-pr-xs q-pt-xs" style="overflow-y: auto">
+                <q-timeline layout="dense" color="primary" class="q-px-xs">
+                  <q-timeline-entry
+                    v-for="entry in activeSession.timelineEvents"
+                    :key="entry.id"
+                    :title="entry.title"
+                    :subtitle="entry.subtitle"
+                    :icon="entry.icon"
+                    :color="entry.color"
+                    class="task-timeline-entry"
                   >
-                    <q-tooltip>Attach PDF / text document for Document Understanding</q-tooltip>
-                  </q-btn>
-                  <q-btn
-                    flat
-                    round
-                    dense
-                    :icon="isListening ? 'mic_off' : 'mic'"
-                    :color="isListening ? 'negative' : 'primary'"
-                    :class="{ 'pulse-mic': isListening }"
-                    :disabled="isSending || !isSttSupported"
-                    @click="toggleVoiceDictation"
-                  >
-                    <q-tooltip>{{
-                      isListening ? "Stop dictation" : "Native voice dictation (€0)"
-                    }}</q-tooltip>
-                  </q-btn>
-                </template>
-
-                <template #after>
-                  <q-btn
-                    round
-                    dense
-                    flat
-                    icon="send"
-                    color="primary"
-                    :disabled="(!chatMessage.trim() && !selectedFile) || isSending"
-                    @click="handleSendChatMessage"
-                  />
-                </template>
-              </q-input>
+                    <div
+                      v-if="entry.description"
+                      class="text-caption text-grey-8 q-mt-xs"
+                      style="font-size: 0.72rem; line-height: 1.3; overflow-wrap: break-word"
+                    >
+                      {{ entry.description }}
+                    </div>
+                  </q-timeline-entry>
+                </q-timeline>
+              </div>
             </div>
           </div>
         </template>
@@ -1131,5 +1336,30 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
   border-radius: 0 !important;
   border: none !important;
   box-shadow: none !important;
+  z-index: 9999 !important;
+}
+
+.border-bottom-light {
+  border-bottom: 1px solid rgba(10, 35, 66, 0.08);
+}
+
+.task-timeline-panel {
+  background-color: #fbfbfd;
+  transition: all 0.2s ease;
+}
+
+.task-timeline-entry {
+  :deep(.q-timeline__title) {
+    font-size: 0.78rem;
+    font-weight: 700;
+    margin-bottom: 2px;
+  }
+  :deep(.q-timeline__subtitle) {
+    font-size: 0.7rem;
+    color: #6c757d;
+    margin-bottom: 2px;
+    text-transform: none;
+    opacity: 0.85;
+  }
 }
 </style>

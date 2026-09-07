@@ -12,13 +12,20 @@
 
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
-import type { Task, TaskChatMessage, ApprovalRecord, TaskKeyPoint } from "../types/models";
+import type {
+  Task,
+  TaskChatMessage,
+  ApprovalRecord,
+  TaskKeyPoint,
+  TaskTimelineEvent,
+} from "../types/models";
 
 export interface ChatSession {
   taskId: string;
   workspaceId: string;
   task: Task | null;
   messages: TaskChatMessage[];
+  timelineEvents: TaskTimelineEvent[];
   approvals: ApprovalRecord[];
   isLoading: boolean;
   isAgentTyping: boolean;
@@ -90,6 +97,32 @@ export const useTaskChatStore = defineStore("taskChat", () => {
   } /*end saveMessagesToStorage*/
 
   /**
+   * Helper to load persisted timeline events from localStorage.
+   */
+  function loadTimelineFromStorage(taskId: string): TaskTimelineEvent[] {
+    try {
+      const raw = localStorage.getItem(`opsflow_task_timeline_${taskId}`);
+      if (raw) {
+        return JSON.parse(raw);
+      }
+    } catch {
+      // Ignore storage error
+    }
+    return [];
+  } /*end loadTimelineFromStorage*/
+
+  /**
+   * Helper to save timeline events to localStorage.
+   */
+  function saveTimelineToStorage(taskId: string, events: TaskTimelineEvent[]): void {
+    try {
+      localStorage.setItem(`opsflow_task_timeline_${taskId}`, JSON.stringify(events));
+    } catch {
+      // Ignore storage error
+    }
+  } /*end saveTimelineToStorage*/
+
+  /**
    * Opens or retrieves an existing ChatSession for a given taskId.
    * @param {string} taskId - Target task ID
    * @param {string} workspaceId - Target workspace ID
@@ -101,11 +134,13 @@ export const useTaskChatStore = defineStore("taskChat", () => {
       return existing;
     }
     const savedMessages = loadMessagesFromStorage(taskId);
+    const savedTimeline = loadTimelineFromStorage(taskId);
     const newSession: ChatSession = {
       taskId,
       workspaceId,
       task: null,
       messages: savedMessages,
+      timelineEvents: savedTimeline,
       approvals: [],
       isLoading: false,
       isAgentTyping: false,
@@ -188,21 +223,28 @@ export const useTaskChatStore = defineStore("taskChat", () => {
       highestZIndex.value += 1;
       existing.zIndex = highestZIndex.value;
       existing.isMinimized = false;
+      const idx = floatingWindows.value.indexOf(existing);
+      if (idx > -1 && idx !== floatingWindows.value.length - 1) {
+        floatingWindows.value.splice(idx, 1);
+        floatingWindows.value.push(existing);
+      }
       return existing;
     }
 
     highestZIndex.value += 1;
     const count = floatingWindows.value.length;
-    const initialX = Math.min(window.innerWidth - 650, 120 + (count % 4) * 45);
-    const initialY = Math.min(window.innerHeight - 500, 70 + (count % 4) * 35);
+    const targetWidth = Math.min(920, Math.max(760, window.innerWidth - 60));
+    const targetHeight = Math.min(580, Math.max(460, window.innerHeight - 80));
+    const initialX = Math.min(window.innerWidth - targetWidth - 20, 80 + (count % 4) * 35);
+    const initialY = Math.min(window.innerHeight - targetHeight - 20, 60 + (count % 4) * 30);
 
     const newWin: FloatingWindow = {
       id: `win-${task.id}`,
       taskId: task.id,
       workspaceId,
       task,
-      position: { x: Math.max(20, initialX), y: Math.max(20, initialY) },
-      size: { width: 680, height: 480 },
+      position: { x: Math.max(15, initialX), y: Math.max(15, initialY) },
+      size: { width: targetWidth, height: targetHeight },
       zIndex: highestZIndex.value,
       isMinimized: false,
     };
@@ -220,6 +262,11 @@ export const useTaskChatStore = defineStore("taskChat", () => {
     if (win) {
       highestZIndex.value += 1;
       win.zIndex = highestZIndex.value;
+      const idx = floatingWindows.value.indexOf(win);
+      if (idx > -1 && idx !== floatingWindows.value.length - 1) {
+        floatingWindows.value.splice(idx, 1);
+        floatingWindows.value.push(win);
+      }
     }
   } /*end bringToFront*/
 
@@ -251,17 +298,43 @@ export const useTaskChatStore = defineStore("taskChat", () => {
       if (win.isFullscreen) {
         highestZIndex.value += 1;
         win.zIndex = highestZIndex.value;
+        const idx = floatingWindows.value.indexOf(win);
+        if (idx > -1 && idx !== floatingWindows.value.length - 1) {
+          floatingWindows.value.splice(idx, 1);
+          floatingWindows.value.push(win);
+        }
       }
     }
   } /*end toggleFullscreenWindow*/
 
   function sendToBack(taskId: string): void {
     const win = floatingWindows.value.find((w) => w.taskId === taskId);
-    if (win && floatingWindows.value.length > 1) {
+    if (win) {
       const lowestZ = Math.min(...floatingWindows.value.map((w) => w.zIndex));
       win.zIndex = Math.max(10, lowestZ - 1);
+      const idx = floatingWindows.value.indexOf(win);
+      if (idx > 0) {
+        floatingWindows.value.splice(idx, 1);
+        floatingWindows.value.unshift(win);
+      }
+      const otherWins = floatingWindows.value.filter((w) => w.taskId !== taskId);
+      if (otherWins.length > 0) {
+        const topOther = otherWins[otherWins.length - 1]!;
+        highestZIndex.value += 1;
+        topOther.zIndex = highestZIndex.value;
+      }
     }
   } /*end sendToBack*/
+
+  function appendTimelineEvent(taskId: string, event: TaskTimelineEvent): void {
+    const s = sessions.value.get(taskId);
+    if (s) {
+      if (!s.timelineEvents.some((e) => e.id === event.id)) {
+        s.timelineEvents.push(event);
+        saveTimelineToStorage(taskId, s.timelineEvents);
+      }
+    }
+  } /*end appendTimelineEvent*/
 
   /**
    * Appends or updates an ApprovalRecord in the session.
@@ -380,6 +453,7 @@ export const useTaskChatStore = defineStore("taskChat", () => {
     toggleMinimizeWindow,
     toggleFullscreenWindow,
     sendToBack,
+    appendTimelineEvent,
     setKeyPoints,
     addKeyPoint,
     clearKeyPoints,
