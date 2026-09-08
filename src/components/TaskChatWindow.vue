@@ -2044,6 +2044,15 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Task Operational Settings Modal (Google Sheet, Tab & Email Signature) -->
+    <TaskSettingsModal
+      v-if="task"
+      v-model="showTaskSettingsModal"
+      :task="task"
+      :workspace="workspace"
+      @saved="taskStore.fetchTasks()"
+    />
   </div>
 </template>
 
