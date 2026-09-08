@@ -76,8 +76,8 @@ export const ManageGoogleSheetSchema = z.object({
     .default("A1")
     .describe("Sheet range or name (es. A1, Foglio1!A1, o Sheet1!A1)"),
   values: z
-    .array(z.array(z.any()))
-    .describe("2D array of row values to append or update (matrix of cell values)"),
+    .array(z.array(z.string()))
+    .describe("2D array of row values to append or update (matrix of cell string values)"),
   tenantId: z.string().optional().describe("Tenant ID for Firestore isolation"),
   workspaceId: z.string().optional().describe("Workspace ID for scoping"),
   taskId: z.string().optional().describe("Task ID for approval subcollection"),

@@ -137,7 +137,8 @@ const initFields = (): void => {
     editableBody.value = gmailPreview.value.body || "";
   } else if (isSheetAppend.value) {
     const raw = props.approval.previewData as unknown as Record<string, unknown> | undefined;
-    editableSpreadsheetId.value = (raw?.spreadsheetId as string) || "";
+    editableSpreadsheetId.value =
+      (raw?.spreadsheetId as string) || props.availableSheets?.[0]?.id || "";
     editableRange.value = (raw?.range as string) || "A1";
 
     let allRows: (string | number)[][] = [];
@@ -163,6 +164,13 @@ watch(
 );
 
 // ── Editing Helpers ───────────────────────────────────────────────────────────
+const sheetSelectOptions = computed(() => {
+  return (props.availableSheets || []).map((s) => ({
+    label: `${s.name}${s.isMaster ? " ⭐" : ""}`,
+    value: s.id,
+  }));
+});
+
 const getSheetDisplayName = (sheetId: string): string => {
   if (!sheetId) return "";
   const found = props.availableSheets?.find((s) => s.id === sheetId);
@@ -345,6 +353,21 @@ const onReject = (): void => {
         class="q-pa-md q-gutter-y-sm"
       >
         <div class="row q-col-gutter-sm items-center">
+          <div v-if="sheetSelectOptions.length > 0" class="col-12 q-mb-xs">
+            <q-select
+              v-model="editableSpreadsheetId"
+              :options="sheetSelectOptions"
+              emit-value
+              map-options
+              dense
+              outlined
+              label="Foglio Google di destinazione"
+            >
+              <template #prepend>
+                <q-icon name="table_chart" color="positive" size="18px" />
+              </template>
+            </q-select>
+          </div>
           <div class="col-8">
             <q-input
               v-model="editableRange"
@@ -632,6 +655,21 @@ const onReject = (): void => {
                 </div>
 
                 <div v-if="isEditing && isPending" class="row q-gutter-sm items-center">
+                  <q-select
+                    v-if="sheetSelectOptions.length > 0"
+                    v-model="editableSpreadsheetId"
+                    :options="sheetSelectOptions"
+                    emit-value
+                    map-options
+                    dense
+                    outlined
+                    label="Foglio Destinazione"
+                    style="min-width: 220px"
+                  >
+                    <template #prepend>
+                      <q-icon name="table_chart" color="positive" size="18px" />
+                    </template>
+                  </q-select>
                   <q-input
                     v-model="editableRange"
                     label="Range"

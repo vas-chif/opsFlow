@@ -19,6 +19,10 @@ export interface PromptStackOptions {
     | {
         selectedSheetId?: string | undefined;
         selectedSheetName?: string | undefined;
+        selectedSheetIds?: string[] | undefined;
+        selectedSheets?:
+          | Array<{ id: string; name: string; url?: string | undefined; isMaster?: boolean | undefined }>
+          | undefined;
         selectedSheetTab?: string | undefined;
         emailSignature?: string | undefined;
       }
@@ -96,7 +100,22 @@ export function buildStackedPrompt(options: PromptStackOptions): string {
   }
 
   // Dynamic Google Sheets assignment
-  if (taskSettings?.selectedSheetId) {
+  if (taskSettings?.selectedSheets && taskSettings.selectedSheets.length > 0) {
+    level2Constitution +=
+      "FOGLI GOOGLE ASSEGNATI A QUESTO SPECIFICO TASK (usa questi fogli per salvare/leggere dati):\n";
+    for (const sheet of taskSettings.selectedSheets) {
+      const isPrimary = sheet.id === taskSettings.selectedSheetId;
+      const primaryTag = isPrimary ? " [TARGET PRIMARIO DI SCRITTURA PREDEFINITO]" : "";
+      level2Constitution += `- "${sheet.name}" (ID: ${sheet.id})${primaryTag}\n`;
+    }
+    if (taskSettings.selectedSheetTab) {
+      level2Constitution += `SCHEDA/TAB NEL FOGLIO: "${taskSettings.selectedSheetTab}"\n`;
+    }
+    level2Constitution +=
+      "Se l'utente non specifica diversamente, usa il foglio designato come " +
+      "[TARGET PRIMARIO DI SCRITTURA PREDEFINITO]. " +
+      "Se l'utente menziona un altro foglio per nome, usa quello corrispondente.\n\n";
+  } else if (taskSettings?.selectedSheetId) {
     const sName = taskSettings.selectedSheetName || "Foglio Task";
     const tabSuffix = taskSettings.selectedSheetTab ?
       `SCHEDA/TAB NEL FOGLIO: "${taskSettings.selectedSheetTab}"\n` :

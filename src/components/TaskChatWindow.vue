@@ -1688,7 +1688,11 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                           workspace?.linkedResources?.defaultEmailSignature ||
                           ''
                         "
-                        :available-sheets="workspace?.linkedResources?.linkedSheets || []"
+                        :available-sheets="
+                          task?.settings?.selectedSheets?.length
+                            ? task.settings.selectedSheets
+                            : workspace?.linkedResources?.linkedSheets || []
+                        "
                         class="q-my-sm q-ml-sm"
                         @approve="handleApproveAction"
                         @reject="handleRejectAction"

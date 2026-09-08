@@ -44,8 +44,8 @@ const isSaving = ref<boolean>(false);
 const activeTab = ref<string>("sheet");
 
 // Task settings state
-const selectedSheetId = ref<string>("");
-const selectedSheetName = ref<string>("");
+const selectedSheetIds = ref<string[]>([]);
+const primarySheetId = ref<string>("");
 const selectedSheetTab = ref<string>("");
 const emailSignature = ref<string>("");
 const emailHeader = ref<string>("");
@@ -98,21 +98,30 @@ const extractIdFromUrl = (input: string): string => {
 
 const syncFromTask = (): void => {
   const s = props.task.settings;
-  selectedSheetId.value =
-    s?.selectedSheetId || props.workspace?.linkedResources?.defaultSheetId || "";
-  selectedSheetName.value =
-    s?.selectedSheetName || props.workspace?.linkedResources?.defaultSheetName || "";
+
+  // Initialize selected sheet IDs array (multi-select)
+  if (Array.isArray(s?.selectedSheetIds) && s.selectedSheetIds.length > 0) {
+    selectedSheetIds.value = [...s.selectedSheetIds];
+  } else if (s?.selectedSheetId) {
+    selectedSheetIds.value = [s.selectedSheetId];
+  } else if (props.workspace?.linkedResources?.defaultSheetId) {
+    selectedSheetIds.value = [props.workspace.linkedResources.defaultSheetId];
+  } else {
+    selectedSheetIds.value = [];
+  }
+
+  // Primary sheet ID (default target for writing)
+  primarySheetId.value =
+    s?.selectedSheetId ||
+    selectedSheetIds.value[0] ||
+    props.workspace?.linkedResources?.defaultSheetId ||
+    "";
+
   selectedSheetTab.value = s?.selectedSheetTab || "";
   emailSignature.value =
     s?.emailSignature || props.workspace?.linkedResources?.defaultEmailSignature || "";
   emailHeader.value = s?.emailHeader || "";
   syncToMasterSheet.value = s?.syncToMasterSheet || false;
-
-  // Match sheet name if selectedSheetId is set
-  if (selectedSheetId.value && !selectedSheetName.value) {
-    const found = availableWorkspaceSheets.value.find((ws) => ws.id === selectedSheetId.value);
-    if (found) selectedSheetName.value = found.name;
-  }
 }; /*end syncFromTask*/
 
 watch(
@@ -123,11 +132,51 @@ watch(
   { immediate: true },
 );
 
-// ── Actions ───────────────────────────────────────────────────────────────────
-const onSelectSheet = (sheet: LinkedGoogleResource): void => {
-  selectedSheetId.value = sheet.id;
-  selectedSheetName.value = sheet.name;
-}; /*end onSelectSheet*/
+// ── Multi-Select Actions ───────────────────────────────────────────────────────
+const isSheetSelected = (sheetId: string): boolean => {
+  return selectedSheetIds.value.includes(sheetId);
+}; /*end isSheetSelected*/
+
+const toggleSheet = (sheet: LinkedGoogleResource): void => {
+  const idx = selectedSheetIds.value.indexOf(sheet.id);
+  if (idx >= 0) {
+    selectedSheetIds.value.splice(idx, 1);
+    if (primarySheetId.value === sheet.id) {
+      primarySheetId.value = selectedSheetIds.value[0] || "";
+    }
+  } else {
+    selectedSheetIds.value.push(sheet.id);
+    if (!primarySheetId.value) {
+      primarySheetId.value = sheet.id;
+    }
+  }
+}; /*end toggleSheet*/
+
+const setPrimarySheet = (sheetId: string, event?: Event): void => {
+  if (event) event.stopPropagation();
+  if (!selectedSheetIds.value.includes(sheetId)) {
+    selectedSheetIds.value.push(sheetId);
+  }
+  primarySheetId.value = sheetId;
+  q.notify({
+    type: "positive",
+    message: "🎯 Foglio primario di scrittura impostato per questo task!",
+    position: "top",
+    timeout: 1200,
+  });
+}; /*end setPrimarySheet*/
+
+const selectAllSheets = (): void => {
+  selectedSheetIds.value = availableWorkspaceSheets.value.map((s) => s.id);
+  if (!primarySheetId.value && selectedSheetIds.value.length > 0) {
+    primarySheetId.value = selectedSheetIds.value[0] || "";
+  }
+}; /*end selectAllSheets*/
+
+const clearSelectedSheets = (): void => {
+  selectedSheetIds.value = [];
+  primarySheetId.value = "";
+}; /*end clearSelectedSheets*/
 
 const handleAddNewSheetOnTheFly = async (): Promise<void> => {
   if (!newSheetUrlInput.value.trim() || !props.workspace) return;
@@ -162,9 +211,11 @@ const handleAddNewSheetOnTheFly = async (): Promise<void> => {
       defaultSheetName: props.workspace.linkedResources?.defaultSheetName || friendlyName,
     });
 
-    // 2. Select it for this task
-    selectedSheetId.value = cleanId;
-    selectedSheetName.value = friendlyName;
+    // 2. Select it for this task (add to multi-select and set as primary)
+    if (!selectedSheetIds.value.includes(cleanId)) {
+      selectedSheetIds.value.push(cleanId);
+    }
+    primarySheetId.value = cleanId;
 
     // Reset input
     newSheetNameInput.value = "";
@@ -211,9 +262,17 @@ const handleSave = async (): Promise<void> => {
   isSaving.value = true;
 
   try {
+    const selectedSheetsList = availableWorkspaceSheets.value.filter((ws) =>
+      selectedSheetIds.value.includes(ws.id),
+    );
+    const primarySheet =
+      selectedSheetsList.find((ws) => ws.id === primarySheetId.value) || selectedSheetsList[0];
+
     const updatedSettings: TaskSettings = {
-      selectedSheetId: selectedSheetId.value.trim() || undefined,
-      selectedSheetName: selectedSheetName.value.trim() || undefined,
+      selectedSheetId: primarySheet?.id || undefined,
+      selectedSheetName: primarySheet?.name || undefined,
+      selectedSheetIds: selectedSheetIds.value,
+      selectedSheets: selectedSheetsList,
       selectedSheetTab: selectedSheetTab.value.trim() || undefined,
       emailSignature: emailSignature.value.trim() || undefined,
       emailHeader: emailHeader.value.trim() || undefined,
@@ -254,8 +313,8 @@ const handleSave = async (): Promise<void> => {
         <q-icon name="tune" size="22px" color="amber-5" class="q-mr-sm" />
         <div>
           <div class="text-subtitle1 text-weight-bold text-white">Impostazioni Operative Task</div>
-          <div class="text-caption text-grey-4">
-            Task: {{ task.title }} | Workspace: {{ workspace?.name || "Generale" }}
+          <div class="text-caption text-amber-2">
+            Task: {{ task.title }} | Workspace: {{ workspace?.name }}
           </div>
         </div>
         <q-space />
@@ -271,7 +330,7 @@ const handleSave = async (): Promise<void> => {
         align="left"
         class="task-settings-card__tabs text-grey-7 bg-grey-2"
       >
-        <q-tab name="sheet" icon="table_chart" label="1. Foglio Google & Schede" no-caps />
+        <q-tab name="sheet" icon="table_chart" label="1. Fogli Google & Schede" no-caps />
         <q-tab name="email" icon="mail" label="2. Firma & Intestazione Email" no-caps />
         <q-tab name="sync" icon="cloud_sync" label="3. Master DB & Cronologia" no-caps />
       </q-tabs>
@@ -281,41 +340,80 @@ const handleSave = async (): Promise<void> => {
       <!-- Tab Content -->
       <q-card-section class="q-pa-lg">
         <q-tab-panels v-model="activeTab" animated class="bg-transparent">
-          <!-- TAB 1: GOOGLE SHEETS -->
+          <!-- TAB 1: GOOGLE SHEETS (MULTI-SELECT) -->
           <q-tab-panel name="sheet" class="q-pa-none">
             <div class="text-subtitle2 text-weight-bold text-navy q-mb-xs">
-              📊 Foglio Google di Lavoro per questo Task:
+              📊 Fogli Google di Lavoro per questo Task (Multi-selezione):
             </div>
             <p class="text-caption text-grey-7 q-mb-md">
-              L'Agente IA scriverà ed estrarrà i dati esclusivamente su questo foglio, proteggendo
-              gli altri file del Workspace da sovrascritture accidentali.
+              Seleziona uno o più fogli Google da collegare a questo task. L'Agente IA conoscerà
+              tutti i fogli selezionati e potrà leggere o salvare dati su ciascuno di essi in base
+              alle tue istruzioni.
             </p>
 
-            <!-- Available Sheets List -->
+            <!-- Available Sheets Multi-Select List -->
             <div v-if="availableWorkspaceSheets.length > 0" class="q-mb-md">
-              <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
-                Seleziona dalla libreria del Workspace:
+              <div class="row items-center justify-between q-mb-xs">
+                <div class="text-caption text-weight-bold text-grey-8">
+                  Seleziona dalla libreria del Workspace:
+                </div>
+                <div class="row q-gutter-xs">
+                  <q-btn
+                    flat
+                    dense
+                    no-caps
+                    size="xs"
+                    color="primary"
+                    label="Seleziona tutti"
+                    @click="selectAllSheets"
+                  />
+                  <span class="text-grey-4">|</span>
+                  <q-btn
+                    flat
+                    dense
+                    no-caps
+                    size="xs"
+                    color="grey-7"
+                    label="Deseleziona tutti"
+                    @click="clearSelectedSheets"
+                  />
+                </div>
               </div>
+
               <q-list bordered separator class="rounded-borders bg-white">
                 <q-item
                   v-for="sheet in availableWorkspaceSheets"
                   :key="sheet.id"
                   clickable
-                  :active="selectedSheetId === sheet.id"
-                  active-class="bg-amber-1 text-weight-bold"
-                  @click="onSelectSheet(sheet)"
+                  :active="isSheetSelected(sheet.id)"
+                  active-class="bg-amber-1"
+                  @click="toggleSheet(sheet)"
                 >
-                  <q-item-section avatar style="min-width: 36px">
-                    <q-icon
-                      :name="selectedSheetId === sheet.id ? 'check_circle' : 'table_chart'"
-                      :color="selectedSheetId === sheet.id ? 'positive' : 'grey-7'"
+                  <q-item-section avatar style="min-width: 40px">
+                    <q-checkbox
+                      :model-value="isSheetSelected(sheet.id)"
+                      color="amber-9"
+                      @update:model-value="toggleSheet(sheet)"
+                      @click.stop
                     />
                   </q-item-section>
+
                   <q-item-section>
-                    <q-item-label class="text-subtitle2">
-                      {{ sheet.name }}
+                    <q-item-label class="text-subtitle2 row items-center no-wrap">
+                      <span :class="{ 'text-weight-bold': isSheetSelected(sheet.id) }">
+                        {{ sheet.name }}
+                      </span>
                       <q-badge
-                        v-if="sheet.isMaster"
+                        v-if="primarySheetId === sheet.id"
+                        color="positive"
+                        text-color="white"
+                        label="🎯 Primario"
+                        class="q-ml-sm"
+                      >
+                        <q-tooltip>Foglio target per la scrittura automatica predefinita</q-tooltip>
+                      </q-badge>
+                      <q-badge
+                        v-else-if="sheet.isMaster"
                         color="amber-9"
                         text-color="dark"
                         label="⭐ Master DB"
@@ -326,7 +424,23 @@ const handleSave = async (): Promise<void> => {
                       ID: {{ sheet.id }}
                     </q-item-label>
                   </q-item-section>
-                  <q-item-section side>
+
+                  <q-item-section side class="row no-wrap items-center q-gutter-xs">
+                    <!-- Button to make this sheet primary -->
+                    <q-btn
+                      v-if="isSheetSelected(sheet.id) && primarySheetId !== sheet.id"
+                      flat
+                      dense
+                      no-caps
+                      size="xs"
+                      color="positive"
+                      icon="check_circle_outline"
+                      label="Rendi Primario"
+                      @click.stop="setPrimarySheet(sheet.id, $event)"
+                    >
+                      <q-tooltip>Imposta questo foglio come target primario di scrittura</q-tooltip>
+                    </q-btn>
+
                     <q-btn
                       v-if="sheet.url"
                       flat

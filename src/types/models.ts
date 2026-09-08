@@ -147,6 +147,8 @@ export interface TaskChatMessage {
 export interface TaskSettings {
   selectedSheetId?: string | undefined;
   selectedSheetName?: string | undefined;
+  selectedSheetIds?: string[] | undefined;
+  selectedSheets?: LinkedGoogleResource[] | undefined;
   selectedSheetTab?: string | undefined;
   emailSignature?: string | undefined;
   emailHeader?: string | undefined;

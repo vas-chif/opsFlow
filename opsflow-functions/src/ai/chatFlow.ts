@@ -58,12 +58,23 @@ export const ChatInputSchema = z.object({
     .object({
       selectedSheetId: z.string().optional(),
       selectedSheetName: z.string().optional(),
+      selectedSheetIds: z.array(z.string()).optional(),
+      selectedSheets: z
+        .array(
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            url: z.string().optional(),
+            isMaster: z.boolean().optional(),
+          }),
+        )
+        .optional(),
       selectedSheetTab: z.string().optional(),
       emailSignature: z.string().optional(),
       emailHeader: z.string().optional(),
     })
     .optional()
-    .describe("Specific task settings such as assigned sheet, tab, and custom signature"),
+    .describe("Specific task settings such as assigned sheets, tab, and custom signature"),
   linkedResources: z
     .object({
       googleEmail: z.string().optional(),
@@ -258,9 +269,19 @@ export const chatWithAgentFlow = ai.defineFlow(
         prompt: systemInstruction,
       });
 
-      let reply =
-        fallbackResponse.text ||
-        "Operazione completata in modalità diretta dall'Agente IA OpsFlow.";
+      let reply = fallbackResponse.text?.trim() || "";
+      if (!reply && fallbackResponse.messages) {
+        for (const msg of fallbackResponse.messages) {
+          if (msg.content) {
+            for (const part of msg.content) {
+              if (part.text) reply += part.text;
+            }
+          }
+        }
+      }
+      if (!reply) {
+        reply = "Operazione completata in modalità diretta dall'Agente IA OpsFlow.";
+      }
       let approvalId: string | undefined;
       let approvalRecord: unknown = undefined;
       const toolsUsed: string[] = [];
