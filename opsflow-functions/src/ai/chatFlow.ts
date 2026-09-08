@@ -141,7 +141,7 @@ export const chatWithAgentFlow = ai.defineFlow(
         ],
       });
 
-      const replyText =
+      let replyText =
         llmResponse.text || "Operazione completata con successo dall'Agente IA OpsFlow.";
 
       const toolsUsed: string[] = [];
@@ -172,6 +172,49 @@ export const chatWithAgentFlow = ai.defineFlow(
         }
       }
 
+      // Defensive Parsing: If LLM generated textual JSON with tool_calls instead of executing natively
+      if (!approvalRecord && replyText.includes("\"tool_calls\"")) {
+        try {
+          const jsonMatch = replyText.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || [null, replyText];
+          const rawJson = (jsonMatch[1] || replyText).trim();
+          const parsed = JSON.parse(rawJson);
+          const toolCalls = parsed.tool_calls || parsed;
+          if (Array.isArray(toolCalls)) {
+            for (const call of toolCalls) {
+              if (call.name === "manageGoogleSheetTool" && call.args) {
+                const toolRes = await manageGoogleSheetTool({
+                  ...call.args,
+                  tenantId,
+                  workspaceId,
+                  taskId,
+                });
+                approvalId = toolRes.approvalId;
+                approvalRecord = toolRes.approvalRecord;
+                toolsUsed.push("manageGoogleSheetTool");
+                replyText =
+                  "📊 Ho estratto e organizzato i dati nel foglio Google Sheets. " +
+                  "Verifica l'anteprima nella scheda sottostante e clicca [✅ Approva ed Esegui] per confermare.";
+              } else if (call.name === "createGmailDraftTool" && call.args) {
+                const toolRes = await createGmailDraftTool({
+                  ...call.args,
+                  tenantId,
+                  workspaceId,
+                  taskId,
+                });
+                approvalId = toolRes.approvalId;
+                approvalRecord = toolRes.approvalRecord;
+                toolsUsed.push("createGmailDraftTool");
+                replyText =
+                  "📧 Ho preparato la bozza email richiesta. " +
+                  "Verifica l'anteprima nella scheda sottostante e clicca [✅ Approva ed Esegui] per creare la bozza.";
+              }
+            }
+          }
+        } catch (parseErr) {
+          console.warn("[chatWithAgentFlow] Failed to auto-parse textual tool_calls:", parseErr);
+        }
+      }
+
       return {
         reply: replyText,
         agentName: "Agente AI Assistant",
@@ -192,12 +235,62 @@ export const chatWithAgentFlow = ai.defineFlow(
         prompt: systemInstruction,
       });
 
+      let reply =
+        fallbackResponse.text ||
+        "Operazione completata in modalità diretta dall'Agente IA OpsFlow.";
+      let approvalId: string | undefined;
+      let approvalRecord: unknown = undefined;
+      const toolsUsed: string[] = [];
+
+      // Defensive Parsing in fallback mode:
+      if (reply.includes("\"tool_calls\"")) {
+        try {
+          const jsonMatch = reply.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || [null, reply];
+          const rawJson = (jsonMatch[1] || reply).trim();
+          const parsed = JSON.parse(rawJson);
+          const toolCalls = parsed.tool_calls || parsed;
+          if (Array.isArray(toolCalls)) {
+            for (const call of toolCalls) {
+              if (call.name === "manageGoogleSheetTool" && call.args) {
+                const toolRes = await manageGoogleSheetTool({
+                  ...call.args,
+                  tenantId,
+                  workspaceId,
+                  taskId,
+                });
+                approvalId = toolRes.approvalId;
+                approvalRecord = toolRes.approvalRecord;
+                toolsUsed.push("manageGoogleSheetTool");
+                reply =
+                  "📊 Ho estratto e organizzato i dati nel foglio Google Sheets. " +
+                  "Verifica l'anteprima nella scheda sottostante e clicca [✅ Approva ed Esegui] per confermare.";
+              } else if (call.name === "createGmailDraftTool" && call.args) {
+                const toolRes = await createGmailDraftTool({
+                  ...call.args,
+                  tenantId,
+                  workspaceId,
+                  taskId,
+                });
+                approvalId = toolRes.approvalId;
+                approvalRecord = toolRes.approvalRecord;
+                toolsUsed.push("createGmailDraftTool");
+                reply =
+                  "📧 Ho preparato la bozza email richiesta. " +
+                  "Verifica l'anteprima nella scheda sottostante e clicca [✅ Approva ed Esegui] per creare la bozza.";
+              }
+            }
+          }
+        } catch (parseErr) {
+          console.warn("[chatWithAgentFlow] Fallback parse error:", parseErr);
+        }
+      }
+
       return {
-        reply:
-          fallbackResponse.text ||
-          "Operazione completata in modalità diretta dall'Agente IA OpsFlow.",
-        agentName: "Agente AI Assistant (Diretto)",
-        toolsUsed: [],
+        reply,
+        agentName: approvalRecord ? "Agente AI Assistant" : "Agente AI Assistant (Diretto)",
+        toolsUsed,
+        approvalId,
+        approvalRecord,
       };
     }
   },

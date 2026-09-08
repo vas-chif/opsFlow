@@ -457,8 +457,10 @@ export const resolveApproval = onRequest(
         const preview = approval.previewData as {
           spreadsheetId: string;
           range: string;
-          previewRows: string[][];
-          rows?: string[][];
+          previewRows?: unknown[];
+          rows?: unknown[];
+          rowsJson?: string;
+          previewRowsJson?: string;
         };
 
         const oAuth2Client = await getAuthenticatedOAuth2Client(
@@ -468,8 +470,33 @@ export const resolveApproval = onRequest(
           workspaceId,
         );
 
-        const rowsToWrite =
-          preview.rows && preview.rows.length > 0 ? preview.rows : preview.previewRows;
+        let rowsToWrite: (string | number)[][] = [];
+        if (typeof preview.rowsJson === "string") {
+          try {
+            const parsed = JSON.parse(preview.rowsJson);
+            if (Array.isArray(parsed)) {
+              rowsToWrite = parsed;
+            }
+          } catch (e) {
+            logger.error("resolveApproval: failed to parse rowsJson", { error: e });
+          }
+        }
+        if (rowsToWrite.length === 0) {
+          let candidateRows: unknown[] = [];
+          if (Array.isArray(preview.rows) && preview.rows.length > 0) {
+            candidateRows = preview.rows;
+          } else if (Array.isArray(preview.previewRows)) {
+            candidateRows = preview.previewRows;
+          }
+
+          rowsToWrite = candidateRows.map((r: unknown) => {
+            if (Array.isArray(r)) return r as (string | number)[];
+            if (r && typeof r === "object" && "cells" in r && Array.isArray((r as { cells: unknown[] }).cells)) {
+              return (r as { cells: (string | number)[] }).cells;
+            }
+            return [String(r ?? "")];
+          });
+        }
 
         const { google } = await import("googleapis");
         const sheets = google.sheets({ version: "v4", auth: oAuth2Client });
@@ -480,7 +507,12 @@ export const resolveApproval = onRequest(
           requestBody: { values: rowsToWrite },
         });
 
-        logger.info("resolveApproval: Sheets rows appended", { tenantId, taskId, approvalId });
+        logger.info("resolveApproval: Sheets rows appended", {
+          tenantId,
+          taskId,
+          approvalId,
+          rowCount: rowsToWrite.length,
+        });
       }
 
       await approvalRef.update({

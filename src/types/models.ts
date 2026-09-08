@@ -77,7 +77,9 @@ export interface SheetAppendPreview {
   spreadsheetId: string;
   range: string;
   /** Human-readable preview of the rows to be written (first 5 max). */
-  previewRows: string[][];
+  previewRows: (string | number)[][] | Array<{ cells: (string | number)[] }>;
+  rowsJson?: string;
+  previewRowsJson?: string;
 }
 
 /**

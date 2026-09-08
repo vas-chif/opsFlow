@@ -76,8 +76,8 @@ export const ManageGoogleSheetSchema = z.object({
     .default("Sheet1!A1")
     .describe("Sheet range or name (es. Sheet1!A1 o NomeFoglio!A1)"),
   values: z
-    .array(z.array(z.union([z.string(), z.number(), z.boolean()])))
-    .describe("2D array of row values to append or update"),
+    .array(z.array(z.any()))
+    .describe("2D array of row values to append or update (matrix of cell values)"),
   tenantId: z.string().optional().describe("Tenant ID for Firestore isolation"),
   workspaceId: z.string().optional().describe("Workspace ID for scoping"),
   taskId: z.string().optional().describe("Task ID for approval subcollection"),
@@ -182,9 +182,16 @@ export const manageGoogleSheetTool = ai.defineTool(
       `tenants/${effectiveTenantId}/workspaces/${effectiveWorkspaceId}/tasks/${effectiveTaskId}/approvals`,
     );
 
-    // Preview: show max 5 rows to keep Firestore document small
-    const previewRows = values.slice(0, 5);
+    // Normalize rows to ensure safe 2D array of strings
+    const normalizedValues: string[][] = (values || []).map((row) =>
+      Array.isArray(row) ? row.map((cell) => String(cell ?? "")) : [String(row ?? "")],
+    );
 
+    // Preview: show max 5 rows to keep Firestore document small
+    const previewRows = normalizedValues.slice(0, 5);
+
+    // Firestore does not permit direct nested arrays (e.g. string[][]).
+    // We store previewRows as an array of objects { cells: [...] } and full data as rowsJson.
     const approvalRecord = {
       id: approvalId,
       taskId: effectiveTaskId,
@@ -192,12 +199,13 @@ export const manageGoogleSheetTool = ai.defineTool(
       tenantId: effectiveTenantId,
       actionType: "sheet_append",
       status: "pending",
-      summary: `📊 Aggiunta ${values.length} righe → Sheets ID: ${effectiveSpreadsheetId.slice(0, 15)}...`,
+      summary: `📊 Aggiunta ${normalizedValues.length} righe → Sheets ID: ${effectiveSpreadsheetId.slice(0, 15)}...`,
       previewData: {
         spreadsheetId: effectiveSpreadsheetId,
         range,
-        previewRows,
-        rows: values,
+        previewRows: previewRows.map((cells) => ({ cells })),
+        rowsJson: JSON.stringify(normalizedValues),
+        previewRowsJson: JSON.stringify(previewRows),
       },
       createdAt: new Date().toISOString(),
     };
@@ -208,9 +216,17 @@ export const manageGoogleSheetTool = ai.defineTool(
       approvalId,
       status: "pending" as const,
       message:
-        `📊 ${values.length} righe formattate per Google Sheets (${range}). ` +
+        `📊 ${normalizedValues.length} righe formattate per Google Sheets (${range}). ` +
         "Rivedi l'anteprima e clicca [✅ Approva ed Esegui] per scrivere su Sheets.",
-      approvalRecord,
+      approvalRecord: {
+        ...approvalRecord,
+        previewData: {
+          spreadsheetId: effectiveSpreadsheetId,
+          range,
+          previewRows,
+          rowsJson: JSON.stringify(normalizedValues),
+        },
+      },
     };
   },
 ); /* end manageGoogleSheetTool */

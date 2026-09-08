@@ -37,9 +37,49 @@ const gmailPreview = computed<GmailDraftPreview | null>(() => {
   return props.approval.previewData as GmailDraftPreview;
 }); /*end gmailPreview*/
 
-const sheetPreview = computed<SheetAppendPreview | null>(() => {
+const sheetPreview = computed<{
+  spreadsheetId: string;
+  range: string;
+  previewRows: (string | number)[][];
+} | null>(() => {
   if (!isSheetAppend.value) return null;
-  return props.approval.previewData as SheetAppendPreview;
+  const raw = props.approval.previewData as unknown as Record<string, unknown> | undefined;
+  if (!raw) return null;
+
+  let previewRows: (string | number)[][] = [];
+  if (Array.isArray(raw.previewRows)) {
+    previewRows = (raw.previewRows as unknown[]).map((r) => {
+      if (Array.isArray(r)) return r as (string | number)[];
+      if (r && typeof r === "object" && "cells" in r && Array.isArray(r.cells)) {
+        return r.cells as (string | number)[];
+      }
+      return [String(r)];
+    });
+  } else if (typeof raw.previewRowsJson === "string") {
+    try {
+      const parsed = JSON.parse(raw.previewRowsJson);
+      if (Array.isArray(parsed)) {
+        previewRows = parsed;
+      }
+    } catch {
+      // Ignore parse failure
+    }
+  } else if (typeof raw.rowsJson === "string") {
+    try {
+      const parsed = JSON.parse(raw.rowsJson);
+      if (Array.isArray(parsed)) {
+        previewRows = parsed.slice(0, 5);
+      }
+    } catch {
+      // Ignore parse failure
+    }
+  }
+
+  return {
+    spreadsheetId: typeof raw.spreadsheetId === "string" ? raw.spreadsheetId : "",
+    range: typeof raw.range === "string" ? raw.range : "Sheet1!A1",
+    previewRows,
+  };
 }); /*end sheetPreview*/
 
 const statusIcon = computed<string>(() => {
