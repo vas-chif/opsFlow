@@ -151,20 +151,22 @@ sequenceDiagram
 
 ---
 
-## ⚙️ 6. Task Settings, Creazione Dinamica Tab & Approval Card Avanzata
+## ⚙️ 6. Task Settings, Multi-Selezione Google Sheets & Approval Card Avanzata
 
 ### 6.1 Configurazione Operativa del Task (`TaskSettingsModal.vue`)
 
 Accessibile mediante il pulsante `[ ⚙️ ]` integrato nell'header di `TaskChatWindow.vue`:
 
-- **Assegnazione Foglio Target:** Consente di scegliere quale foglio Google (tra quelli censiti nel Workspace) utilizzare per le operazioni di estrazione e append dell'Agente.
+- **Multi-Selezione Fogli Google (`selectedSheetIds`, `selectedSheets`):** L'operatore può selezionare uno o più fogli Google contemporaneamente dalla libreria del Workspace, con supporto ad azioni massive (_"Seleziona tutti"_, _"Deseleziona tutti"_).
+- **Designazione Foglio Primario (🎯 Target di Scrittura Predefinito):** Tra i fogli selezionati, un click su `[ Rendi Primario ]` imposta il foglio di destinazione predefinito per le azioni di append automatiche dell'Agente IA.
 - **Specifica del Foglio/Tab Interno (`selectedSheetTab`):** L'operatore può specificare una scheda interna personalizzata (es. _"Lead Qualificati"_, _"Report Clinico"_).
 - **Creazione Dinamica Automatica del Tab (`addSheet` batchUpdate):** Se la scheda specificata non esiste ancora all'interno del Google Spreadsheet, la Cloud Function `resolveApproval` esegue automaticamente la chiamata `spreadsheets.batchUpdate` con richiesta `addSheet` su Google Sheets API prima dell'inserimento dei dati, eliminando alla radice gli errori 400/404.
 - **Firma Email Specifica per Task:** L'operatore può personalizzare la firma usata nelle bozze Gmail generate per il task, oppure cliccare `[ Carica Firma Workspace ]` per ereditare la firma predefinita del team.
 - **Collegamento Risorse al Volo:** Incollando un link o ID di foglio Google nel form di aggiunta rapida, il foglio viene sia associato al task sia salvato nel catalogo risorse del Workspace (`linkedSheets`), rendendolo immediatamente riutilizzabile in altri task.
 
-### 6.2 Approval Card Avanzata (`ApprovalCard.vue`) & Zero PII Hardcoding
+### 6.2 Approval Card Avanzata (`ApprovalCard.vue`) & Selezione Foglio di Destinazione
 
+- **Cambio Foglio al Volo in Approvazione:** Quando l'Agente propone un inserimento o aggiornamento dati su Google Sheets, l'operatore può aprire la modalità modifica e selezionare qualsiasi foglio assegnato al task o al workspace tramite un comodo menu a tendina `q-select`, garantendo pieno controllo su dove andranno a finire i dati.
 - **Zero Hardcoded PII (GDPR & Universal Multi-Tenant):** Tutte le stringhe statiche personali sono state completamente rimosse da codice e prompt. I template, le firme e i metadati sono generati dinamicamente dal contesto del tenant.
 - **Modalità Espansa a Schermo Intero:** Pulsante `[ ↗ Espandi ]` per visualizzare le bozze Gmail e le tabelle di preview Google Sheets in un dialog Quasar ad alta leggibilità, ottimizzato per audit complessi.
 - **Modifica Preventiva dei Dati:** L'operatore può modificare oggetto, destinatari e corpo per le email Gmail, oppure inserire/modificare singole celle e righe per i fogli Google prima di dare l'approvazione finale.
