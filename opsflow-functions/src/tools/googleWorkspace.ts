@@ -73,8 +73,8 @@ export const ManageGoogleSheetSchema = z.object({
     .describe("Target Google Spreadsheet ID (se omesso usa il foglio predefinito del workspace)"),
   range: z
     .string()
-    .default("Sheet1!A1")
-    .describe("Sheet range or name (es. Sheet1!A1 o NomeFoglio!A1)"),
+    .default("A1")
+    .describe("Sheet range or name (es. A1, Foglio1!A1, o Sheet1!A1)"),
   values: z
     .array(z.array(z.any()))
     .describe("2D array of row values to append or update (matrix of cell values)"),

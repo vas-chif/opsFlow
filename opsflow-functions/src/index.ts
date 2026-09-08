@@ -500,9 +500,41 @@ export const resolveApproval = onRequest(
 
         const { google } = await import("googleapis");
         const sheets = google.sheets({ version: "v4", auth: oAuth2Client });
+
+        // Resolve active sheet tab name to handle Italian ("Foglio1"), English ("Sheet1"), or custom titles
+        let targetRange = preview.range || "A1";
+        try {
+          const meta = await sheets.spreadsheets.get({
+            spreadsheetId: preview.spreadsheetId,
+            fields: "sheets.properties.title",
+          });
+          const sheetTitles = (meta.data.sheets || [])
+            .map((s) => s.properties?.title)
+            .filter((t): t is string => Boolean(t));
+
+          const defaultSheetTitle = sheetTitles[0] || "Foglio1";
+
+          const requestedSheetMatch = targetRange.match(/^([^!]+)!/);
+          if (requestedSheetMatch) {
+            const requestedSheet = requestedSheetMatch[1].replace(/^'|'$/g, "");
+            if (!sheetTitles.includes(requestedSheet)) {
+              // Replace missing sheet name with the real sheet title
+              targetRange = `'${defaultSheetTitle}'!${targetRange.replace(/^[^!]+!/, "")}`;
+            }
+          } else {
+            targetRange = `'${defaultSheetTitle}'!${targetRange}`;
+          }
+        } catch (metaErr) {
+          logger.warn("resolveApproval: could not inspect spreadsheet metadata, using fallback range", {
+            tenantId,
+            taskId,
+            error: metaErr instanceof Error ? metaErr.message : String(metaErr),
+          });
+        }
+
         await sheets.spreadsheets.values.append({
           spreadsheetId: preview.spreadsheetId,
-          range: preview.range,
+          range: targetRange,
           valueInputOption: "USER_ENTERED",
           requestBody: { values: rowsToWrite },
         });
@@ -511,6 +543,7 @@ export const resolveApproval = onRequest(
           tenantId,
           taskId,
           approvalId,
+          targetRange,
           rowCount: rowsToWrite.length,
         });
       }
@@ -532,8 +565,12 @@ export const resolveApproval = onRequest(
           requiredScopes: err.requiredScopes,
         });
       } else {
+        let errorMsg = "Internal error during approval execution.";
+        if (err && typeof err === "object" && "message" in err) {
+          errorMsg = String((err as { message: unknown }).message);
+        }
         logger.error("resolveApproval: execution failed", { tenantId, taskId, approvalId, err });
-        res.status(500).json({ error: "Internal error during approval execution." });
+        res.status(500).json({ error: errorMsg });
       }
     }
   },
