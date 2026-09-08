@@ -574,8 +574,8 @@ const onReject = (): void => {
         <q-separator />
 
         <!-- Dialog Scrollable Content -->
-        <q-card-section class="col q-pa-xl scroll bg-grey-1">
-          <div class="approval-dialog__inner-card shadow-3 q-pa-xl bg-white">
+        <q-card-section class="col q-pa-md q-pa-sm-lg scroll bg-grey-1">
+          <div class="approval-dialog__inner-card shadow-2 q-pa-md q-pa-sm-lg bg-white">
             <!-- GMAIL FULLSCREEN VIEW -->
             <template v-if="isGmailDraft">
               <div v-if="isEditing && isPending" class="q-gutter-y-md">
@@ -949,10 +949,12 @@ const onReject = (): void => {
 }
 
 .approval-dialog__inner-card {
-  max-width: 1200px;
+  width: 100%;
+  max-width: 98%;
   margin: 0 auto;
   border-radius: 12px;
   border: 1px solid rgba(197, 160, 101, 0.25);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
 }
 
 .approval-dialog__preview-box {
@@ -972,16 +974,34 @@ const onReject = (): void => {
 }
 
 .approval-dialog__table-scroll {
+  width: 100%;
   overflow-x: auto;
   border: 1px solid rgba(197, 160, 101, 0.25);
   border-radius: 8px;
+  background: #fff;
 }
 
 .approval-dialog__table {
+  width: 100%;
+  table-layout: auto;
   font-size: 13px;
+  border-collapse: collapse;
 
-  td {
-    padding: 8px 12px;
+  td,
+  .approval-card__table-cell {
+    padding: 10px 14px;
+    white-space: normal !important;
+    word-break: break-word;
+    line-height: 1.45;
+  }
+
+  tr.approval-card__table-header td {
+    white-space: nowrap !important;
+    font-weight: 700;
+    font-size: 13px;
+    background: rgba(10, 35, 66, 0.06);
+    color: #0a2342;
+    border-bottom: 2px solid rgba(197, 160, 101, 0.35);
   }
 }
 

@@ -100,7 +100,7 @@ const syncFromTask = (): void => {
   const s = props.task.settings;
 
   // Initialize selected sheet IDs array (multi-select)
-  if (Array.isArray(s?.selectedSheetIds) && s.selectedSheetIds.length > 0) {
+  if (s && Array.isArray(s.selectedSheetIds) && s.selectedSheetIds.length > 0) {
     selectedSheetIds.value = [...s.selectedSheetIds];
   } else if (s?.selectedSheetId) {
     selectedSheetIds.value = [s.selectedSheetId];
