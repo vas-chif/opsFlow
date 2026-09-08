@@ -51,7 +51,7 @@ export function setGoogleWorkspaceContext(ctx: GoogleWorkspaceContext): void {
   activeWorkspaceContext.workspaceId = ctx.workspaceId;
   activeWorkspaceContext.taskId = ctx.taskId;
   activeWorkspaceContext.defaultSheetId = ctx.defaultSheetId;
-} /*end setGoogleWorkspaceContext*/
+} /* end setGoogleWorkspaceContext */
 
 // ── Input Schemas ─────────────────────────────────────────────────────────────
 

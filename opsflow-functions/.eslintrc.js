@@ -21,6 +21,7 @@ module.exports = {
   ignorePatterns: [
     "/lib/**/*", // Ignore built files.
     "/generated/**/*", // Ignore generated files.
+    "patch-genkit.js",
   ],
   plugins: ["@typescript-eslint", "import"],
   rules: {

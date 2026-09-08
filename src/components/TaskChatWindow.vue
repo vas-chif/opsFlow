@@ -1306,12 +1306,14 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                       size="sm"
                       color="secondary"
                       icon="search"
-                      label="Search Leads"
+                      label="Cerca Lead"
                       no-caps
                       class="full-width q-py-xs text-weight-bold"
                       :disabled="isSending"
                       @click="
-                        handleSendCustomPrompt('Find relevant leads and prospects for this task.')
+                        handleSendCustomPrompt(
+                          'Trova e mappa lead o snodi territoriali per questo task in conformità deontologica e GDPR.',
+                        )
                       "
                     />
                   </div>
@@ -1322,13 +1324,13 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                       size="sm"
                       color="positive"
                       icon="mail"
-                      label="Draft Email"
+                      label="Bozza Email"
                       no-caps
                       class="full-width q-py-xs text-weight-bold"
                       :disabled="isSending"
                       @click="
                         handleSendCustomPrompt(
-                          'Generate an email intro draft for the found prospects.',
+                          'Genera una bozza email informativa per i caregiver e gli snodi identificati.',
                         )
                       "
                     />
@@ -1340,13 +1342,13 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                       size="sm"
                       color="amber-10"
                       icon="table_chart"
-                      label="Sheets"
+                      label="Salva su Sheets"
                       no-caps
                       class="full-width q-py-xs text-weight-bold"
                       :disabled="isSending"
                       @click="
                         handleSendCustomPrompt(
-                          'Save and organize extracted data into the default Google Sheets.',
+                          'Salva e organizza i dati estratti nel foglio Google Sheets predefinito.',
                         )
                       "
                     />
