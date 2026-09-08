@@ -19,12 +19,14 @@ import { computed, ref, watch } from "vue";
 import { useQuasar } from "quasar";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-import type { ApprovalRecord, GmailDraftPreview } from "../types/models";
+import type { ApprovalRecord, GmailDraftPreview, LinkedGoogleResource } from "../types/models";
 
 // ── Props & Emits ─────────────────────────────────────────────────────────────
 const props = defineProps<{
   approval: ApprovalRecord;
-  isResolving?: boolean;
+  isResolving?: boolean | undefined;
+  emailSignature?: string | undefined;
+  availableSheets?: LinkedGoogleResource[] | undefined;
 }>();
 
 const emit = defineEmits<{
@@ -46,16 +48,6 @@ const editableBody = ref<string>("");
 const editableSpreadsheetId = ref<string>("");
 const editableRange = ref<string>("A1");
 const editableRows = ref<(string | number)[][]>([]);
-
-const VERSILIA_CARE_SIGNATURE =
-  "Cordiali saluti,\n\n" +
-  "Dott. Vasile Chifeac Infermiere\n" +
-  "Specialista in Area Critica e Terapia Intensiva\n" +
-  "Versilia Care – Assistenza Infermieristica Specialistica\n" +
-  "📍 Massa-Carrara e Versilia\n" +
-  "🌐 https://versiliacare.it/ | 📞 +39 327 4459377\n" +
-  "Email: versiliacare@gmail.com\n" +
-  "Servizio Programmato su Appuntamento";
 
 // ── Computed ──────────────────────────────────────────────────────────────────
 const isGmailDraft = computed(() => props.approval.actionType === "gmail_draft");
@@ -171,19 +163,24 @@ watch(
 );
 
 // ── Editing Helpers ───────────────────────────────────────────────────────────
-const insertVersiliaSignature = (): void => {
-  if (!editableBody.value.includes("Versilia Care")) {
-    editableBody.value = editableBody.value.trim() + "\n\n" + VERSILIA_CARE_SIGNATURE;
-  } else {
-    editableBody.value = editableBody.value + "\n\n" + VERSILIA_CARE_SIGNATURE;
+const getSheetDisplayName = (sheetId: string): string => {
+  if (!sheetId) return "";
+  const found = props.availableSheets?.find((s) => s.id === sheetId);
+  return found ? found.name : `${sheetId.slice(0, 16)}...`;
+}; /*end getSheetDisplayName*/
+
+const insertDynamicSignature = (): void => {
+  const sig = props.emailSignature?.trim() || "Cordiali saluti,\n[Firma]";
+  if (!editableBody.value.includes(sig)) {
+    editableBody.value = editableBody.value.trim() + "\n\n" + sig;
   }
   q.notify({
     type: "positive",
-    message: "Firma ufficiale VersiliaCare inserita!",
+    message: "Firma inserita!",
     icon: "verified",
     timeout: 1400,
   });
-}; /*end insertVersiliaSignature*/
+}; /*end insertDynamicSignature*/
 
 const addRow = (): void => {
   const colCount = editableRows.value[0]?.length || 4;
@@ -288,7 +285,7 @@ const onReject = (): void => {
           label="Destinatario (TO)"
           dense
           outlined
-          placeholder="es. info@versiliacare.it"
+          placeholder="es. destinatario@dominio.com"
         />
         <q-input
           v-model="editableSubject"
@@ -307,8 +304,8 @@ const onReject = (): void => {
             size="xs"
             color="primary"
             icon="verified"
-            label="Inserisci Firma VersiliaCare"
-            @click="insertVersiliaSignature"
+            label="Inserisci Firma"
+            @click="insertDynamicSignature"
           />
         </div>
 
@@ -410,14 +407,16 @@ const onReject = (): void => {
       <!-- Google Sheets: READ-ONLY DISPLAY -->
       <q-card-section v-else-if="isSheetAppend && sheetPreview" class="q-pa-md">
         <div class="approval-card__preview-row">
-          <span class="approval-card__label">Sheet ID:</span>
-          <span class="approval-card__value text-mono">
-            {{ (editableSpreadsheetId || sheetPreview.spreadsheetId).slice(0, 20) }}...
+          <span class="approval-card__label">Foglio:</span>
+          <span class="approval-card__value text-weight-bold text-navy">
+            {{ getSheetDisplayName(editableSpreadsheetId || sheetPreview.spreadsheetId) }}
           </span>
         </div>
         <div class="approval-card__preview-row q-mt-xs">
-          <span class="approval-card__label">Range:</span>
-          <span class="approval-card__value">{{ editableRange || sheetPreview.range }}</span>
+          <span class="approval-card__label">Intervallo / Scheda:</span>
+          <span class="approval-card__value text-mono">{{
+            editableRange || sheetPreview.range
+          }}</span>
         </div>
         <q-separator class="q-my-sm" />
         <div class="approval-card__table-wrapper">
@@ -561,7 +560,7 @@ const onReject = (): void => {
                   v-model="editableTo"
                   label="Destinatario (TO)"
                   outlined
-                  placeholder="es. caregiver.info@versiliacare.it"
+                  placeholder="es. destinatario@dominio.com"
                 />
                 <q-input
                   v-model="editableSubject"
@@ -580,8 +579,8 @@ const onReject = (): void => {
                     size="sm"
                     color="primary"
                     icon="verified"
-                    label="Inserisci Firma Ufficiale VersiliaCare"
-                    @click="insertVersiliaSignature"
+                    label="Inserisci Firma Predefinita"
+                    @click="insertDynamicSignature"
                   />
                 </div>
 
@@ -619,10 +618,15 @@ const onReject = (): void => {
               <div class="row items-center justify-between q-mb-md">
                 <div>
                   <span class="text-subtitle1 text-weight-bold text-navy">
-                    Tabella Dati VersiliaCare
+                    {{
+                      getSheetDisplayName(
+                        editableSpreadsheetId || sheetPreview?.spreadsheetId || "",
+                      ) || "Tabella Dati Google Sheets"
+                    }}
                   </span>
                   <div class="text-caption text-grey-7">
-                    Sheet ID: {{ editableSpreadsheetId || sheetPreview?.spreadsheetId }} | Range:
+                    ID: {{ editableSpreadsheetId || sheetPreview?.spreadsheetId }} | Intervallo /
+                    Scheda:
                     {{ editableRange || sheetPreview?.range }}
                   </div>
                 </div>

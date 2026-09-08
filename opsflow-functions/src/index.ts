@@ -330,6 +330,7 @@ export const chatWithAgent = onRequest(
         history,
         attitude,
         linkedResources,
+        taskSettings,
       } = req.body || {};
       if (!message || typeof message !== "string") {
         res.status(400).json({ error: "Missing required string 'message'" });
@@ -347,6 +348,7 @@ export const chatWithAgent = onRequest(
         history,
         attitude,
         linkedResources,
+        taskSettings,
       });
       res.status(200).json(result);
     } catch (err) {
@@ -414,7 +416,13 @@ export const resolveApproval = onRequest(
     };
 
     if (approval.status !== "pending") {
-      res.status(409).json({ error: "Approval already resolved.", status: approval.status });
+      const stateText = approval.status === "approved" ? "approvata ed eseguita" : "rifiutata";
+      res.status(200).json({
+        success: true,
+        alreadyResolved: true,
+        status: approval.status,
+        message: `Questa operazione risulta già ${stateText}.`,
+      });
       return;
     }
 
@@ -546,8 +554,32 @@ export const resolveApproval = onRequest(
           if (requestedSheetMatch) {
             const requestedSheet = requestedSheetMatch[1].replace(/^'|'$/g, "");
             if (!sheetTitles.includes(requestedSheet)) {
-              // Replace missing sheet name with the real sheet title
-              targetRange = `'${defaultSheetTitle}'!${targetRange.replace(/^[^!]+!/, "")}`;
+              // User specified a new sheet title: create it automatically in the spreadsheet!
+              try {
+                await sheets.spreadsheets.batchUpdate({
+                  spreadsheetId: effectiveSpreadsheetId,
+                  requestBody: {
+                    requests: [
+                      {
+                        addSheet: {
+                          properties: {
+                            title: requestedSheet,
+                          },
+                        },
+                      },
+                    ],
+                  },
+                });
+                targetRange = `'${requestedSheet}'!A1`;
+              } catch (createSheetErr) {
+                const sheetErrMsg =
+                  createSheetErr instanceof Error ? createSheetErr.message : String(createSheetErr);
+                logger.warn("resolveApproval: could not addSheet, falling back to default", {
+                  requestedSheet,
+                  error: sheetErrMsg,
+                });
+                targetRange = `'${defaultSheetTitle}'!${targetRange.replace(/^[^!]+!/, "")}`;
+              }
             }
           } else {
             targetRange = `'${defaultSheetTitle}'!${targetRange}`;

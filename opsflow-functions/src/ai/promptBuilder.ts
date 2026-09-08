@@ -15,6 +15,14 @@ export interface PromptStackOptions {
   workspacePrompt?: string | undefined;
   workspaceName?: string | undefined;
   taskTitle?: string | undefined;
+  taskSettings?:
+    | {
+        selectedSheetId?: string | undefined;
+        selectedSheetName?: string | undefined;
+        selectedSheetTab?: string | undefined;
+        emailSignature?: string | undefined;
+      }
+    | undefined;
   attitude?:
     | {
         industryScope?: string | undefined;
@@ -34,6 +42,11 @@ export interface PromptStackOptions {
         googleEmail?: string | undefined;
         linkedEmails?: string[] | undefined;
         defaultSheetId?: string | undefined;
+        defaultSheetName?: string | undefined;
+        defaultEmailSignature?: string | undefined;
+        linkedSheets?:
+          | Array<{ id: string; name: string; isMaster?: boolean | undefined }>
+          | undefined;
         defaultDriveFolderId?: string | undefined;
       }
     | undefined;
@@ -45,7 +58,7 @@ export interface PromptStackOptions {
  * @return {string} Formatted 3-level stacked prompt string
  */
 export function buildStackedPrompt(options: PromptStackOptions): string {
-  const { userPrompt, workspacePrompt, workspaceName, taskTitle, attitude, linkedResources } =
+  const { userPrompt, workspacePrompt, workspaceName, taskTitle, attitude, linkedResources, taskSettings } =
     options;
 
   const level1Base =
@@ -60,24 +73,46 @@ export function buildStackedPrompt(options: PromptStackOptions): string {
     "inglese). Rispondi in inglese SOLO se l'intero workspace ed i messaggi " +
     "precedenti sono esplicitamente in inglese.\n" +
     "Rispetta sempre le normative GDPR, esegui la sanitizzazione PII e non esporre mai dati PII.\n" +
-    "Per creare bozze email usa SEMPRE createGmailDraftTool (genera la card di approvazione, NO invio diretto). " +
-    "Nelle bozze email includi SEMPRE in calce la firma istituzionale standard:\n" +
-    "Cordiali saluti,\n\n" +
-    "Dott. Vasile Chifeac Infermiere\n" +
-    "Specialista in Area Critica e Terapia Intensiva\n" +
-    "Versilia Care – Assistenza Infermieristica Specialistica\n" +
-    "📍 Massa-Carrara e Versilia\n" +
-    "🌐 https://versiliacare.it/ | 📞 +39 327 4459377\n" +
-    "Email: versiliacare@gmail.com\n" +
-    "Servizio Programmato su Appuntamento\n\n" +
+    "Per creare bozze email usa SEMPRE createGmailDraftTool (genera la card di approvazione, NO invio diretto).\n" +
     "Per salvare o strutturare dati su Google Sheets invoca SEMPRE il tool manageGoogleSheetTool (passando i dati in " +
-    "values come matrice 2D di righe e colonne, range es. 'Sheet1!A1' e spreadsheetId se presente nelle risorse " +
-    "collegate). NON limitarti a scrivere solo tabelle markdown nel testo: invoca il tool affinché venga creata " +
-    "la card di approvazione interattiva.\n" +
+    "values come matrice 2D di righe e colonne, range es. 'Sheet1!A1' o con il nome della scheda specificata e " +
+    "spreadsheetId presente nelle risorse collegate). NON limitarti a scrivere solo tabelle markdown nel testo: " +
+    "invoca il tool affinché venga creata la card di approvazione interattiva.\n" +
     "Per cercare informazioni reali sul web usa searchWebAndPlatformsTool e jinaReaderTool.\n" +
     "Per profilare prospetti usa leadSynthesisTool.\n";
 
   let level2Constitution = "\n=== LEVEL 2: WORKSPACE CONSTITUTION & LINKED RESOURCES ===\n";
+
+  // Dynamic Email Signature from Task or Workspace Settings
+  const effectiveSignature = taskSettings?.emailSignature || linkedResources?.defaultEmailSignature;
+  if (effectiveSignature?.trim()) {
+    level2Constitution +=
+      "FIRMA EMAIL CONFIGURATA (usa sempre questa firma in calce a bozze email):\n" +
+      `${effectiveSignature.trim()}\n\n`;
+  } else {
+    level2Constitution +=
+      "FIRMA EMAIL: Se non espressamente richiesta dall'utente, usa una formula di chiusura formale neutra " +
+      "(es. 'Cordiali saluti,') senza inventare nominativi o contatti privati non forniti.\n\n";
+  }
+
+  // Dynamic Google Sheets assignment
+  if (taskSettings?.selectedSheetId) {
+    const sName = taskSettings.selectedSheetName || "Foglio Task";
+    const tabSuffix = taskSettings.selectedSheetTab ?
+      `SCHEDA/TAB NEL FOGLIO: "${taskSettings.selectedSheetTab}"\n` :
+      "";
+    level2Constitution +=
+      `FOGLIO GOOGLE DI LAVORO ASSEGNATO A QUESTO TASK: "${sName}" (ID: ${taskSettings.selectedSheetId})\n` +
+      tabSuffix +
+      "Se l'utente chiede di salvare o aggiornare dati per questo task, usa questo spreadsheetId.\n\n";
+  } else if (linkedResources?.linkedSheets && linkedResources.linkedSheets.length > 0) {
+    level2Constitution += "FOGLI GOOGLE COLLEGATI AL WORKSPACE (fai riferimento ad essi con il loro NOME):\n";
+    for (const sheet of linkedResources.linkedSheets) {
+      const masterTag = sheet.isMaster ? " [FOGLIO PRINCIPALE / MASTER DATABASE]" : "";
+      level2Constitution += `- "${sheet.name}" (ID: ${sheet.id})${masterTag}\n`;
+    }
+    level2Constitution += "\n";
+  }
 
   if (workspaceName) {
     level2Constitution += `WORKSPACE NAME: "${workspaceName}"\n`;

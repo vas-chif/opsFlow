@@ -54,11 +54,32 @@ export const ChatInputSchema = z.object({
     })
     .optional()
     .describe("Universal DBS Workspace Attitude constitution"),
+  taskSettings: z
+    .object({
+      selectedSheetId: z.string().optional(),
+      selectedSheetName: z.string().optional(),
+      selectedSheetTab: z.string().optional(),
+      emailSignature: z.string().optional(),
+      emailHeader: z.string().optional(),
+    })
+    .optional()
+    .describe("Specific task settings such as assigned sheet, tab, and custom signature"),
   linkedResources: z
     .object({
       googleEmail: z.string().optional(),
       linkedEmails: z.array(z.string()).optional(),
       defaultSheetId: z.string().optional(),
+      defaultSheetName: z.string().optional(),
+      defaultEmailSignature: z.string().optional(),
+      linkedSheets: z
+        .array(
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            isMaster: z.boolean().optional(),
+          }),
+        )
+        .optional(),
       defaultDriveFolderId: z.string().optional(),
     })
     .optional()
@@ -90,6 +111,7 @@ export const chatWithAgentFlow = ai.defineFlow(
     workspaceName,
     history,
     attitude,
+    taskSettings,
     linkedResources,
   }) => {
     // 1. Sanitize user message for PII protection (GDPR Compliance)
@@ -100,7 +122,7 @@ export const chatWithAgentFlow = ai.defineFlow(
       tenantId: tenantId || "opsflow_tenant_default",
       workspaceId: workspaceId || "default_workspace",
       taskId: taskId || "default_task",
-      defaultSheetId: linkedResources?.defaultSheetId,
+      defaultSheetId: taskSettings?.selectedSheetId || linkedResources?.defaultSheetId,
     });
 
     // 3. Format Sliding Window History (Last 5 messages max, 1000 chars per msg max)
@@ -122,6 +144,7 @@ export const chatWithAgentFlow = ai.defineFlow(
         workspacePrompt,
         workspaceName,
         taskTitle: taskId,
+        taskSettings,
         attitude,
         linkedResources,
       }) + historyContext;

@@ -19,7 +19,7 @@ import { useAuthStore } from "../stores/authStore";
 import { useSecureLogger } from "../composables/useSecureLogger";
 
 // ── Types ────────────────────────────────────────────────────────────────────
-import type { Workspace, WorkspaceLinkedResources } from "../types/models";
+import type { Workspace, WorkspaceLinkedResources, LinkedGoogleResource } from "../types/models";
 
 const props = defineProps<{
   modelValue: boolean;
@@ -94,6 +94,13 @@ const newEmailInput = ref("");
 const linkedEmails = ref<string[]>([]);
 const defaultSheetId = ref("");
 const defaultDriveFolderId = ref("");
+const defaultEmailSignature = ref("");
+const linkedSheets = ref<LinkedGoogleResource[]>([]);
+const newSheetNameInput = ref("");
+const newSheetUrlInput = ref("");
+const linkedFolders = ref<LinkedGoogleResource[]>([]);
+const newFolderNameInput = ref("");
+const newFolderUrlInput = ref("");
 const isOAuthConnected = ref(false);
 const isConnectingGoogle = ref(false);
 
@@ -352,31 +359,90 @@ onUnmounted(() => {
   }
 }); /*end onUnmounted*/
 
-const handleConnectDriveFolder = (): void => {
-  if (!defaultDriveFolderId.value.trim()) return;
-  defaultDriveFolderId.value = extractIdFromUrl(defaultDriveFolderId.value);
-  logger.success("GoogleDrive", "Cartella Drive collegata", {
-    folderId: defaultDriveFolderId.value,
-  });
-  q.notify({
-    type: "positive",
-    message: `Cartella Google Drive (ID: ${defaultDriveFolderId.value}) collegata con successo!`,
-    position: "top",
-    icon: "folder_special",
-  });
-}; /*end handleConnectDriveFolder*/
+const addSheetResource = (): void => {
+  if (!newSheetUrlInput.value.trim()) return;
+  const cleanId = extractIdFromUrl(newSheetUrlInput.value);
+  const friendlyName =
+    newSheetNameInput.value.trim() || `Foglio Google (${cleanId.slice(0, 8)}...)`;
+  const isMaster = linkedSheets.value.length === 0;
 
-const handleConnectGoogleSheet = (): void => {
-  if (!defaultSheetId.value.trim()) return;
-  defaultSheetId.value = extractIdFromUrl(defaultSheetId.value);
-  logger.success("GoogleSheets", "Google Sheet collegato", { sheetId: defaultSheetId.value });
+  linkedSheets.value.push({
+    id: cleanId,
+    name: friendlyName,
+    type: "sheet",
+    url: newSheetUrlInput.value.trim(),
+    isMaster,
+    addedAt: new Date().toISOString(),
+  });
+
+  if (isMaster) defaultSheetId.value = cleanId;
+  newSheetNameInput.value = "";
+  newSheetUrlInput.value = "";
+
   q.notify({
     type: "positive",
-    message: `Google Sheet (ID: ${defaultSheetId.value}) collegato con successo!`,
+    message: `Foglio "${friendlyName}" aggiunto alle Risorse!`,
+    icon: "table_chart",
     position: "top",
-    icon: "table_view",
   });
-}; /*end handleConnectGoogleSheet*/
+}; /*end addSheetResource*/
+
+const setMasterSheet = (sheetId: string): void => {
+  for (const s of linkedSheets.value) {
+    s.isMaster = s.id === sheetId;
+  }
+  defaultSheetId.value = sheetId;
+  q.notify({
+    type: "positive",
+    message: "⭐ Foglio Principale (Master Database) impostato!",
+    icon: "star",
+    position: "top",
+  });
+}; /*end setMasterSheet*/
+
+const removeSheetResource = (sheetId: string): void => {
+  linkedSheets.value = linkedSheets.value.filter((s: LinkedGoogleResource) => s.id !== sheetId);
+  if (defaultSheetId.value === sheetId) {
+    defaultSheetId.value = linkedSheets.value[0]?.id || "";
+    if (linkedSheets.value[0]) linkedSheets.value[0].isMaster = true;
+  }
+}; /*end removeSheetResource*/
+
+const addFolderResource = (): void => {
+  if (!newFolderUrlInput.value.trim()) return;
+  const cleanId = extractIdFromUrl(newFolderUrlInput.value);
+  const friendlyName =
+    newFolderNameInput.value.trim() || `Cartella Drive (${cleanId.slice(0, 8)}...)`;
+  const isMaster = linkedFolders.value.length === 0;
+
+  linkedFolders.value.push({
+    id: cleanId,
+    name: friendlyName,
+    type: "folder",
+    url: newFolderUrlInput.value.trim(),
+    isMaster,
+    addedAt: new Date().toISOString(),
+  });
+
+  if (isMaster) defaultDriveFolderId.value = cleanId;
+  newFolderNameInput.value = "";
+  newFolderUrlInput.value = "";
+
+  q.notify({
+    type: "positive",
+    message: `Cartella "${friendlyName}" aggiunta!`,
+    icon: "folder_special",
+    position: "top",
+  });
+}; /*end addFolderResource*/
+
+const removeFolderResource = (folderId: string): void => {
+  linkedFolders.value = linkedFolders.value.filter((f: LinkedGoogleResource) => f.id !== folderId);
+  if (defaultDriveFolderId.value === folderId) {
+    defaultDriveFolderId.value = linkedFolders.value[0]?.id || "";
+    if (linkedFolders.value[0]) linkedFolders.value[0].isMaster = true;
+  }
+}; /*end removeFolderResource*/
 
 // Tab 3: Assigned Agents
 const assignedAgents = ref<string[]>([
@@ -475,6 +541,32 @@ const syncFromWorkspace = (newWs: Workspace | null): void => {
       : [];
   defaultSheetId.value = res.defaultSheetId || "";
   defaultDriveFolderId.value = res.defaultDriveFolderId || "";
+  defaultEmailSignature.value = res.defaultEmailSignature || "";
+
+  linkedSheets.value = res.linkedSheets ? [...res.linkedSheets] : [];
+  if (linkedSheets.value.length === 0 && res.defaultSheetId) {
+    linkedSheets.value = [
+      {
+        id: res.defaultSheetId,
+        name: res.defaultSheetName || "Foglio Google Predefinito",
+        type: "sheet",
+        isMaster: true,
+      },
+    ];
+  }
+
+  linkedFolders.value = res.linkedFolders ? [...res.linkedFolders] : [];
+  if (linkedFolders.value.length === 0 && res.defaultDriveFolderId) {
+    linkedFolders.value = [
+      {
+        id: res.defaultDriveFolderId,
+        name: res.defaultDriveFolderName || "Cartella Drive Principale",
+        type: "folder",
+        isMaster: true,
+      },
+    ];
+  }
+
   if (res.assignedAgents) {
     assignedAgents.value = [...res.assignedAgents];
   }
@@ -542,11 +634,21 @@ const handleSave = async (): Promise<void> => {
       .map((s) => s.trim())
       .filter(Boolean);
 
+    const masterSheetObj =
+      linkedSheets.value.find((s: LinkedGoogleResource) => s.isMaster) || linkedSheets.value[0];
+    const masterFolderObj =
+      linkedFolders.value.find((f: LinkedGoogleResource) => f.isMaster) || linkedFolders.value[0];
+
     const linkedResources: WorkspaceLinkedResources = {
       googleEmail: googleEmail.value.trim() || (linkedEmails.value[0] ?? ""),
       linkedEmails: linkedEmails.value,
-      defaultSheetId: defaultSheetId.value.trim(),
-      defaultDriveFolderId: defaultDriveFolderId.value.trim(),
+      linkedSheets: linkedSheets.value,
+      linkedFolders: linkedFolders.value,
+      defaultSheetId: masterSheetObj?.id || defaultSheetId.value.trim(),
+      defaultSheetName: masterSheetObj?.name || "Foglio Master",
+      defaultDriveFolderId: masterFolderObj?.id || defaultDriveFolderId.value.trim(),
+      defaultDriveFolderName: masterFolderObj?.name || "Cartella Drive",
+      defaultEmailSignature: defaultEmailSignature.value.trim() || undefined,
       isOAuthConnected: isOAuthConnected.value,
       assignedAgents: assignedAgents.value,
     };
@@ -832,81 +934,241 @@ const handleSave = async (): Promise<void> => {
 
             <q-separator class="q-my-md" />
 
-            <!-- Google Sheets Connection Section -->
-            <div class="q-mb-md">
-              <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
-                📊 ID / Link Foglio Google Sheets Predefinito:
+            <!-- Google Sheets Section (Multiple Sheets with Names) -->
+            <div class="q-mb-lg">
+              <div class="row items-center justify-between q-mb-xs">
+                <div class="text-subtitle2 text-weight-bold text-navy">
+                  📊 Fogli Google Sheets Collegati (riconoscibili per Nome):
+                </div>
               </div>
-              <div class="row q-gutter-sm">
-                <q-input
-                  v-model="defaultSheetId"
-                  outlined
-                  dense
-                  class="col"
-                  placeholder="Es: 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms o URL completo"
-                >
-                  <template #prepend>
-                    <q-icon name="table_chart" color="positive" />
-                  </template>
-                </q-input>
-                <q-btn
-                  color="positive"
-                  icon="link"
-                  label="Collega Google Sheet"
-                  no-caps
-                  dense
-                  class="q-px-sm"
-                  :disabled="!defaultSheetId.trim()"
-                  @click="handleConnectGoogleSheet"
-                />
-              </div>
-              <div
-                v-if="defaultSheetId.trim()"
-                class="text-caption text-positive q-mt-xs row items-center"
+              <p class="text-caption text-grey-7 q-mb-sm">
+                Seleziona quale foglio funge da
+                <strong>⭐ Foglio Principale (Master Database)</strong> per la cronologia generale e
+                quali fogli sono dedicati ai singoli task.
+              </p>
+
+              <!-- Sheets List -->
+              <q-list
+                v-if="linkedSheets.length > 0"
+                bordered
+                separator
+                class="rounded-borders bg-white q-mb-sm"
               >
-                <q-icon name="check_circle" size="xs" class="q-mr-xs" />
-                Foglio Google Sheets collegato con successo!
+                <q-item v-for="sheet in linkedSheets" :key="sheet.id" class="q-py-sm">
+                  <q-item-section avatar style="min-width: 36px">
+                    <q-icon name="table_chart" color="positive" size="22px" />
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label class="text-subtitle2 text-weight-bold">
+                      {{ sheet.name }}
+                      <q-chip
+                        v-if="sheet.isMaster"
+                        color="amber-9"
+                        text-color="dark"
+                        size="xs"
+                        icon="star"
+                        class="text-weight-bold q-ml-xs"
+                      >
+                        Foglio Master (Database)
+                      </q-chip>
+                    </q-item-label>
+                    <q-item-label
+                      caption
+                      class="text-mono text-grey-6 text-ellipsis"
+                      style="max-width: 320px"
+                    >
+                      ID: {{ sheet.id }}
+                    </q-item-label>
+                  </q-item-section>
+                  <q-item-section side class="row no-wrap items-center q-gutter-xs">
+                    <q-btn
+                      v-if="!sheet.isMaster"
+                      flat
+                      dense
+                      no-caps
+                      size="xs"
+                      color="amber-9"
+                      icon="star_border"
+                      label="Imposta come Master"
+                      @click="setMasterSheet(sheet.id)"
+                    />
+                    <q-btn
+                      v-if="sheet.url"
+                      flat
+                      round
+                      dense
+                      icon="open_in_new"
+                      size="xs"
+                      color="grey-7"
+                      :href="sheet.url"
+                      target="_blank"
+                    />
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      icon="delete"
+                      size="xs"
+                      color="negative"
+                      @click="removeSheetResource(sheet.id)"
+                    />
+                  </q-item-section>
+                </q-item>
+              </q-list>
+              <div v-else class="text-caption text-grey-6 italic q-mb-sm">
+                Nessun Foglio Google ancora registrato. Aggiungine uno qui sotto:
+              </div>
+
+              <!-- Add Sheet Form -->
+              <div class="row q-col-gutter-xs items-center bg-grey-1 q-pa-xs rounded-borders">
+                <div class="col-12 col-md-4">
+                  <q-input
+                    v-model="newSheetNameInput"
+                    outlined
+                    dense
+                    placeholder="Nome Foglio (es. Listino Servizi)"
+                    bg-color="white"
+                  />
+                </div>
+                <div class="col-12 col-md-6">
+                  <q-input
+                    v-model="newSheetUrlInput"
+                    outlined
+                    dense
+                    placeholder="URL o ID Foglio Google"
+                    bg-color="white"
+                  />
+                </div>
+                <div class="col-12 col-md-2">
+                  <q-btn
+                    unelevated
+                    color="positive"
+                    icon="add"
+                    label="Aggiungi"
+                    no-caps
+                    dense
+                    class="full-width"
+                    :disabled="!newSheetUrlInput.trim()"
+                    @click="addSheetResource"
+                  />
+                </div>
               </div>
             </div>
 
             <q-separator class="q-my-md" />
 
-            <!-- Google Drive Folder Connection Section -->
-            <div class="q-mb-md">
-              <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
-                📁 ID / Link Cartella Google Drive di Riferimento:
+            <!-- Google Drive Folders Section -->
+            <div class="q-mb-lg">
+              <div class="text-subtitle2 text-weight-bold text-navy q-mb-xs">
+                📁 Cartelle Google Drive Collegate:
               </div>
-              <div class="row q-gutter-sm">
-                <q-input
-                  v-model="defaultDriveFolderId"
-                  outlined
-                  dense
-                  class="col"
-                  placeholder="Es: 1a2b3c4d5e6f7g8h9i0j o URL cartella Drive"
-                >
-                  <template #prepend>
-                    <q-icon name="folder_special" color="amber-9" />
-                  </template>
-                </q-input>
-                <q-btn
-                  color="amber-9"
-                  text-color="dark"
-                  icon="add_to_drive"
-                  label="Collega Spazio Drive"
-                  no-caps
-                  dense
-                  class="q-px-sm"
-                  :disabled="!defaultDriveFolderId.trim()"
-                  @click="handleConnectDriveFolder"
-                />
-              </div>
-              <div
-                v-if="defaultDriveFolderId.trim()"
-                class="text-caption text-amber-10 q-mt-xs row items-center text-weight-medium"
+              <p class="text-caption text-grey-7 q-mb-sm">
+                Spazi Drive per l'indicizzazione e l'estrazione documentale da parte dell'Agente.
+              </p>
+
+              <q-list
+                v-if="linkedFolders.length > 0"
+                bordered
+                separator
+                class="rounded-borders bg-white q-mb-sm"
               >
-                <q-icon name="folder_shared" size="xs" class="q-mr-xs" />
-                Cartella Google Drive collegata con successo per l'estrazione documenti!
+                <q-item v-for="folder in linkedFolders" :key="folder.id" class="q-py-sm">
+                  <q-item-section avatar style="min-width: 36px">
+                    <q-icon name="folder_special" color="amber-9" size="22px" />
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label class="text-subtitle2 text-weight-bold">
+                      {{ folder.name }}
+                    </q-item-label>
+                    <q-item-label
+                      caption
+                      class="text-mono text-grey-6 text-ellipsis"
+                      style="max-width: 320px"
+                    >
+                      ID: {{ folder.id }}
+                    </q-item-label>
+                  </q-item-section>
+                  <q-item-section side class="row no-wrap items-center q-gutter-xs">
+                    <q-btn
+                      v-if="folder.url"
+                      flat
+                      round
+                      dense
+                      icon="open_in_new"
+                      size="xs"
+                      color="grey-7"
+                      :href="folder.url"
+                      target="_blank"
+                    />
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      icon="delete"
+                      size="xs"
+                      color="negative"
+                      @click="removeFolderResource(folder.id)"
+                    />
+                  </q-item-section>
+                </q-item>
+              </q-list>
+
+              <!-- Add Folder Form -->
+              <div class="row q-col-gutter-xs items-center bg-grey-1 q-pa-xs rounded-borders">
+                <div class="col-12 col-md-4">
+                  <q-input
+                    v-model="newFolderNameInput"
+                    outlined
+                    dense
+                    placeholder="Nome Cartella (es. Documenti)"
+                    bg-color="white"
+                  />
+                </div>
+                <div class="col-12 col-md-6">
+                  <q-input
+                    v-model="newFolderUrlInput"
+                    outlined
+                    dense
+                    placeholder="URL o ID Cartella Drive"
+                    bg-color="white"
+                  />
+                </div>
+                <div class="col-12 col-md-2">
+                  <q-btn
+                    unelevated
+                    color="amber-9"
+                    text-color="dark"
+                    icon="add"
+                    label="Aggiungi"
+                    no-caps
+                    dense
+                    class="full-width text-weight-bold"
+                    :disabled="!newFolderUrlInput.trim()"
+                    @click="addFolderResource"
+                  />
+                </div>
               </div>
+            </div>
+
+            <q-separator class="q-my-md" />
+
+            <!-- Default Email Signature for the Workspace -->
+            <div class="q-mb-md">
+              <div class="text-subtitle2 text-weight-bold text-navy q-mb-xs">
+                ✍️ Firma Email Predefinita del Workspace:
+              </div>
+              <p class="text-caption text-grey-7 q-mb-sm">
+                Questa firma viene ereditata automaticamente da tutti i task del Workspace (può
+                essere personalizzata nel singolo task).
+              </p>
+              <q-input
+                v-model="defaultEmailSignature"
+                type="textarea"
+                rows="4"
+                outlined
+                dense
+                placeholder="Inserisci la firma predefinita (es. Cordiali saluti, Team OpsFlow...)"
+              />
             </div>
           </q-tab-panel>
 

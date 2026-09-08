@@ -142,6 +142,18 @@ export interface TaskChatMessage {
 }
 
 /**
+ * Task-level operational settings (Google Sheet, internal tab, custom email signature).
+ */
+export interface TaskSettings {
+  selectedSheetId?: string | undefined;
+  selectedSheetName?: string | undefined;
+  selectedSheetTab?: string | undefined;
+  emailSignature?: string | undefined;
+  emailHeader?: string | undefined;
+  syncToMasterSheet?: boolean | undefined;
+}
+
+/**
  * Core Task document model.
  * Represents a work item assigned to users/operators.
  */
@@ -154,6 +166,7 @@ export interface Task {
   workspaceId: string;
   assignedTo: string | null;
   aiMetadata: TaskAIMetadata;
+  settings?: TaskSettings;
   createdAt: FirestoreTimestamp;
   updatedAt: FirestoreTimestamp;
 } /*end Task*/
@@ -258,23 +271,38 @@ export interface WorkspaceAttitude {
 }
 
 /**
+ * Structured Google Resource (Spreadsheet, Drive Folder) linked to a Workspace or Task.
+ */
+export interface LinkedGoogleResource {
+  id: string;
+  name: string;
+  type: "sheet" | "folder";
+  url?: string | undefined;
+  isMaster?: boolean | undefined;
+  addedAt?: string | undefined;
+}
+
+/**
  * Linked Google resources & OAuth state for a Workspace.
  */
 export interface WorkspaceLinkedResources {
-  googleEmail?: string;
-  linkedEmails?: string[];
-  defaultSheetId?: string;
-  defaultSheetName?: string;
-  defaultDriveFolderId?: string;
-  defaultDriveFolderName?: string;
-  isOAuthConnected?: boolean;
-  assignedAgents?: string[];
+  googleEmail?: string | undefined;
+  linkedEmails?: string[] | undefined;
+  linkedSheets?: LinkedGoogleResource[] | undefined;
+  linkedFolders?: LinkedGoogleResource[] | undefined;
+  defaultSheetId?: string | undefined;
+  defaultSheetName?: string | undefined;
+  defaultDriveFolderId?: string | undefined;
+  defaultDriveFolderName?: string | undefined;
+  defaultEmailSignature?: string | undefined;
+  isOAuthConnected?: boolean | undefined;
+  assignedAgents?: string[] | undefined;
   /** @deprecated Migrated to WorkspaceAttitude.rules.doList */
-  doList?: string[];
+  doList?: string[] | undefined;
   /** @deprecated Migrated to WorkspaceAttitude.rules.dontList */
-  dontList?: string[];
+  dontList?: string[] | undefined;
   /** @deprecated Migrated to WorkspaceAttitude.tone */
-  toneOfVoice?: "formal" | "informal" | "operational" | "roi_synthetic";
+  toneOfVoice?: "formal" | "informal" | "operational" | "roi_synthetic" | undefined;
 }
 
 /**

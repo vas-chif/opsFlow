@@ -148,3 +148,24 @@ sequenceDiagram
 | `in_progress`       | Invio Primo Messaggio Chat      | `chatWithAgent` esegue prompt e tool chaining        | Badges reattivi + Rolling Key Points |
 | `approval_required` | Agente emette proposta azione   | Generazione record in `tenants/{tenantId}/approvals` | `ApprovalCard.vue` in primo piano    |
 | `completed`         | Chiusura Manuale / Ispezione OK | `onTaskUpdated` aziona `AgenteArchivista` per RAG KB | Badge verde + Storico note bloccato  |
+
+---
+
+## ⚙️ 6. Task Settings, Creazione Dinamica Tab & Approval Card Avanzata
+
+### 6.1 Configurazione Operativa del Task (`TaskSettingsModal.vue`)
+
+Accessibile mediante il pulsante `[ ⚙️ ]` integrato nell'header di `TaskChatWindow.vue`:
+
+- **Assegnazione Foglio Target:** Consente di scegliere quale foglio Google (tra quelli censiti nel Workspace) utilizzare per le operazioni di estrazione e append dell'Agente.
+- **Specifica del Foglio/Tab Interno (`selectedSheetTab`):** L'operatore può specificare una scheda interna personalizzata (es. _"Lead Qualificati"_, _"Report Clinico"_).
+- **Creazione Dinamica Automatica del Tab (`addSheet` batchUpdate):** Se la scheda specificata non esiste ancora all'interno del Google Spreadsheet, la Cloud Function `resolveApproval` esegue automaticamente la chiamata `spreadsheets.batchUpdate` con richiesta `addSheet` su Google Sheets API prima dell'inserimento dei dati, eliminando alla radice gli errori 400/404.
+- **Firma Email Specifica per Task:** L'operatore può personalizzare la firma usata nelle bozze Gmail generate per il task, oppure cliccare `[ Carica Firma Workspace ]` per ereditare la firma predefinita del team.
+- **Collegamento Risorse al Volo:** Incollando un link o ID di foglio Google nel form di aggiunta rapida, il foglio viene sia associato al task sia salvato nel catalogo risorse del Workspace (`linkedSheets`), rendendolo immediatamente riutilizzabile in altri task.
+
+### 6.2 Approval Card Avanzata (`ApprovalCard.vue`) & Zero PII Hardcoding
+
+- **Zero Hardcoded PII (GDPR & Universal Multi-Tenant):** Tutte le stringhe statiche personali sono state completamente rimosse da codice e prompt. I template, le firme e i metadati sono generati dinamicamente dal contesto del tenant.
+- **Modalità Espansa a Schermo Intero:** Pulsante `[ ↗ Espandi ]` per visualizzare le bozze Gmail e le tabelle di preview Google Sheets in un dialog Quasar ad alta leggibilità, ottimizzato per audit complessi.
+- **Modifica Preventiva dei Dati:** L'operatore può modificare oggetto, destinatari e corpo per le email Gmail, oppure inserire/modificare singole celle e righe per i fogli Google prima di dare l'approvazione finale.
+- **Idempotenza & Risoluzione Conflitti:** La Cloud Function `resolveApproval` verifica lo stato del record: se l'azione è già stata approvata o rifiutata da un altro click, restituisce `{ success: true, alreadyResolved: true }` prevenendo errori 409 (Conflict) o crash della UI.

@@ -165,3 +165,24 @@ L'assistente nel drawer destro opera **esclusivamente con un contesto workspace 
 1. **Visibilità Condizionata (`v-if="selectedWorkspace"`):** Il pulsante di apertura nella navbar e il componente drawer sono renderizzati unicamente se è attivo un workspace.
 2. **Auto-Chiusura Reattiva:** Un watcher su `taskStore.activeWorkspaceId` chiude forzatamente il drawer destro (`rightDrawerOpen = false`) nel momento in cui l'utente torna alla Home Dashboard.
 3. **Isolamento Cronologia:** Al cambio di workspace (`newId !== oldId`), la cronologia messaggi viene resettata con il prompt DNA e il saluto specifico del nuovo workspace selezionato, azzerando qualsiasi fuga di contesto cross-workspace.
+
+---
+
+## 🌐 6. Hub Risorse Google, Master Sheet & Sincronizzazione Cross-Task (`WorkspaceAttitudeModal.vue`)
+
+### 6.1 Hub Centralizzato Risorse Google per Workspace
+
+In `WorkspaceAttitudeModal.vue` (Tab 2: _Risorse Google Collegate_), OpsFlow gestisce un hub centralizzato di fogli Google e cartelle Drive:
+
+- **Etichette Riconoscibili (Friendly Names):** Le risorse non sono memorizzate come semplici link grezzi opachi, ma con nomi descrittivi specificati dall'utente (es. _"Database Pazienti"_, _"Lead Generation Sanitaria"_, _"Listino Servizi"_).
+- **Designazione Master Sheet (⭐):** Un foglio Google può essere designato come **Foglio Principale (Master Database)** del Workspace. L'Agente IA utilizza questo foglio per registrare lo storico delle attività, i KPI e i log operativi generali del team.
+- **Firma Istituzionale di Workspace:** Configurazione della firma email aziendale predefinita (`defaultEmailSignature`) ereditabile dinamicamente da tutti i task del workspace.
+- **Token Vault Isolato:** L'autenticazione OAuth 2.0 risiede nel token vault isolato server-side (`tenants/{tenantId}/workspaces/{workspaceId}/integrations/google`) protetto da AES-256-GCM.
+
+### 6.2 Sincronizzazione On-The-Fly Cross-Task
+
+Quando un operatore lavora all'interno di un task e incolla un nuovo link o ID di Google Sheets in `TaskSettingsModal.vue`:
+
+1. **Aggancio Locale al Task:** Il foglio viene selezionato come target per le operazioni dell'Agente su quel singolo task (`task.settings.selectedSheetId`).
+2. **Propagazione Automatica al Workspace:** Il sistema invoca immediatamente `taskStore.updateWorkspaceLinkedResources(workspaceId, ...)`, registrando il nuovo foglio nell'elenco `linkedSheets` del Workspace sia su Firestore sia nel Pinia store reattivo.
+3. **Disponibilità Cross-Task:** Il foglio compare immediatamente nell'elenco risorse di `WorkspaceAttitudeModal.vue` e diventa selezionabile in tutti gli altri task presenti e futuri del Workspace, evitando duplicazioni e frammentazione dei dati.

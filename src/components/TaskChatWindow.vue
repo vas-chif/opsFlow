@@ -33,6 +33,7 @@ import { useWebSpeech } from "../composables/useWebSpeech";
 // ── Components ───────────────────────────────────────────────────────────────
 import TaskKeyPointsCard from "./TaskKeyPointsCard.vue";
 import ApprovalCard from "./ApprovalCard.vue";
+import TaskSettingsModal from "./TaskSettingsModal.vue";
 
 const props = defineProps<{
   windowState: FloatingWindow;
@@ -109,7 +110,9 @@ const isDragging = ref(false);
 const dragStart = ref({ x: 0, y: 0 });
 const initialPos = ref({ x: 0, y: 0 });
 
-// Resize state
+// UI window state (minimized, maximized, size, position)
+const isExpanded = ref(false);
+const showTaskSettingsModal = ref<boolean>(false);
 const isResizing = ref(false);
 const resizeStart = ref({ x: 0, y: 0, w: 0, h: 0 });
 
@@ -503,6 +506,7 @@ const handleSendChatMessage = async (): Promise<void> => {
         })),
         attitude: workspace.value?.attitude,
         linkedResources: workspace.value?.linkedResources,
+        taskSettings: task.value?.settings,
       }),
     });
 
@@ -704,7 +708,9 @@ const handleApproveAction = async (
       chatStore.resolveApprovalInSession(taskId, approvalId, "approved");
       q.notify({
         type: "positive",
-        message: "Azione approvata ed eseguita con successo!",
+        message: result.alreadyResolved
+          ? result.message || "Azione già approvata in precedenza."
+          : "Azione approvata ed eseguita con successo!",
         icon: "check_circle",
       });
     } else {
@@ -1037,6 +1043,20 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
             </q-item>
           </q-list>
         </q-btn-dropdown>
+
+        <!-- Task Settings Button -->
+        <q-btn
+          flat
+          round
+          dense
+          size="sm"
+          icon="tune"
+          color="amber-5"
+          @click.stop="showTaskSettingsModal = true"
+          @mousedown.stop
+        >
+          <q-tooltip>Impostazioni Task, Foglio Google & Firma</q-tooltip>
+        </q-btn>
 
         <!-- Send To Back Button -->
         <q-btn
@@ -1451,7 +1471,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                       :disabled="isSending"
                       @click="
                         handleSendCustomPrompt(
-                          'Genera una bozza email formale per i caregiver e gli snodi identificati, con oggetto chiaro e la firma completa del Dott. Vasile Chifeac - Versilia Care.',
+                          'Genera una bozza email formale per i destinatari identificati, con oggetto chiaro e la firma configurata per questo task/workspace.',
                         )
                       "
                     />
@@ -1663,6 +1683,12 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                         v-if="getApprovalForMessage(msg)"
                         :approval="getApprovalForMessage(msg)!"
                         :is-resolving="isResolvingApproval === getApprovalForMessage(msg)!.id"
+                        :email-signature="
+                          task?.settings?.emailSignature ||
+                          workspace?.linkedResources?.defaultEmailSignature ||
+                          ''
+                        "
+                        :available-sheets="workspace?.linkedResources?.linkedSheets || []"
                         class="q-my-sm q-ml-sm"
                         @approve="handleApproveAction"
                         @reject="handleRejectAction"
