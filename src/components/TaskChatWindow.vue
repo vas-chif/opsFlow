@@ -9,7 +9,7 @@
 <script setup lang="ts">
 // ── Vue & Framework ──────────────────────────────────────────────────────────
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
-import { useQuasar } from "quasar";
+import { useQuasar, copyToClipboard } from "quasar";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 import type {
@@ -64,6 +64,8 @@ const workspace = computed(
 
 const chatMessage = ref("");
 const isSending = ref(false);
+const activeAbortController = ref<AbortController | null>(null);
+const chatInputRef = ref<any>(null);
 const chatScrollRef = ref<HTMLDivElement | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const selectedFile = ref<File | null>(null);
@@ -477,11 +479,15 @@ const handleSendChatMessage = async (): Promise<void> => {
   logger.info("TaskChat", `Messaggio inviato sul task "${task.value.title}"`, { taskId, userText });
 
   let fetchedOk = false;
+  const abortCtrl = new AbortController();
+  activeAbortController.value = abortCtrl;
+  const timeoutSignal = AbortSignal.timeout(55000); // Step 12: 55s — 5s headroom below CF 60s timeout
+  const combinedSignal = AbortSignal.any([abortCtrl.signal, timeoutSignal]);
 
   try {
     const res = await fetch("https://europe-west1-opsflow-88of.cloudfunctions.net/chatWithAgent", {
       method: "POST",
-      signal: AbortSignal.timeout(55000), // Step 12: 55s — 5s headroom below CF 60s timeout
+      signal: combinedSignal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message: userText,
@@ -534,8 +540,27 @@ const handleSendChatMessage = async (): Promise<void> => {
       fetchedOk = true;
       scrollToBottom();
     }
-  } catch (err) {
-    logger.warn("CloudFunction", "Cloud Function non raggiungibile", err);
+  } catch (err: unknown) {
+    if (abortCtrl.signal.aborted) {
+      logger.info("TaskChat", "Richiesta annullata dall'utente.");
+      fetchedOk = true;
+      chatStore.appendMessage(taskId, {
+        id: `agt-${Date.now()}`,
+        taskId: taskId,
+        sender: "agent",
+        agentName: "Sistema",
+        text: "⏹️ *Elaborazione IA interrotta dall'utente.*",
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        toolsUsed: [],
+      });
+    } else {
+      logger.warn("CloudFunction", "Cloud Function non raggiungibile", err);
+    }
+  } finally {
+    activeAbortController.value = null;
+    isSending.value = false;
+    chatStore.setAgentTyping(taskId, false);
+    scrollToBottom();
   }
 
   if (!fetchedOk) {
@@ -556,11 +581,85 @@ const handleSendChatMessage = async (): Promise<void> => {
     });
     scrollToBottom();
   }
-
-  isSending.value = false;
-  chatStore.setAgentTyping(taskId, false);
-  scrollToBottom();
 }; /*end handleSendChatMessage*/
+
+const focusChatInput = (): void => {
+  nextTick(() => {
+    chatInputRef.value?.focus();
+  });
+}; /*end focusChatInput*/
+
+const handleStopAiExecution = (): void => {
+  if (activeAbortController.value) {
+    activeAbortController.value.abort();
+    activeAbortController.value = null;
+  }
+  isSending.value = false;
+  if (task.value) {
+    chatStore.setAgentTyping(task.value.id, false);
+  }
+  q.notify({
+    type: "warning",
+    message: "Elaborazione IA interrotta dall'utente.",
+    icon: "stop_circle",
+    timeout: 1500,
+  });
+}; /*end handleStopAiExecution*/
+
+const handleCopyMessage = async (text: string): Promise<void> => {
+  try {
+    if (typeof copyToClipboard === "function") {
+      await copyToClipboard(text);
+    } else if (navigator.clipboard) {
+      await navigator.clipboard.writeText(text);
+    }
+    q.notify({
+      type: "positive",
+      message: "Testo copiato negli appunti",
+      icon: "content_copy",
+      timeout: 1500,
+    });
+  } catch {
+    q.notify({
+      type: "negative",
+      message: "Impossibile copiare il testo",
+      icon: "error",
+      timeout: 1500,
+    });
+  }
+}; /*end handleCopyMessage*/
+
+const isLastAgentMessage = (msg: TaskChatMessage): boolean => {
+  const agentMessages = activeSession.value.messages.filter((m) => m.sender === "agent");
+  const last = agentMessages[agentMessages.length - 1];
+  return last ? last.id === msg.id : false;
+}; /*end isLastAgentMessage*/
+
+const handleRetryLastMessage = async (): Promise<void> => {
+  if (isSending.value || !activeSession.value.messages.length) return;
+  const userMessages = activeSession.value.messages.filter((m) => m.sender === "user");
+  const lastUserMsg = userMessages[userMessages.length - 1];
+  if (!lastUserMsg) return;
+  chatMessage.value = lastUserMsg.text;
+  q.notify({
+    type: "info",
+    message: "Rigenerazione risposta in corso...",
+    icon: "replay",
+    timeout: 1500,
+  });
+  await handleSendChatMessage();
+}; /*end handleRetryLastMessage*/
+
+const handleEditUserPrompt = (msg: TaskChatMessage): void => {
+  chatMessage.value = msg.text;
+  focusChatInput();
+  q.notify({
+    type: "info",
+    message: "Prompt ricaricato per la modifica.",
+    icon: "edit",
+    timeout: 1500,
+  });
+}; /*end handleEditUserPrompt*/
 
 const getApprovalForMessage = (msg: TaskChatMessage): ApprovalRecord | null => {
   if (!msg.approvalId && !msg.approvalRecord) return null;
@@ -1284,18 +1383,36 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                 </div>
               </q-expansion-item>
 
-              <!-- Direct AI Execution & Shortcuts -->
+              <!-- Direct AI Execution & Stop Button -->
               <div class="q-mb-sm">
-                <q-btn
-                  color="primary"
-                  icon="auto_awesome"
-                  label="🚀 Avvia Esecuzione IA"
-                  no-caps
-                  dense
-                  class="full-width q-mb-xs text-weight-bold"
-                  :loading="isSending"
-                  @click="handleExecuteTaskAI"
-                />
+                <div class="row q-col-gutter-xs items-center full-width q-mb-xs">
+                  <div :class="isSending ? 'col-8' : 'col-12'">
+                    <q-btn
+                      color="primary"
+                      icon="auto_awesome"
+                      :label="isSending ? 'Elaborazione...' : '🚀 Avvia Esecuzione IA'"
+                      no-caps
+                      dense
+                      class="full-width text-weight-bold"
+                      :loading="isSending"
+                      :disabled="isSending"
+                      @click="handleExecuteTaskAI"
+                    />
+                  </div>
+                  <div v-if="isSending" class="col-4">
+                    <q-btn
+                      color="negative"
+                      icon="stop_circle"
+                      label="Stop"
+                      no-caps
+                      dense
+                      class="full-width text-weight-bold"
+                      @click="handleStopAiExecution"
+                    >
+                      <q-tooltip>Interrompi immediatamente l'esecuzione dell'Agente IA</q-tooltip>
+                    </q-btn>
+                  </div>
+                </div>
                 <div class="row q-col-gutter-xs full-width">
                   <div class="col-12 col-sm-4">
                     <q-btn
@@ -1441,11 +1558,65 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                           v-html="renderFormattedMessage(msg.text)"
                         ></div>
 
-                        <!-- TTS Audio Read Aloud button for agent messages -->
+                        <!-- User Message Actions: Torna Indietro e Modifica / Copia -->
+                        <div
+                          v-if="msg.sender === 'user'"
+                          class="row items-center justify-end q-mt-xs q-gutter-xs"
+                        >
+                          <q-btn
+                            flat
+                            round
+                            dense
+                            size="xs"
+                            icon="edit"
+                            color="white"
+                            :disabled="isSending"
+                            @click="handleEditUserPrompt(msg)"
+                          >
+                            <q-tooltip>Torna indietro e modifica prompt</q-tooltip>
+                          </q-btn>
+                          <q-btn
+                            flat
+                            round
+                            dense
+                            size="xs"
+                            icon="content_copy"
+                            color="white"
+                            @click="handleCopyMessage(msg.text)"
+                          >
+                            <q-tooltip>Copia prompt</q-tooltip>
+                          </q-btn>
+                        </div>
+
+                        <!-- Action buttons for agent messages: Copia, Rigenera e Audio TTS -->
                         <div
                           v-if="msg.sender === 'agent'"
-                          class="row items-center justify-end q-mt-xs"
+                          class="row items-center justify-end q-mt-xs q-gutter-xs"
                         >
+                          <q-btn
+                            flat
+                            round
+                            dense
+                            size="xs"
+                            icon="content_copy"
+                            color="grey-7"
+                            @click="handleCopyMessage(msg.text)"
+                          >
+                            <q-tooltip>Copia testo negli appunti</q-tooltip>
+                          </q-btn>
+                          <q-btn
+                            v-if="isLastAgentMessage(msg)"
+                            flat
+                            round
+                            dense
+                            size="xs"
+                            icon="replay"
+                            color="grey-7"
+                            :disabled="isSending"
+                            @click="handleRetryLastMessage"
+                          >
+                            <q-tooltip>Rigenera risposta dell'Agente</q-tooltip>
+                          </q-btn>
                           <q-btn
                             flat
                             round
@@ -1456,7 +1627,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                             @click="handleSpeakMessage(msg.text)"
                           >
                             <q-tooltip>{{
-                              isSpeaking ? "Stop audio" : "Listen to voice response"
+                              isSpeaking ? "Interrompi audio" : "Ascolta risposta vocale"
                             }}</q-tooltip>
                           </q-btn>
                         </div>
@@ -1523,10 +1694,11 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                   <!-- Chat Input Field with Voice STT & File Attach -->
                   <div class="q-pt-xs bg-white shrink">
                     <q-input
+                      ref="chatInputRef"
                       v-model="chatMessage"
                       outlined
                       dense
-                      placeholder="Type instruction or dictate..."
+                      placeholder="Scrivi un'istruzione o detta a voce..."
                       :disabled="isSending"
                       style="font-size: 0.85rem"
                       @keyup.enter="handleSendChatMessage"
@@ -1541,9 +1713,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                           :disabled="isSending"
                           @click="triggerFileInput"
                         >
-                          <q-tooltip
-                            >Attach PDF / text document for Document Understanding</q-tooltip
-                          >
+                          <q-tooltip>Allega documento PDF o testo</q-tooltip>
                         </q-btn>
                         <q-btn
                           flat
@@ -1556,7 +1726,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                           @click="toggleVoiceDictation"
                         >
                           <q-tooltip>{{
-                            isListening ? "Stop dictation" : "Native voice dictation (€0)"
+                            isListening ? "Ferma dettatura" : "Dettatura vocale nativa (€0)"
                           }}</q-tooltip>
                         </q-btn>
                       </template>
@@ -1566,11 +1736,15 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                           round
                           dense
                           flat
-                          icon="send"
-                          color="primary"
-                          :disabled="(!chatMessage.trim() && !selectedFile) || isSending"
-                          @click="handleSendChatMessage"
-                        />
+                          :icon="isSending ? 'stop_circle' : 'send'"
+                          :color="isSending ? 'negative' : 'primary'"
+                          :disabled="!isSending && !chatMessage.trim() && !selectedFile"
+                          @click="isSending ? handleStopAiExecution() : handleSendChatMessage()"
+                        >
+                          <q-tooltip>{{
+                            isSending ? "Interrompi elaborazione IA" : "Invia messaggio"
+                          }}</q-tooltip>
+                        </q-btn>
                       </template>
                     </q-input>
                   </div>
