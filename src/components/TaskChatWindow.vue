@@ -481,13 +481,14 @@ const handleSendChatMessage = async (): Promise<void> => {
   let fetchedOk = false;
   const abortCtrl = new AbortController();
   activeAbortController.value = abortCtrl;
-  const timeoutSignal = AbortSignal.timeout(55000); // Step 12: 55s — 5s headroom below CF 60s timeout
-  const combinedSignal = AbortSignal.any([abortCtrl.signal, timeoutSignal]);
+  const timeoutId = setTimeout(() => {
+    abortCtrl.abort("timeout");
+  }, 55000); // 55s — 5s headroom below CF 60s timeout
 
   try {
     const res = await fetch("https://europe-west1-opsflow-88of.cloudfunctions.net/chatWithAgent", {
       method: "POST",
-      signal: combinedSignal,
+      signal: abortCtrl.signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message: userText,
@@ -541,7 +542,7 @@ const handleSendChatMessage = async (): Promise<void> => {
       scrollToBottom();
     }
   } catch (err: unknown) {
-    if (abortCtrl.signal.aborted) {
+    if (abortCtrl.signal.aborted && abortCtrl.signal.reason !== "timeout") {
       logger.info("TaskChat", "Richiesta annullata dall'utente.");
       fetchedOk = true;
       chatStore.appendMessage(taskId, {
@@ -557,6 +558,7 @@ const handleSendChatMessage = async (): Promise<void> => {
       logger.warn("CloudFunction", "Cloud Function non raggiungibile", err);
     }
   } finally {
+    clearTimeout(timeoutId);
     activeAbortController.value = null;
     isSending.value = false;
     chatStore.setAgentTyping(taskId, false);
