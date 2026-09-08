@@ -671,7 +671,10 @@ const getApprovalForMessage = (msg: TaskChatMessage): ApprovalRecord | null => {
   return found || msg.approvalRecord || null;
 }; /*end getApprovalForMessage*/
 
-const handleApproveAction = async (approvalId: string): Promise<void> => {
+const handleApproveAction = async (
+  approvalId: string,
+  editedData?: Record<string, unknown>,
+): Promise<void> => {
   if (!task.value || !approvalId) return;
   const taskId = task.value.id;
   const tenantId = authStore.tenantId || workspace.value?.tenantId || "opsflow_tenant_default";
@@ -692,6 +695,7 @@ const handleApproveAction = async (approvalId: string): Promise<void> => {
           approvalId,
           userId,
           decision: "approved",
+          editedData,
         }),
       },
     );
@@ -1447,7 +1451,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                       :disabled="isSending"
                       @click="
                         handleSendCustomPrompt(
-                          'Genera una bozza email informativa per i caregiver e gli snodi identificati.',
+                          'Genera una bozza email formale per i caregiver e gli snodi identificati, con oggetto chiaro e la firma completa del Dott. Vasile Chifeac - Versilia Care.',
                         )
                       "
                     />

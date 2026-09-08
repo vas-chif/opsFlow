@@ -369,6 +369,14 @@ interface ResolveApprovalBody {
   approvalId: string;
   userId: string;
   decision: "approved" | "rejected";
+  editedData?: {
+    to?: string;
+    subject?: string;
+    body?: string;
+    spreadsheetId?: string;
+    range?: string;
+    rows?: (string | number)[][];
+  };
 }
 
 /**
@@ -380,7 +388,7 @@ interface ResolveApprovalBody {
 export const resolveApproval = onRequest(
   { cors: true, region: "europe-west1" },
   async (req, res) => {
-    const { tenantId, workspaceId, taskId, approvalId, userId, decision } =
+    const { tenantId, workspaceId, taskId, approvalId, userId, decision, editedData } =
       req.body as ResolveApprovalBody;
 
     if (!tenantId || !workspaceId || !taskId || !approvalId || !userId || !decision) {
@@ -421,8 +429,18 @@ export const resolveApproval = onRequest(
     }
 
     try {
+      const updatedPreviewData: Record<string, unknown> = { ...approval.previewData };
+
       if (approval.actionType === "gmail_draft") {
         const preview = approval.previewData as { to: string; subject: string; body: string };
+        const effectiveTo = editedData?.to || preview.to;
+        const effectiveSubject = editedData?.subject || preview.subject;
+        const effectiveBody = editedData?.body || preview.body;
+
+        updatedPreviewData.to = effectiveTo;
+        updatedPreviewData.subject = effectiveSubject;
+        updatedPreviewData.body = effectiveBody;
+
         const oAuth2Client = await getAuthenticatedOAuth2Client(
           tenantId,
           userId,
@@ -431,12 +449,12 @@ export const resolveApproval = onRequest(
         );
 
         const rawEmail = [
-          `To: ${preview.to}`,
-          `Subject: ${preview.subject}`,
+          `To: ${effectiveTo}`,
+          `Subject: ${effectiveSubject}`,
           "Content-Type: text/plain; charset=utf-8",
           "MIME-Version: 1.0",
           "",
-          preview.body,
+          effectiveBody,
         ].join("\r\n");
 
         const encodedMessage = Buffer.from(rawEmail)
@@ -463,6 +481,9 @@ export const resolveApproval = onRequest(
           previewRowsJson?: string;
         };
 
+        const effectiveSpreadsheetId = editedData?.spreadsheetId || preview.spreadsheetId;
+        const effectiveRange = editedData?.range || preview.range;
+
         const oAuth2Client = await getAuthenticatedOAuth2Client(
           tenantId,
           userId,
@@ -471,7 +492,9 @@ export const resolveApproval = onRequest(
         );
 
         let rowsToWrite: (string | number)[][] = [];
-        if (typeof preview.rowsJson === "string") {
+        if (editedData?.rows && Array.isArray(editedData.rows) && editedData.rows.length > 0) {
+          rowsToWrite = editedData.rows;
+        } else if (typeof preview.rowsJson === "string") {
           try {
             const parsed = JSON.parse(preview.rowsJson);
             if (Array.isArray(parsed)) {
@@ -498,14 +521,19 @@ export const resolveApproval = onRequest(
           });
         }
 
+        updatedPreviewData.spreadsheetId = effectiveSpreadsheetId;
+        updatedPreviewData.range = effectiveRange;
+        updatedPreviewData.rowsJson = JSON.stringify(rowsToWrite);
+        updatedPreviewData.previewRows = rowsToWrite.slice(0, 5).map((cells) => ({ cells }));
+
         const { google } = await import("googleapis");
         const sheets = google.sheets({ version: "v4", auth: oAuth2Client });
 
         // Resolve active sheet tab name to handle Italian ("Foglio1"), English ("Sheet1"), or custom titles
-        let targetRange = preview.range || "A1";
+        let targetRange = effectiveRange || "A1";
         try {
           const meta = await sheets.spreadsheets.get({
-            spreadsheetId: preview.spreadsheetId,
+            spreadsheetId: effectiveSpreadsheetId,
             fields: "sheets.properties.title",
           });
           const sheetTitles = (meta.data.sheets || [])
@@ -533,7 +561,7 @@ export const resolveApproval = onRequest(
         }
 
         await sheets.spreadsheets.values.append({
-          spreadsheetId: preview.spreadsheetId,
+          spreadsheetId: effectiveSpreadsheetId,
           range: targetRange,
           valueInputOption: "USER_ENTERED",
           requestBody: { values: rowsToWrite },
@@ -550,6 +578,7 @@ export const resolveApproval = onRequest(
 
       await approvalRef.update({
         status: "approved",
+        previewData: updatedPreviewData,
         resolvedAt: new Date().toISOString(),
         resolvedBy: userId,
       });

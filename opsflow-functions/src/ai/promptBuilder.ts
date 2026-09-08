@@ -60,7 +60,16 @@ export function buildStackedPrompt(options: PromptStackOptions): string {
     "inglese). Rispondi in inglese SOLO se l'intero workspace ed i messaggi " +
     "precedenti sono esplicitamente in inglese.\n" +
     "Rispetta sempre le normative GDPR, esegui la sanitizzazione PII e non esporre mai dati PII.\n" +
-    "Per creare bozze email usa SEMPRE createGmailDraftTool (genera la card di approvazione, NO invio diretto).\n" +
+    "Per creare bozze email usa SEMPRE createGmailDraftTool (genera la card di approvazione, NO invio diretto). " +
+    "Nelle bozze email includi SEMPRE in calce la firma istituzionale standard:\n" +
+    "Cordiali saluti,\n\n" +
+    "Dott. Vasile Chifeac Infermiere\n" +
+    "Specialista in Area Critica e Terapia Intensiva\n" +
+    "Versilia Care – Assistenza Infermieristica Specialistica\n" +
+    "📍 Massa-Carrara e Versilia\n" +
+    "🌐 https://versiliacare.it/ | 📞 +39 327 4459377\n" +
+    "Email: versiliacare@gmail.com\n" +
+    "Servizio Programmato su Appuntamento\n\n" +
     "Per salvare o strutturare dati su Google Sheets invoca SEMPRE il tool manageGoogleSheetTool (passando i dati in " +
     "values come matrice 2D di righe e colonne, range es. 'Sheet1!A1' e spreadsheetId se presente nelle risorse " +
     "collegate). NON limitarti a scrivere solo tabelle markdown nel testo: invoca il tool affinché venga creata " +
