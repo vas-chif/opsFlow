@@ -376,6 +376,30 @@ async function getTenantDocById<T>(collectionName: string, docId: string): Promi
 } /*end getTenantDocById*/
 
 /**
+ * Recursively removes any undefined keys or nested undefined values from an object
+ * to ensure 100% compatibility with Firestore document updates.
+ */
+function sanitizeFirestoreData<T>(val: T): T {
+  if (val === null || val === undefined) return val;
+  if (val instanceof Date) return val;
+  if (Array.isArray(val)) {
+    return val
+      .filter((item) => item !== undefined)
+      .map((item) => sanitizeFirestoreData(item)) as unknown as T;
+  }
+  if (typeof val === "object") {
+    const clean: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+      if (v !== undefined) {
+        clean[k] = sanitizeFirestoreData(v);
+      }
+    }
+    return clean as T;
+  }
+  return val;
+}
+
+/**
  * Update a document in a tenant-scoped collection.
  */
 async function updateTenantDoc(
@@ -384,10 +408,10 @@ async function updateTenantDoc(
   data: Partial<DocumentData>,
 ): Promise<void> {
   const docRef = getTenantDoc(collectionName, docId);
-  const updateData = {
+  const updateData = sanitizeFirestoreData({
     ...data,
     updatedAt: new Date(),
-  };
+  });
 
   await updateDoc(docRef, updateData);
 } /*end updateTenantDoc*/

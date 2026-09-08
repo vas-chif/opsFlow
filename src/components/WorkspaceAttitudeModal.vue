@@ -639,16 +639,40 @@ const handleSave = async (): Promise<void> => {
     const masterFolderObj =
       linkedFolders.value.find((f: LinkedGoogleResource) => f.isMaster) || linkedFolders.value[0];
 
+    const cleanLinkedSheets = linkedSheets.value.map((s: LinkedGoogleResource) => {
+      const item: LinkedGoogleResource = {
+        id: s.id,
+        name: s.name,
+        type: s.type || "sheet",
+        isMaster: !!s.isMaster,
+      };
+      if (s.url) item.url = s.url;
+      if (s.addedAt) item.addedAt = s.addedAt;
+      return item;
+    });
+
+    const cleanLinkedFolders = linkedFolders.value.map((f: LinkedGoogleResource) => {
+      const item: LinkedGoogleResource = {
+        id: f.id,
+        name: f.name,
+        type: f.type || "folder",
+        isMaster: !!f.isMaster,
+      };
+      if (f.url) item.url = f.url;
+      if (f.addedAt) item.addedAt = f.addedAt;
+      return item;
+    });
+
     const linkedResources: WorkspaceLinkedResources = {
       googleEmail: googleEmail.value.trim() || (linkedEmails.value[0] ?? ""),
       linkedEmails: linkedEmails.value,
-      linkedSheets: linkedSheets.value,
-      linkedFolders: linkedFolders.value,
-      defaultSheetId: masterSheetObj?.id || defaultSheetId.value.trim(),
+      linkedSheets: cleanLinkedSheets,
+      linkedFolders: cleanLinkedFolders,
+      defaultSheetId: masterSheetObj?.id || defaultSheetId.value.trim() || "",
       defaultSheetName: masterSheetObj?.name || "Foglio Master",
-      defaultDriveFolderId: masterFolderObj?.id || defaultDriveFolderId.value.trim(),
+      defaultDriveFolderId: masterFolderObj?.id || defaultDriveFolderId.value.trim() || "",
       defaultDriveFolderName: masterFolderObj?.name || "Cartella Drive",
-      defaultEmailSignature: defaultEmailSignature.value.trim() || undefined,
+      defaultEmailSignature: defaultEmailSignature.value.trim(),
       isOAuthConnected: isOAuthConnected.value,
       assignedAgents: assignedAgents.value,
     };
@@ -677,10 +701,12 @@ const handleSave = async (): Promise<void> => {
     });
     emit("saved");
     isOpen.value = false;
-  } catch {
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    logger.error("WorkspaceAttitude", "Error saving Workspace configuration", { error: errorMsg });
     q.notify({
       type: "negative",
-      message: "Error saving Workspace configuration",
+      message: `Errore salvataggio configurazione: ${errorMsg}`,
       position: "top",
     });
   } finally {

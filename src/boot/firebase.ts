@@ -24,7 +24,7 @@ import { defineBoot } from "#q-app";
 // ── Firebase ─────────────────────────────────────────────────────────────────
 import { initializeApp, type FirebaseApp } from "firebase/app";
 import { getAuth, connectAuthEmulator, type Auth } from "firebase/auth";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import { initializeFirestore, type Firestore } from "firebase/firestore";
 
 // ── Stores ───────────────────────────────────────────────────────────────────
 import { useAuthStore } from "@/stores/authStore";
@@ -49,7 +49,9 @@ const firebaseConfig = {
 
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
-const db: Firestore = getFirestore(app);
+const db: Firestore = initializeFirestore(app, {
+  ignoreUndefinedProperties: true,
+});
 
 if (import.meta.env.DEV && String(import.meta.env.VITE_USE_EMULATOR) === "true") {
   try {
