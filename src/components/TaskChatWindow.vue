@@ -1225,7 +1225,6 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                 header-class="text-caption text-weight-bold text-primary q-pa-xs bg-blue-1 rounded-borders"
                 class="q-mb-sm task-subtasks-expansion rounded-borders"
                 style="border: 1px solid rgba(10, 35, 66, 0.15)"
-                default-opened
               >
                 <q-list dense separator class="q-pa-xs bg-white rounded-borders">
                   <q-item
@@ -1279,7 +1278,6 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                 label="Punti Chiave del Task"
                 header-class="text-caption text-weight-bold text-secondary q-pa-xs"
                 class="q-mb-sm task-kp-expansion"
-                default-opened
               >
                 <div class="q-px-xs q-pb-xs">
                   <TaskKeyPointsCard :task-id="task.id" :task="task" />

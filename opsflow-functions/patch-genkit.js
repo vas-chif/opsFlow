@@ -1,7 +1,7 @@
 /**
  * @file patch-genkit.js
- * @description Automatically patches @genkit-ai/google-genai converters to map tool responses to role 'user'.
- * Gemini 3.6 Flash / Google Generative Language API v1beta rejects role 'function' with HTTP 400.
+ * @description Automatically patches @genkit-ai/google-genai converters to map tool responses to role 'user',
+ * and removes broken monorepo tsconfig extends.
  */
 
 const fs = require("fs");
@@ -41,4 +41,21 @@ for (const filePath of filesToPatch) {
   }
 }
 
-console.log(`[patch-genkit] Finished. ${patchedCount} file(s) confirmed.`);
+// Patch tsconfig.json in @genkit-ai/google-genai to remove broken "extends": "../../tsconfig.json"
+const tsconfigPath = path.join(__dirname, "node_modules/@genkit-ai/google-genai/tsconfig.json");
+if (fs.existsSync(tsconfigPath)) {
+  try {
+    const originalTsConfig = fs.readFileSync(tsconfigPath, "utf8");
+    if (originalTsConfig.includes('"../../tsconfig.json"')) {
+      const fixedTsConfig = originalTsConfig.replace(/"extends":\s*"[^"]*",?\s*/g, "");
+      fs.writeFileSync(tsconfigPath, fixedTsConfig, "utf8");
+      console.log(`[patch-genkit] Successfully patched: ${path.relative(__dirname, tsconfigPath)}`);
+    } else {
+      console.log(`[patch-genkit] tsconfig.json already clean: ${path.relative(__dirname, tsconfigPath)}`);
+    }
+  } catch (err) {
+    console.error(`[patch-genkit] Failed to patch ${tsconfigPath}:`, err.message);
+  }
+}
+
+console.log(`[patch-genkit] Finished. ${patchedCount} converter file(s) confirmed.`);
