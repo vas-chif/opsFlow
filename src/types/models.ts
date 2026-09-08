@@ -128,14 +128,15 @@ export interface TaskChatMessage {
   id: string;
   taskId: string;
   sender: "user" | "agent";
-  agentName?: string;
+  agentName?: string | undefined;
   text: string;
   timestamp: string;
-  toolsUsed?: string[];
-  draftUrl?: string;
+  toolsUsed?: string[] | undefined;
+  draftUrl?: string | undefined;
   /** If present, render an <ApprovalCard> inline for this approval. */
-  approvalId?: string;
-  oauthError?: OAuthError;
+  approvalId?: string | undefined;
+  approvalRecord?: ApprovalRecord | undefined;
+  oauthError?: OAuthError | undefined;
 }
 
 /**

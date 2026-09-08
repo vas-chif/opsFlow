@@ -31,6 +31,28 @@ import { getFirestore } from "firebase-admin/firestore";
 // ── Utils ─────────────────────────────────────────────────────────────────────
 import { randomUUID } from "node:crypto";
 
+// ── Context Management ───────────────────────────────────────────────────────
+
+export interface GoogleWorkspaceContext {
+  tenantId?: string;
+  workspaceId?: string;
+  taskId?: string;
+  defaultSheetId?: string;
+}
+
+export const activeWorkspaceContext: GoogleWorkspaceContext = {};
+
+/**
+ * Sets the active workspace context for the current tool execution.
+ * @param {GoogleWorkspaceContext} ctx - Active request context
+ */
+export function setGoogleWorkspaceContext(ctx: GoogleWorkspaceContext): void {
+  activeWorkspaceContext.tenantId = ctx.tenantId;
+  activeWorkspaceContext.workspaceId = ctx.workspaceId;
+  activeWorkspaceContext.taskId = ctx.taskId;
+  activeWorkspaceContext.defaultSheetId = ctx.defaultSheetId;
+} /*end setGoogleWorkspaceContext*/
+
 // ── Input Schemas ─────────────────────────────────────────────────────────────
 
 /** Input schema for creating a Gmail draft approval. */
@@ -38,19 +60,27 @@ export const CreateGmailDraftSchema = z.object({
   to: z.string().describe("Recipient email address"),
   subject: z.string().describe("Email subject line"),
   body: z.string().describe("Formatted email body text"),
-  tenantId: z.string().describe("Tenant ID for Firestore isolation"),
-  workspaceId: z.string().describe("Workspace ID for scoping"),
-  taskId: z.string().describe("Task ID for approval subcollection"),
+  tenantId: z.string().optional().describe("Tenant ID for Firestore isolation"),
+  workspaceId: z.string().optional().describe("Workspace ID for scoping"),
+  taskId: z.string().optional().describe("Task ID for approval subcollection"),
 });
 
 /** Input schema for managing Google Sheets rows. */
 export const ManageGoogleSheetSchema = z.object({
-  spreadsheetId: z.string().describe("Target Google Spreadsheet ID"),
-  range: z.string().default("Sheet1!A1").describe("Sheet range or name"),
-  values: z.array(z.array(z.string())).describe("2D array of row values to append or update"),
-  tenantId: z.string().describe("Tenant ID for Firestore isolation"),
-  workspaceId: z.string().describe("Workspace ID for scoping"),
-  taskId: z.string().describe("Task ID for approval subcollection"),
+  spreadsheetId: z
+    .string()
+    .optional()
+    .describe("Target Google Spreadsheet ID (se omesso usa il foglio predefinito del workspace)"),
+  range: z
+    .string()
+    .default("Sheet1!A1")
+    .describe("Sheet range or name (es. Sheet1!A1 o NomeFoglio!A1)"),
+  values: z
+    .array(z.array(z.union([z.string(), z.number(), z.boolean()])))
+    .describe("2D array of row values to append or update"),
+  tenantId: z.string().optional().describe("Tenant ID for Firestore isolation"),
+  workspaceId: z.string().optional().describe("Workspace ID for scoping"),
+  taskId: z.string().optional().describe("Task ID for approval subcollection"),
 });
 
 // ── Genkit Tools ──────────────────────────────────────────────────────────────
@@ -73,27 +103,36 @@ export const createGmailDraftTool = ai.defineTool(
       approvalId: z.string(),
       status: z.literal("pending"),
       message: z.string(),
+      approvalRecord: z.any().optional(),
     }),
   },
   async ({ to, subject, body, tenantId, workspaceId, taskId }) => {
     const db = getFirestore();
     const approvalId = randomUUID();
 
+    const effectiveTenantId =
+      tenantId || activeWorkspaceContext.tenantId || "opsflow_tenant_default";
+    const effectiveWorkspaceId =
+      workspaceId || activeWorkspaceContext.workspaceId || "default_workspace";
+    const effectiveTaskId = taskId || activeWorkspaceContext.taskId || "default_task";
+
     const approvalsRef = db.collection(
-      `tenants/${tenantId}/workspaces/${workspaceId}/tasks/${taskId}/approvals`,
+      `tenants/${effectiveTenantId}/workspaces/${effectiveWorkspaceId}/tasks/${effectiveTaskId}/approvals`,
     );
 
-    await approvalsRef.doc(approvalId).set({
+    const approvalRecord = {
       id: approvalId,
-      taskId,
-      workspaceId,
-      tenantId,
+      taskId: effectiveTaskId,
+      workspaceId: effectiveWorkspaceId,
+      tenantId: effectiveTenantId,
       actionType: "gmail_draft",
       status: "pending",
       summary: `📧 Bozza Email → ${to} | Oggetto: "${subject}"`,
       previewData: { to, subject, body },
       createdAt: new Date().toISOString(),
-    });
+    };
+
+    await approvalsRef.doc(approvalId).set(approvalRecord);
 
     return {
       approvalId,
@@ -101,6 +140,7 @@ export const createGmailDraftTool = ai.defineTool(
       message:
         `📧 Bozza email pronta per "${to}" con oggetto "${subject}". ` +
         "Rivedi l'anteprima e clicca [✅ Approva ed Esegui] per creare la bozza su Gmail.",
+      approvalRecord,
     };
   },
 ); /* end createGmailDraftTool */
@@ -123,30 +163,46 @@ export const manageGoogleSheetTool = ai.defineTool(
       approvalId: z.string(),
       status: z.literal("pending"),
       message: z.string(),
+      approvalRecord: z.any().optional(),
     }),
   },
   async ({ spreadsheetId, range, values, tenantId, workspaceId, taskId }) => {
     const db = getFirestore();
     const approvalId = randomUUID();
 
+    const effectiveTenantId =
+      tenantId || activeWorkspaceContext.tenantId || "opsflow_tenant_default";
+    const effectiveWorkspaceId =
+      workspaceId || activeWorkspaceContext.workspaceId || "default_workspace";
+    const effectiveTaskId = taskId || activeWorkspaceContext.taskId || "default_task";
+    const effectiveSpreadsheetId =
+      spreadsheetId || activeWorkspaceContext.defaultSheetId || "default_sheet";
+
     const approvalsRef = db.collection(
-      `tenants/${tenantId}/workspaces/${workspaceId}/tasks/${taskId}/approvals`,
+      `tenants/${effectiveTenantId}/workspaces/${effectiveWorkspaceId}/tasks/${effectiveTaskId}/approvals`,
     );
 
     // Preview: show max 5 rows to keep Firestore document small
     const previewRows = values.slice(0, 5);
 
-    await approvalsRef.doc(approvalId).set({
+    const approvalRecord = {
       id: approvalId,
-      taskId,
-      workspaceId,
-      tenantId,
+      taskId: effectiveTaskId,
+      workspaceId: effectiveWorkspaceId,
+      tenantId: effectiveTenantId,
       actionType: "sheet_append",
       status: "pending",
-      summary: `📊 Aggiunta ${values.length} righe → Sheets ID: ${spreadsheetId.slice(0, 12)}...`,
-      previewData: { spreadsheetId, range, previewRows },
+      summary: `📊 Aggiunta ${values.length} righe → Sheets ID: ${effectiveSpreadsheetId.slice(0, 15)}...`,
+      previewData: {
+        spreadsheetId: effectiveSpreadsheetId,
+        range,
+        previewRows,
+        rows: values,
+      },
       createdAt: new Date().toISOString(),
-    });
+    };
+
+    await approvalsRef.doc(approvalId).set(approvalRecord);
 
     return {
       approvalId,
@@ -154,6 +210,7 @@ export const manageGoogleSheetTool = ai.defineTool(
       message:
         `📊 ${values.length} righe formattate per Google Sheets (${range}). ` +
         "Rivedi l'anteprima e clicca [✅ Approva ed Esegui] per scrivere su Sheets.",
+      approvalRecord,
     };
   },
 ); /* end manageGoogleSheetTool */

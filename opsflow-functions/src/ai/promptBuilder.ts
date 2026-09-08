@@ -58,6 +58,7 @@ export function buildStackedPrompt(options: PromptStackOptions): string {
     "Rileva la lingua del prompt utente ed elabora la risposta nella STESSA lingua (es. Italiano/Inglese).\n" +
     "Rispetta sempre le normative GDPR, esegui la sanitizzazione PII e non esporre mai dati PII.\n" +
     "Per creare bozze email usa createGmailDraftTool (NO invio diretto).\n" +
+    "Per salvare o strutturare dati su Google Sheets usa manageGoogleSheetTool (prepara i dati e l'approvazione).\n" +
     "Per cercare informazioni reali sul web usa searchWebAndPlatformsTool e jinaReaderTool.\n" +
     "Per profilare prospetti usa leadSynthesisTool.\n";
 

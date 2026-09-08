@@ -322,6 +322,7 @@ export const chatWithAgent = onRequest(
     try {
       const {
         message,
+        tenantId,
         workspaceId,
         taskId,
         workspacePrompt,
@@ -338,6 +339,7 @@ export const chatWithAgent = onRequest(
       const { chatWithAgentFlow } = await import("./ai/chatFlow.js");
       const result = await chatWithAgentFlow({
         message,
+        tenantId,
         workspaceId,
         taskId,
         workspacePrompt,
@@ -421,9 +423,12 @@ export const resolveApproval = onRequest(
     try {
       if (approval.actionType === "gmail_draft") {
         const preview = approval.previewData as { to: string; subject: string; body: string };
-        const oAuth2Client = await getAuthenticatedOAuth2Client(tenantId, userId, [
-          "https://www.googleapis.com/auth/gmail.compose",
-        ]);
+        const oAuth2Client = await getAuthenticatedOAuth2Client(
+          tenantId,
+          userId,
+          ["https://www.googleapis.com/auth/gmail.compose"],
+          workspaceId,
+        );
 
         const rawEmail = [
           `To: ${preview.to}`,
@@ -453,11 +458,18 @@ export const resolveApproval = onRequest(
           spreadsheetId: string;
           range: string;
           previewRows: string[][];
+          rows?: string[][];
         };
 
-        const oAuth2Client = await getAuthenticatedOAuth2Client(tenantId, userId, [
-          "https://www.googleapis.com/auth/spreadsheets",
-        ]);
+        const oAuth2Client = await getAuthenticatedOAuth2Client(
+          tenantId,
+          userId,
+          ["https://www.googleapis.com/auth/spreadsheets"],
+          workspaceId,
+        );
+
+        const rowsToWrite =
+          preview.rows && preview.rows.length > 0 ? preview.rows : preview.previewRows;
 
         const { google } = await import("googleapis");
         const sheets = google.sheets({ version: "v4", auth: oAuth2Client });
@@ -465,7 +477,7 @@ export const resolveApproval = onRequest(
           spreadsheetId: preview.spreadsheetId,
           range: preview.range,
           valueInputOption: "USER_ENTERED",
-          requestBody: { values: preview.previewRows },
+          requestBody: { values: rowsToWrite },
         });
 
         logger.info("resolveApproval: Sheets rows appended", { tenantId, taskId, approvalId });

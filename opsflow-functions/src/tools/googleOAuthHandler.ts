@@ -206,9 +206,19 @@ export async function getAuthenticatedOAuth2Client(
   requiredScopes: string[],
   workspaceId?: string,
 ): Promise<GoogleOAuth2Client> {
-  const tokenRef = resolveVaultRef(tenantId, userId, workspaceId);
+  let tokenRef = resolveVaultRef(tenantId, userId, workspaceId);
+  let snap = await tokenRef.get();
 
-  const snap = await tokenRef.get();
+  // Fallback: if not found in workspace vault, check user-scoped vault (and vice versa)
+  if (!snap.exists && workspaceId) {
+    const fallbackRef = resolveVaultRef(tenantId, userId);
+    const fallbackSnap = await fallbackRef.get();
+    if (fallbackSnap.exists) {
+      snap = fallbackSnap;
+      tokenRef = fallbackRef;
+    }
+  }
+
   if (!snap.exists) {
     throw new OAuthVaultError(
       "TOKEN_NOT_FOUND",

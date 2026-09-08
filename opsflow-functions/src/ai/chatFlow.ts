@@ -14,13 +14,18 @@ import { ai } from "./genkitConfig";
 import { z } from "genkit";
 import { sanitizePii } from "./piiSanitizer";
 import { buildStackedPrompt } from "./promptBuilder";
-import { createGmailDraftTool, manageGoogleSheetTool } from "../tools/googleWorkspace";
+import {
+  createGmailDraftTool,
+  manageGoogleSheetTool,
+  setGoogleWorkspaceContext,
+} from "../tools/googleWorkspace";
 import { searchWebAndPlatformsTool, leadSynthesisTool, jinaReaderTool } from "../tools/webSearch";
 import { contentMarketingTool } from "../tools/contentMarketing";
 
 /** Input schema for the chat flow. */
 export const ChatInputSchema = z.object({
   message: z.string().describe("User prompt or instruction sent from chat drawer"),
+  tenantId: z.string().optional().describe("Active tenant context ID"),
   workspaceId: z.string().optional().describe("Active workspace context ID"),
   taskId: z.string().optional().describe("Active task context ID"),
   workspacePrompt: z.string().optional().describe("Dynamic Workspace System Prompt from Firestore"),
@@ -72,13 +77,17 @@ export const chatWithAgentFlow = ai.defineFlow(
       reply: z.string(),
       agentName: z.string(),
       toolsUsed: z.array(z.string()),
+      approvalId: z.string().optional(),
+      approvalRecord: z.any().optional(),
     }),
   },
   async ({
     message,
+    tenantId,
+    workspaceId,
+    taskId,
     workspacePrompt,
     workspaceName,
-    taskId,
     history,
     attitude,
     linkedResources,
@@ -86,7 +95,15 @@ export const chatWithAgentFlow = ai.defineFlow(
     // 1. Sanitize user message for PII protection (GDPR Compliance)
     const sanitized = sanitizePii(message);
 
-    // 2. Format Sliding Window History (Last 5 messages max, 1000 chars per msg max)
+    // 2. Set active execution context for Google Workspace tools (prevents LLM missing ID errors)
+    setGoogleWorkspaceContext({
+      tenantId: tenantId || "opsflow_tenant_default",
+      workspaceId: workspaceId || "default_workspace",
+      taskId: taskId || "default_task",
+      defaultSheetId: linkedResources?.defaultSheetId,
+    });
+
+    // 3. Format Sliding Window History (Last 5 messages max, 1000 chars per msg max)
     let historyContext = "";
     if (history && history.length > 0) {
       const recentTurns = history.slice(-5);
@@ -98,7 +115,7 @@ export const chatWithAgentFlow = ai.defineFlow(
         `${cleanHistory}\n--- FINE CRONOLOGIA ---`;
     }
 
-    // 3. Build 3-Level Dynamic Stacked Prompt
+    // 4. Build 3-Level Dynamic Stacked Prompt
     const systemInstruction =
       buildStackedPrompt({
         userPrompt: sanitized.sanitizedText,
@@ -109,7 +126,7 @@ export const chatWithAgentFlow = ai.defineFlow(
         linkedResources,
       }) + historyContext;
 
-    // 4. Generate response with tool calling support via Gemini 3.6 Flash
+    // 5. Generate response with tool calling support via Gemini 3.6 Flash
     try {
       const llmResponse = await ai.generate({
         model: "googleai/gemini-3.6-flash",
@@ -128,12 +145,27 @@ export const chatWithAgentFlow = ai.defineFlow(
         llmResponse.text || "Operazione completata con successo dall'Agente IA OpsFlow.";
 
       const toolsUsed: string[] = [];
+      let approvalId: string | undefined;
+      let approvalRecord: unknown = undefined;
+
       if (llmResponse.messages) {
         for (const msg of llmResponse.messages) {
           if (msg.content) {
             for (const part of msg.content) {
               if (part.toolRequest) {
                 toolsUsed.push(part.toolRequest.name);
+              }
+              if (part.toolResponse && part.toolResponse.output) {
+                const out = part.toolResponse.output as {
+                  approvalId?: string;
+                  approvalRecord?: unknown;
+                };
+                if (out.approvalId) {
+                  approvalId = out.approvalId;
+                }
+                if (out.approvalRecord) {
+                  approvalRecord = out.approvalRecord;
+                }
               }
             }
           }
@@ -145,8 +177,15 @@ export const chatWithAgentFlow = ai.defineFlow(
         agentName: "Agente AI Assistant",
         toolsUsed:
           toolsUsed.length > 0 ? Array.from(new Set(toolsUsed)) : ["searchWebAndPlatformsTool"],
+        approvalId,
+        approvalRecord,
       };
-    } catch {
+    } catch (err) {
+      // Step 18: Structured error log on tool calling failure
+      console.error("[chatWithAgentFlow] Tool calling failed, fallback to direct mode:", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+
       // Fallback: Generate direct response without external tool calling if network/tools fail
       const fallbackResponse = await ai.generate({
         model: "googleai/gemini-3.6-flash",

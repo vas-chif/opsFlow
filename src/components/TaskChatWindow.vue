@@ -7,30 +7,43 @@
 -->
 
 <script setup lang="ts">
+// ── Vue & Framework ──────────────────────────────────────────────────────────
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { useQuasar } from "quasar";
-import { useTaskStore } from "../stores/taskStore";
-import { useTaskChatStore, type FloatingWindow } from "../stores/taskChatStore";
-import { useSecureLogger } from "../composables/useSecureLogger";
-import { useWebSpeech } from "../composables/useWebSpeech";
+
+// ── Types ────────────────────────────────────────────────────────────────────
 import type {
   TaskStatus,
   TaskKeyPoint,
   KeyPointCategory,
   TaskTimelineEvent,
+  TaskChatMessage,
+  ApprovalRecord,
 } from "../types/models";
+
+// ── Stores ───────────────────────────────────────────────────────────────────
+import { useAuthStore } from "../stores/authStore";
+import { useTaskStore } from "../stores/taskStore";
+import { useTaskChatStore, type FloatingWindow } from "../stores/taskChatStore";
+
+// ── Composables ──────────────────────────────────────────────────────────────
+import { useSecureLogger } from "../composables/useSecureLogger";
+import { useWebSpeech } from "../composables/useWebSpeech";
 
 // ── Components ───────────────────────────────────────────────────────────────
 import TaskKeyPointsCard from "./TaskKeyPointsCard.vue";
+import ApprovalCard from "./ApprovalCard.vue";
 
 const props = defineProps<{
   windowState: FloatingWindow;
 }>();
 
 const q = useQuasar();
+const authStore = useAuthStore();
 const taskStore = useTaskStore();
 const chatStore = useTaskChatStore();
 const logger = useSecureLogger();
+const isResolvingApproval = ref<string | null>(null);
 const {
   isListening,
   isSpeaking,
@@ -472,6 +485,7 @@ const handleSendChatMessage = async (): Promise<void> => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message: userText,
+        tenantId: authStore.tenantId || workspace.value?.tenantId || "opsflow_tenant_default",
         workspaceId: workspace.value?.id,
         taskId: task.value.id,
         workspacePrompt: workspace.value?.systemPrompt,
@@ -488,15 +502,22 @@ const handleSendChatMessage = async (): Promise<void> => {
     const data = await res.json().catch(() => null);
 
     if (data && data.reply) {
-      const finalReply = data.reply;
-      const finalAgentName = data.agentName || "Agente AI Assistant";
-      const finalTools: string[] = data.toolsUsed || [];
+      const finalReply: string = String(data.reply);
+      const finalAgentName: string = String(data.agentName || "Agente AI Assistant");
+      const finalTools: string[] = Array.isArray(data.toolsUsed) ? data.toolsUsed : [];
+      const approvalId: string | undefined =
+        typeof data.approvalId === "string" ? data.approvalId : undefined;
+      const approvalRecord: ApprovalRecord | undefined = data.approvalRecord || undefined;
+
+      if (approvalRecord) {
+        chatStore.appendApproval(taskId, approvalRecord);
+      }
 
       logger.success("CloudFunction", "Risposta ricevuta dalla Cloud Function", {
         status: res.status,
         reply: finalReply,
       });
-      chatStore.appendMessage(taskId, {
+      const newMsg: TaskChatMessage = {
         id: `agt-${Date.now()}`,
         taskId: taskId,
         sender: "agent",
@@ -504,7 +525,10 @@ const handleSendChatMessage = async (): Promise<void> => {
         text: finalReply,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         toolsUsed: finalTools,
-      });
+        approvalId,
+        approvalRecord,
+      };
+      chatStore.appendMessage(taskId, newMsg);
       // Extract key points from agent reply for the TaskKeyPointsCard panel
       parseKeyPointsFromReply(taskId, finalReply);
       fetchedOk = true;
@@ -537,6 +561,108 @@ const handleSendChatMessage = async (): Promise<void> => {
   chatStore.setAgentTyping(taskId, false);
   scrollToBottom();
 }; /*end handleSendChatMessage*/
+
+const getApprovalForMessage = (msg: TaskChatMessage): ApprovalRecord | null => {
+  if (!msg.approvalId && !msg.approvalRecord) return null;
+  const id = msg.approvalId || msg.approvalRecord?.id;
+  if (!id) return null;
+  const found = activeSession.value.approvals.find((a) => a.id === id);
+  return found || msg.approvalRecord || null;
+}; /*end getApprovalForMessage*/
+
+const handleApproveAction = async (approvalId: string): Promise<void> => {
+  if (!task.value || !approvalId) return;
+  const taskId = task.value.id;
+  const tenantId = authStore.tenantId || workspace.value?.tenantId || "opsflow_tenant_default";
+  const workspaceId = workspace.value?.id || "default_workspace";
+  const userId = authStore.user?.uid || "user_anonymous";
+
+  isResolvingApproval.value = approvalId;
+  try {
+    const res = await fetch(
+      "https://europe-west1-opsflow-88of.cloudfunctions.net/resolveApproval",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenantId,
+          workspaceId,
+          taskId,
+          approvalId,
+          userId,
+          decision: "approved",
+        }),
+      },
+    );
+    const result = await res.json().catch(() => null);
+    if (res.ok && result?.success) {
+      chatStore.resolveApprovalInSession(taskId, approvalId, "approved");
+      q.notify({
+        type: "positive",
+        message: "Azione approvata ed eseguita con successo!",
+        icon: "check_circle",
+      });
+    } else {
+      throw new Error(result?.error || "Errore durante l'esecuzione dell'azione.");
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    q.notify({
+      type: "negative",
+      message: `Errore approvazione: ${msg}`,
+      icon: "error",
+    });
+  } finally {
+    isResolvingApproval.value = null;
+  }
+}; /*end handleApproveAction*/
+
+const handleRejectAction = async (approvalId: string): Promise<void> => {
+  if (!task.value || !approvalId) return;
+  const taskId = task.value.id;
+  const tenantId = authStore.tenantId || workspace.value?.tenantId || "opsflow_tenant_default";
+  const workspaceId = workspace.value?.id || "default_workspace";
+  const userId = authStore.user?.uid || "user_anonymous";
+
+  isResolvingApproval.value = approvalId;
+  try {
+    const res = await fetch(
+      "https://europe-west1-opsflow-88of.cloudfunctions.net/resolveApproval",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenantId,
+          workspaceId,
+          taskId,
+          approvalId,
+          userId,
+          decision: "rejected",
+        }),
+      },
+    );
+    const result = await res.json().catch(() => null);
+    if (res.ok && result?.success) {
+      chatStore.resolveApprovalInSession(taskId, approvalId, "rejected");
+      q.notify({
+        type: "info",
+        message: "Azione rifiutata.",
+        icon: "cancel",
+      });
+    } else {
+      throw new Error(result?.error || "Errore durante il rifiuto dell'azione.");
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    q.notify({
+      type: "negative",
+      message: `Errore rifiuto: ${msg}`,
+      icon: "error",
+    });
+  } finally {
+    isResolvingApproval.value = null;
+  }
+}; /*end handleRejectAction*/
 
 /**
  * Lightweight parser that extracts structured key points from an agent reply.
@@ -1354,6 +1480,16 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                           </q-chip>
                         </div>
                       </q-chat-message>
+
+                      <!-- Approval Card (Human-in-the-Loop) -->
+                      <ApprovalCard
+                        v-if="getApprovalForMessage(msg)"
+                        :approval="getApprovalForMessage(msg)!"
+                        :is-resolving="isResolvingApproval === getApprovalForMessage(msg)!.id"
+                        class="q-my-sm q-ml-sm"
+                        @approve="handleApproveAction"
+                        @reject="handleRejectAction"
+                      />
                     </div>
 
                     <q-chat-message v-if="isSending" name="AI Agent" bg-color="grey-3">

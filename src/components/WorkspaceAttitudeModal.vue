@@ -749,6 +749,23 @@ const handleSave = async (): Promise<void> => {
                     <div class="text-caption text-grey-8">
                       Allows AI to interact with your Gmail, Google Sheets, and Google Drive.
                     </div>
+                    <!-- Connected Account Badge / Card -->
+                    <div
+                      v-if="
+                        isOAuthConnected &&
+                        (googleEmail || (linkedEmails && linkedEmails.length > 0))
+                      "
+                      class="row items-center q-gutter-xs q-mt-xs bg-white q-px-sm q-py-2xs rounded-borders"
+                      style="border: 1px solid rgba(10, 35, 66, 0.15); display: inline-flex"
+                    >
+                      <q-icon name="mark_email_read" size="14px" color="positive" />
+                      <span class="text-caption text-weight-bold text-navy"
+                        >Account collegato:</span
+                      >
+                      <span class="text-caption text-weight-bold text-primary">
+                        {{ googleEmail || linkedEmails[0] }}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <q-btn
