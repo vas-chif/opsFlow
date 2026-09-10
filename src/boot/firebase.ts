@@ -51,6 +51,7 @@ const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth: Auth = getAuth(app);
 const db: Firestore = initializeFirestore(app, {
   ignoreUndefinedProperties: true,
+  experimentalForceLongPolling: true,
 });
 
 if (import.meta.env.DEV && String(import.meta.env.VITE_USE_EMULATOR) === "true") {

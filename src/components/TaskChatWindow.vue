@@ -209,12 +209,15 @@ const scheduledJobStatusLabel = computed<string>(() => {
   }
 });
 
+let isFetchingScheduledJob = false;
 const fetchActiveScheduledJob = async (): Promise<void> => {
+  if (isFetchingScheduledJob) return;
   const tId = authStore.tenantId;
   const wsId = workspace.value?.id || task.value?.workspaceId;
   const taskId = task.value?.id;
   if (!tId || !wsId || !taskId) return;
 
+  isFetchingScheduledJob = true;
   try {
     const db = getFirestore();
     const qCol = query(
@@ -231,8 +234,14 @@ const fetchActiveScheduledJob = async (): Promise<void> => {
     } else {
       activeScheduledJob.value = null;
     }
-  } catch (err) {
-    logger.warn("TaskChatWindow", "Failed to fetch active scheduled job", { err });
+  } catch (err: unknown) {
+    const firebaseErr = err as { code?: string; message?: string };
+    logger.warn("TaskChatWindow", "Failed to fetch active scheduled job", {
+      code: firebaseErr.code || "unknown",
+      message: firebaseErr.message || String(err),
+    });
+  } finally {
+    isFetchingScheduledJob = false;
   }
 }; /*end fetchActiveScheduledJob*/
 
@@ -461,14 +470,18 @@ const initTaskTimeline = (): void => {
 onMounted(() => {
   window.addEventListener("keydown", handleKeyDown);
   initTaskTimeline();
-  fetchActiveScheduledJob();
 });
 
 watch(
   () => task.value?.id,
-  () => {
-    fetchActiveScheduledJob();
+  (newTaskId) => {
+    if (newTaskId) {
+      fetchActiveScheduledJob();
+    } else {
+      activeScheduledJob.value = null;
+    }
   },
+  { immediate: true },
 );
 
 onUnmounted(() => {
