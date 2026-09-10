@@ -21,6 +21,7 @@ import {
 } from "../tools/googleWorkspace";
 import { searchWebAndPlatformsTool, leadSynthesisTool, jinaReaderTool } from "../tools/webSearch";
 import { contentMarketingTool } from "../tools/contentMarketing";
+import { syncTaskEventToMasterSheet } from "../tools/masterSheetLogger";
 
 /** Input schema for the chat flow. */
 export const ChatInputSchema = z.object({
@@ -28,6 +29,7 @@ export const ChatInputSchema = z.object({
   tenantId: z.string().optional().describe("Active tenant context ID"),
   workspaceId: z.string().optional().describe("Active workspace context ID"),
   taskId: z.string().optional().describe("Active task context ID"),
+  taskTitle: z.string().optional().describe("Active task title"),
   workspacePrompt: z.string().optional().describe("Dynamic Workspace System Prompt from Firestore"),
   workspaceName: z.string().optional().describe("Active workspace name"),
   history: z
@@ -72,6 +74,7 @@ export const ChatInputSchema = z.object({
       selectedSheetTab: z.string().optional(),
       emailSignature: z.string().optional(),
       emailHeader: z.string().optional(),
+      syncToMasterSheet: z.boolean().optional(),
     })
     .optional()
     .describe("Specific task settings such as assigned sheets, tab, and custom signature"),
@@ -118,6 +121,7 @@ export const chatWithAgentFlow = ai.defineFlow(
     tenantId,
     workspaceId,
     taskId,
+    taskTitle,
     workspacePrompt,
     workspaceName,
     history,
@@ -216,12 +220,7 @@ export const chatWithAgentFlow = ai.defineFlow(
           if (Array.isArray(toolCalls)) {
             for (const call of toolCalls) {
               if (call.name === "manageGoogleSheetTool" && call.args) {
-                const toolRes = await manageGoogleSheetTool({
-                  ...call.args,
-                  tenantId,
-                  workspaceId,
-                  taskId,
-                });
+                const toolRes = await manageGoogleSheetTool(call.args);
                 approvalId = toolRes.approvalId;
                 approvalRecord = toolRes.approvalRecord;
                 toolsUsed.push("manageGoogleSheetTool");
@@ -229,12 +228,7 @@ export const chatWithAgentFlow = ai.defineFlow(
                   "📊 Ho estratto e organizzato i dati nel foglio Google Sheets. " +
                   "Verifica l'anteprima nella scheda sottostante e clicca [✅ Approva ed Esegui] per confermare.";
               } else if (call.name === "createGmailDraftTool" && call.args) {
-                const toolRes = await createGmailDraftTool({
-                  ...call.args,
-                  tenantId,
-                  workspaceId,
-                  taskId,
-                });
+                const toolRes = await createGmailDraftTool(call.args);
                 approvalId = toolRes.approvalId;
                 approvalRecord = toolRes.approvalRecord;
                 toolsUsed.push("createGmailDraftTool");
@@ -247,6 +241,21 @@ export const chatWithAgentFlow = ai.defineFlow(
         } catch (parseErr) {
           console.warn("[chatWithAgentFlow] Failed to auto-parse textual tool_calls:", parseErr);
         }
+      }
+
+      // Background sync to Master Google Sheet if enabled on this task
+      if (taskSettings?.syncToMasterSheet && taskId && workspaceId) {
+        syncTaskEventToMasterSheet({
+          tenantId: tenantId || "opsflow_tenant_default",
+          workspaceId,
+          taskId,
+          taskTitle: taskTitle || workspaceName || "Task OpsFlow",
+          eventType: "PROMPT_UTENTE",
+          summary: sanitized.sanitizedText.slice(0, 300),
+          detail: `Risposta IA: ${replyText.slice(0, 1500)}`,
+        }).catch((syncErr) => {
+          console.warn("[chatWithAgentFlow] Master sheet sync error:", syncErr);
+        });
       }
 
       return {
@@ -296,12 +305,7 @@ export const chatWithAgentFlow = ai.defineFlow(
           if (Array.isArray(toolCalls)) {
             for (const call of toolCalls) {
               if (call.name === "manageGoogleSheetTool" && call.args) {
-                const toolRes = await manageGoogleSheetTool({
-                  ...call.args,
-                  tenantId,
-                  workspaceId,
-                  taskId,
-                });
+                const toolRes = await manageGoogleSheetTool(call.args);
                 approvalId = toolRes.approvalId;
                 approvalRecord = toolRes.approvalRecord;
                 toolsUsed.push("manageGoogleSheetTool");
@@ -309,12 +313,7 @@ export const chatWithAgentFlow = ai.defineFlow(
                   "📊 Ho estratto e organizzato i dati nel foglio Google Sheets. " +
                   "Verifica l'anteprima nella scheda sottostante e clicca [✅ Approva ed Esegui] per confermare.";
               } else if (call.name === "createGmailDraftTool" && call.args) {
-                const toolRes = await createGmailDraftTool({
-                  ...call.args,
-                  tenantId,
-                  workspaceId,
-                  taskId,
-                });
+                const toolRes = await createGmailDraftTool(call.args);
                 approvalId = toolRes.approvalId;
                 approvalRecord = toolRes.approvalRecord;
                 toolsUsed.push("createGmailDraftTool");
@@ -327,6 +326,21 @@ export const chatWithAgentFlow = ai.defineFlow(
         } catch (parseErr) {
           console.warn("[chatWithAgentFlow] Fallback parse error:", parseErr);
         }
+      }
+
+      // Background sync to Master Google Sheet if enabled on this task
+      if (taskSettings?.syncToMasterSheet && taskId && workspaceId) {
+        syncTaskEventToMasterSheet({
+          tenantId: tenantId || "opsflow_tenant_default",
+          workspaceId,
+          taskId,
+          taskTitle: taskTitle || workspaceName || "Task OpsFlow",
+          eventType: "PROMPT_UTENTE",
+          summary: sanitized.sanitizedText.slice(0, 300),
+          detail: `Risposta IA: ${reply.slice(0, 1500)}`,
+        }).catch((syncErr) => {
+          console.warn("[chatWithAgentFlow] Master sheet sync error (fallback):", syncErr);
+        });
       }
 
       return {

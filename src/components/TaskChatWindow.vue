@@ -25,6 +25,7 @@ import type {
 import { useAuthStore } from "../stores/authStore";
 import { useTaskStore } from "../stores/taskStore";
 import { useTaskChatStore, type FloatingWindow } from "../stores/taskChatStore";
+import { useTimelineStore } from "../stores/timelineStore";
 
 // ── Composables ──────────────────────────────────────────────────────────────
 import { useSecureLogger } from "../composables/useSecureLogger";
@@ -43,6 +44,7 @@ const q = useQuasar();
 const authStore = useAuthStore();
 const taskStore = useTaskStore();
 const chatStore = useTaskChatStore();
+const timelineStore = useTimelineStore();
 const logger = useSecureLogger();
 const isResolvingApproval = ref<string | null>(null);
 const {
@@ -60,7 +62,13 @@ const task = computed(
   () => taskStore.tasks.find((t) => t.id === props.windowState.taskId) ?? props.windowState.task,
 );
 const workspace = computed(
-  () => taskStore.workspaces.find((w) => w.id === props.windowState.workspaceId) ?? null,
+  () =>
+    taskStore.workspaces.find(
+      (w) =>
+        w.id === props.windowState.workspaceId ||
+        w.name === props.windowState.workspaceId ||
+        w.id === task.value?.workspaceId,
+    ) ?? null,
 );
 
 const chatMessage = ref("");
@@ -120,28 +128,41 @@ const resizeStart = ref({ x: 0, y: 0, w: 0, h: 0 });
 const isFullscreen = computed(() => !!props.windowState.isFullscreen);
 const viewMode = ref<"both" | "details" | "chat" | "timeline">("both");
 const splitterModel = ref(46); // balanced default: left details, right chat + timeline
-const showTimeline = ref(true);
-const chatTimelineSplitterModel = ref(62); // 62% chat, 38% timeline
-const savedSplitterRatio = ref(62);
+
+// Timeline section: default CLOSED (showTimeline = false), persisted via Pinia
+const showTimeline = computed(() => timelineStore.showTimeline);
+const chatTimelineSplitterModel = ref(
+  timelineStore.showTimeline ? timelineStore.savedSplitterRatio : 100,
+);
+
+// Persist user-adjusted splitter ratio when timeline is open
+watch(chatTimelineSplitterModel, (newVal) => {
+  if (timelineStore.showTimeline && newVal < 98) {
+    timelineStore.setSplitterRatio(newVal);
+  }
+});
 
 const showNoteDialog = ref(false);
 const selectedTimelineEntry = ref<TaskTimelineEvent | null>(null);
 const currentNoteText = ref("");
 
-type TimelineLayout = "dense" | "comfortable" | "loose";
-type TimelineSide = "right" | "left";
+const timelineLayout = computed({
+  get: () => timelineStore.timelineLayout,
+  set: (val) => timelineStore.setTimelineLayout(val),
+});
 
-const timelineLayout = ref<TimelineLayout>("dense");
-const timelineSide = ref<TimelineSide>("right");
+const timelineSide = computed({
+  get: () => timelineStore.timelineSide,
+  set: (val) => timelineStore.setTimelineSide(val),
+});
 
 const toggleTimeline = (): void => {
-  showTimeline.value = !showTimeline.value;
-  if (!showTimeline.value) {
-    savedSplitterRatio.value = chatTimelineSplitterModel.value;
+  timelineStore.toggleTimeline();
+  if (!timelineStore.showTimeline) {
     chatTimelineSplitterModel.value = 100;
   } else {
     chatTimelineSplitterModel.value =
-      savedSplitterRatio.value < 100 ? savedSplitterRatio.value : 62;
+      timelineStore.savedSplitterRatio < 100 ? timelineStore.savedSplitterRatio : 62;
   }
 }; /*end toggleTimeline*/
 
@@ -496,8 +517,9 @@ const handleSendChatMessage = async (): Promise<void> => {
       body: JSON.stringify({
         message: userText,
         tenantId: authStore.tenantId || workspace.value?.tenantId || "opsflow_tenant_default",
-        workspaceId: workspace.value?.id,
+        workspaceId: workspace.value?.id || task.value?.workspaceId || "main",
         taskId: task.value.id,
+        taskTitle: task.value.title,
         workspacePrompt: workspace.value?.systemPrompt,
         workspaceName: workspace.value?.name,
         history: activeSession.value.messages.slice(-6, -1).map((m) => ({
@@ -678,11 +700,23 @@ const getApprovalForMessage = (msg: TaskChatMessage): ApprovalRecord | null => {
 const handleApproveAction = async (
   approvalId: string,
   editedData?: Record<string, unknown>,
+  context?: { tenantId?: string; workspaceId?: string; taskId?: string },
 ): Promise<void> => {
   if (!task.value || !approvalId) return;
-  const taskId = task.value.id;
-  const tenantId = authStore.tenantId || workspace.value?.tenantId || "opsflow_tenant_default";
-  const workspaceId = workspace.value?.id || "default_workspace";
+  const foundApproval = activeSession.value.approvals.find((a) => a.id === approvalId);
+  const taskId = context?.taskId || foundApproval?.taskId || task.value.id;
+  const tenantId =
+    context?.tenantId ||
+    foundApproval?.tenantId ||
+    authStore.tenantId ||
+    workspace.value?.tenantId ||
+    "opsflow_tenant_default";
+  const workspaceId =
+    workspace.value?.id ||
+    task.value.workspaceId ||
+    context?.workspaceId ||
+    foundApproval?.workspaceId ||
+    "main";
   const userId = authStore.user?.uid || "user_anonymous";
 
   isResolvingApproval.value = approvalId;
@@ -728,11 +762,25 @@ const handleApproveAction = async (
   }
 }; /*end handleApproveAction*/
 
-const handleRejectAction = async (approvalId: string): Promise<void> => {
+const handleRejectAction = async (
+  approvalId: string,
+  context?: { tenantId?: string; workspaceId?: string; taskId?: string },
+): Promise<void> => {
   if (!task.value || !approvalId) return;
-  const taskId = task.value.id;
-  const tenantId = authStore.tenantId || workspace.value?.tenantId || "opsflow_tenant_default";
-  const workspaceId = workspace.value?.id || "default_workspace";
+  const foundApproval = activeSession.value.approvals.find((a) => a.id === approvalId);
+  const taskId = context?.taskId || foundApproval?.taskId || task.value.id;
+  const tenantId =
+    context?.tenantId ||
+    foundApproval?.tenantId ||
+    authStore.tenantId ||
+    workspace.value?.tenantId ||
+    "opsflow_tenant_default";
+  const workspaceId =
+    workspace.value?.id ||
+    task.value.workspaceId ||
+    context?.workspaceId ||
+    foundApproval?.workspaceId ||
+    "main";
   const userId = authStore.user?.uid || "user_anonymous";
 
   isResolvingApproval.value = approvalId;

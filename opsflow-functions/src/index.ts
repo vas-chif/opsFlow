@@ -53,6 +53,7 @@ import {
   saveOAuthToken,
   OAuthVaultError,
 } from "./tools/googleOAuthHandler";
+import { syncTaskEventToMasterSheet } from "./tools/masterSheetLogger";
 
 // ── RBAC: JWT Middleware Helper (Fase 1.2) ────────────────────────────────────
 
@@ -398,21 +399,62 @@ export const resolveApproval = onRequest(
       return;
     }
 
+    logger.info("resolveApproval called", {
+      tenantId,
+      workspaceId,
+      taskId,
+      approvalId,
+      userId,
+      decision,
+    });
+
     const db = getFirestore();
-    const approvalRef = db.doc(
+    let approvalRef = db.doc(
       `tenants/${tenantId}/workspaces/${workspaceId}/tasks/${taskId}/approvals/${approvalId}`,
     );
 
-    const snap = await approvalRef.get();
+    let snap = await approvalRef.get();
     if (!snap.exists) {
-      res.status(404).json({ error: "Approval record not found." });
-      return;
+      logger.warn("resolveApproval: exact path not found, running resilient fallback query", {
+        path: approvalRef.path,
+        approvalId,
+      });
+
+      const querySnap = await db
+        .collectionGroup("approvals")
+        .where("id", "==", approvalId)
+        .limit(1)
+        .get();
+
+      if (!querySnap.empty) {
+        const foundDoc = querySnap.docs[0];
+        const foundData = foundDoc.data();
+        // Multi-tenant isolation check (GDPR Art. 32 / §3)
+        if (foundData.tenantId && foundData.tenantId !== tenantId) {
+          logger.error("resolveApproval: tenant mismatch on fallback query", {
+            reqTenant: tenantId,
+            docTenant: foundData.tenantId,
+          });
+          res.status(403).json({ error: "Access denied: tenant mismatch." });
+          return;
+        }
+        approvalRef = foundDoc.ref;
+        snap = foundDoc;
+        logger.info("resolveApproval: document successfully resolved via resilient fallback", {
+          resolvedPath: foundDoc.ref.path,
+        });
+      } else {
+        logger.warn("resolveApproval: document not found across entire tenant", { approvalId });
+        res.status(404).json({ error: "Approval record not found." });
+        return;
+      }
     }
 
     const approval = snap.data() as {
       status: string;
       actionType: string;
       previewData: Record<string, unknown>;
+      summary?: string;
     };
 
     if (approval.status !== "pending") {
@@ -456,16 +498,24 @@ export const resolveApproval = onRequest(
           workspaceId,
         );
 
+        // RFC 2047: MIME-encode subject in Base64 UTF-8 to preserve accents (e.g. "continuità")
+        const encodedSubject = `=?UTF-8?B?${Buffer.from(effectiveSubject, "utf-8").toString("base64")}?=`;
+
+        // RFC 2045: Base64 encode email body to guarantee 100% UTF-8 preservation (no ISO-8859-1 fallback)
+        const base64Body = Buffer.from(effectiveBody, "utf-8").toString("base64");
+        const formattedBody = base64Body.match(/.{1,76}/g)?.join("\r\n") || base64Body;
+
         const rawEmail = [
-          `To: ${effectiveTo}`,
-          `Subject: ${effectiveSubject}`,
-          "Content-Type: text/plain; charset=utf-8",
           "MIME-Version: 1.0",
+          `To: ${effectiveTo}`,
+          `Subject: ${encodedSubject}`,
+          "Content-Type: text/plain; charset=\"UTF-8\"",
+          "Content-Transfer-Encoding: base64",
           "",
-          effectiveBody,
+          formattedBody,
         ].join("\r\n");
 
-        const encodedMessage = Buffer.from(rawEmail)
+        const encodedMessage = Buffer.from(rawEmail, "utf-8")
           .toString("base64")
           .replace(/\+/g, "-")
           .replace(/\//g, "_")
@@ -613,6 +663,25 @@ export const resolveApproval = onRequest(
         previewData: updatedPreviewData,
         resolvedAt: new Date().toISOString(),
         resolvedBy: userId,
+      });
+
+      let actionDetail = `Righe foglio Sheets: ${updatedPreviewData.spreadsheetId}`;
+      if (approval.actionType === "gmail_draft") {
+        actionDetail = `Bozza email: ${updatedPreviewData.to} | "${updatedPreviewData.subject}"`;
+      }
+
+      // Asynchronously record approved action to Master Sheet if enabled
+      syncTaskEventToMasterSheet({
+        tenantId,
+        workspaceId,
+        taskId,
+        taskTitle: approval.summary || `Task ${taskId.slice(0, 8)}`,
+        userId,
+        eventType: "AZIONE_ESEGUITA",
+        summary: approval.summary || `Azione ${approval.actionType} approvata ed eseguita.`,
+        detail: actionDetail,
+      }).catch((masterLogErr) => {
+        logger.warn("resolveApproval: non-blocking master sheet logging failed", { masterLogErr });
       });
 
       res.status(200).json({ success: true, status: "approved" });

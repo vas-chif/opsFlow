@@ -26,7 +26,7 @@ import { ai } from "../ai/genkitConfig";
 import { z } from "genkit";
 
 // ── Firebase ──────────────────────────────────────────────────────────────────
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, Firestore } from "firebase-admin/firestore";
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
 import { randomUUID } from "node:crypto";
@@ -60,9 +60,6 @@ export const CreateGmailDraftSchema = z.object({
   to: z.string().describe("Recipient email address"),
   subject: z.string().describe("Email subject line"),
   body: z.string().describe("Formatted email body text"),
-  tenantId: z.string().optional().describe("Tenant ID for Firestore isolation"),
-  workspaceId: z.string().optional().describe("Workspace ID for scoping"),
-  taskId: z.string().optional().describe("Task ID for approval subcollection"),
 });
 
 /** Input schema for managing Google Sheets rows. */
@@ -78,10 +75,46 @@ export const ManageGoogleSheetSchema = z.object({
   values: z
     .array(z.array(z.string()))
     .describe("2D array of row values to append or update (matrix of cell string values)"),
-  tenantId: z.string().optional().describe("Tenant ID for Firestore isolation"),
-  workspaceId: z.string().optional().describe("Workspace ID for scoping"),
-  taskId: z.string().optional().describe("Task ID for approval subcollection"),
 });
+
+/**
+ * Resolves a workspace ID, handling cases where a workspace name or slug was provided instead of the Firestore doc ID.
+ *
+ * @param {Firestore} db - Firestore database instance
+ * @param {string} tenantId - Multi-tenant isolation identifier
+ * @param {string} candidateWorkspaceId - Candidate workspace identifier or name
+ * @return {Promise<string>} The canonical workspace document ID
+ */
+async function resolveEffectiveWorkspaceId(
+  db: Firestore,
+  tenantId: string,
+  candidateWorkspaceId: string,
+): Promise<string> {
+  if (!candidateWorkspaceId || candidateWorkspaceId === "main") {
+    return candidateWorkspaceId || "main";
+  }
+  try {
+    const wsDoc = await db.doc(`tenants/${tenantId}/workspaces/${candidateWorkspaceId}`).get();
+    if (wsDoc.exists) return candidateWorkspaceId;
+
+    const wsByName = await db
+      .collection(`tenants/${tenantId}/workspaces`)
+      .where("name", "==", candidateWorkspaceId)
+      .limit(1)
+      .get();
+    if (!wsByName.empty) {
+      return wsByName.docs[0].id;
+    }
+
+    const mainWs = await db.doc(`tenants/${tenantId}/workspaces/main`).get();
+    if (mainWs.exists) {
+      return "main";
+    }
+  } catch {
+    // Non-blocking fallback
+  }
+  return candidateWorkspaceId;
+} /* end resolveEffectiveWorkspaceId */
 
 // ── Genkit Tools ──────────────────────────────────────────────────────────────
 
@@ -106,15 +139,18 @@ export const createGmailDraftTool = ai.defineTool(
       approvalRecord: z.any().optional(),
     }),
   },
-  async ({ to, subject, body, tenantId, workspaceId, taskId }) => {
+  async ({ to, subject, body }) => {
     const db = getFirestore();
     const approvalId = randomUUID();
 
-    const effectiveTenantId =
-      tenantId || activeWorkspaceContext.tenantId || "opsflow_tenant_default";
-    const effectiveWorkspaceId =
-      workspaceId || activeWorkspaceContext.workspaceId || "default_workspace";
-    const effectiveTaskId = taskId || activeWorkspaceContext.taskId || "default_task";
+    const effectiveTenantId = activeWorkspaceContext.tenantId || "opsflow_tenant_default";
+    const rawWorkspaceId = activeWorkspaceContext.workspaceId || "main";
+    const effectiveWorkspaceId = await resolveEffectiveWorkspaceId(
+      db,
+      effectiveTenantId,
+      rawWorkspaceId,
+    );
+    const effectiveTaskId = activeWorkspaceContext.taskId || "default_task";
 
     const approvalsRef = db.collection(
       `tenants/${effectiveTenantId}/workspaces/${effectiveWorkspaceId}/tasks/${effectiveTaskId}/approvals`,
@@ -166,15 +202,18 @@ export const manageGoogleSheetTool = ai.defineTool(
       approvalRecord: z.any().optional(),
     }),
   },
-  async ({ spreadsheetId, range, values, tenantId, workspaceId, taskId }) => {
+  async ({ spreadsheetId, range, values }) => {
     const db = getFirestore();
     const approvalId = randomUUID();
 
-    const effectiveTenantId =
-      tenantId || activeWorkspaceContext.tenantId || "opsflow_tenant_default";
-    const effectiveWorkspaceId =
-      workspaceId || activeWorkspaceContext.workspaceId || "default_workspace";
-    const effectiveTaskId = taskId || activeWorkspaceContext.taskId || "default_task";
+    const effectiveTenantId = activeWorkspaceContext.tenantId || "opsflow_tenant_default";
+    const rawWorkspaceId = activeWorkspaceContext.workspaceId || "main";
+    const effectiveWorkspaceId = await resolveEffectiveWorkspaceId(
+      db,
+      effectiveTenantId,
+      rawWorkspaceId,
+    );
+    const effectiveTaskId = activeWorkspaceContext.taskId || "default_task";
     const effectiveSpreadsheetId =
       spreadsheetId || activeWorkspaceContext.defaultSheetId || "default_sheet";
 

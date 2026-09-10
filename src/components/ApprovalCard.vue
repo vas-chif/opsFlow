@@ -30,8 +30,17 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: "approve", approvalId: string, editedData?: Record<string, unknown>): void;
-  (e: "reject", approvalId: string): void;
+  (
+    e: "approve",
+    approvalId: string,
+    editedData?: Record<string, unknown>,
+    context?: { tenantId?: string; workspaceId?: string; taskId?: string },
+  ): void;
+  (
+    e: "reject",
+    approvalId: string,
+    context?: { tenantId?: string; workspaceId?: string; taskId?: string },
+  ): void;
 }>();
 
 const q = useQuasar();
@@ -224,12 +233,20 @@ const onApprove = (): void => {
     };
   }
   isExpanded.value = false;
-  emit("approve", props.approval.id, editedPayload);
+  emit("approve", props.approval.id, editedPayload, {
+    tenantId: props.approval.tenantId,
+    workspaceId: props.approval.workspaceId,
+    taskId: props.approval.taskId,
+  });
 }; /*end onApprove*/
 
 const onReject = (): void => {
   isExpanded.value = false;
-  emit("reject", props.approval.id);
+  emit("reject", props.approval.id, {
+    tenantId: props.approval.tenantId,
+    workspaceId: props.approval.workspaceId,
+    taskId: props.approval.taskId,
+  });
 }; /*end onReject*/
 </script>
 

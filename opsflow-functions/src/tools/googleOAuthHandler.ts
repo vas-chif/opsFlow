@@ -209,8 +209,64 @@ export async function getAuthenticatedOAuth2Client(
   let tokenRef = resolveVaultRef(tenantId, userId, workspaceId);
   let snap = await tokenRef.get();
 
-  // Fallback: if not found in workspace vault, check user-scoped vault (and vice versa)
+  const db = getFirestore();
+
+  // Fallback 1: If workspaceId was provided but not found, check if workspaceId matches a workspace by name
   if (!snap.exists && workspaceId) {
+    try {
+      const wsByNameQuery = await db
+        .collection(`tenants/${tenantId}/workspaces`)
+        .where("name", "==", workspaceId)
+        .limit(1)
+        .get();
+      if (!wsByNameQuery.empty) {
+        const resolvedDoc = wsByNameQuery.docs[0];
+        const altRef = db.doc(`tenants/${tenantId}/workspaces/${resolvedDoc.id}/integrations/google`);
+        const altSnap = await altRef.get();
+        if (altSnap.exists) {
+          snap = altSnap;
+          tokenRef = altRef;
+        }
+      }
+    } catch {
+      // Non-blocking fallback
+    }
+  }
+
+  // Fallback 2: Check default workspace 'main'
+  if (!snap.exists && workspaceId !== "main") {
+    try {
+      const mainRef = db.doc(`tenants/${tenantId}/workspaces/main/integrations/google`);
+      const mainSnap = await mainRef.get();
+      if (mainSnap.exists) {
+        snap = mainSnap;
+        tokenRef = mainRef;
+      }
+    } catch {
+      // Non-blocking fallback
+    }
+  }
+
+  // Fallback 3: Check any workspace in this tenant with a valid Google integration
+  if (!snap.exists) {
+    try {
+      const allWs = await db.collection(`tenants/${tenantId}/workspaces`).get();
+      for (const wsDoc of allWs.docs) {
+        const candRef = db.doc(`tenants/${tenantId}/workspaces/${wsDoc.id}/integrations/google`);
+        const candSnap = await candRef.get();
+        if (candSnap.exists) {
+          snap = candSnap;
+          tokenRef = candRef;
+          break;
+        }
+      }
+    } catch {
+      // Non-blocking fallback
+    }
+  }
+
+  // Fallback 4: Check user-scoped vault (legacy)
+  if (!snap.exists) {
     const fallbackRef = resolveVaultRef(tenantId, userId);
     const fallbackSnap = await fallbackRef.get();
     if (fallbackSnap.exists) {
