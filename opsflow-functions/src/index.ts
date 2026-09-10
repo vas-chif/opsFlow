@@ -2074,6 +2074,9 @@ export const provisionInitialTenant = onCall(
  * Normalizes a candidate's full name for Dual-Key Deduplication.
  * Converts to lowercase, trims whitespace, and removes common accented characters.
  * Example: "Pino Villà " → "pino villa"
+ *
+ * @param {string} name - Candidate full name
+ * @return {string} Normalized lowercased name
  */
 function normalizeCandidateName(name: string): string {
   return name
@@ -2082,12 +2085,15 @@ function normalizeCandidateName(name: string): string {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "") // Remove combining diacritical marks
     .replace(/\s+/g, " "); // Collapse multiple spaces
-} /*end normalizeCandidateName*/
+} /* end normalizeCandidateName */
 
 /**
  * Normalizes a profile URL for Dual-Key Deduplication.
  * Removes tracking parameters (UTM, trk, ref) and trailing slashes.
  * Example: "https://linkedin.com/in/foo?trk=bar/" → "https://linkedin.com/in/foo"
+ *
+ * @param {string} url - Profile URL to normalize
+ * @return {string} Clean canonical URL
  */
 function normalizeProfileUrl(url: string): string {
   try {
@@ -2101,7 +2107,7 @@ function normalizeProfileUrl(url: string): string {
     // If URL parsing fails, fallback to simple normalization
     return url.trim().toLowerCase().replace(/\/$/, "");
   }
-} /*end normalizeProfileUrl*/
+} /* end normalizeProfileUrl */
 
 
 /**
@@ -2266,15 +2272,15 @@ export const processScheduledSourcingDispatcher = onSchedule(
           .toLocaleDateString("it-IT");
 
         const sourcingPrompt =
-          `Sei AgenteRicerca, lo specialista di screening e skill-matching di OpsFlow.\n` +
+          "Sei AgenteRicerca, lo specialista di screening e skill-matching di OpsFlow.\n" +
           `QUERY DI RICERCA: "${job.searchConfig?.searchQuery ?? ""}"\n` +
           `ISTRUZIONI: ${job.searchConfig?.promptTemplate ?? ""}\n\n` +
-          `REGOLE OPERATIVE OBBLIGATORIE:\n` +
-          `- Cerca SOLO su fonti pubbliche (LinkedIn, Malt, Freelancermap, siti aziendali)\n` +
-          `- Genera un ID candidato univoco per ciascun profilo (formato: CAND-XXX)\n` +
-          `- Data Limite GDPR Art. 14: ${gdprDeadline} (30 giorni da oggi)\n` +
-          `- Includi SEMPRE il campo profileUrl con l'URL esatto del profilo\n` +
-          `- Rispondi ESCLUSIVAMENTE in formato JSON valido secondo lo schema fornito`;
+          "REGOLE OPERATIVE OBBLIGATORIE:\n" +
+          "- Cerca SOLO su fonti pubbliche (LinkedIn, Malt, Freelancermap, siti aziendali)\n" +
+          "- Genera un ID candidato univoco per ciascun profilo (formato: CAND-XXX)\n" +
+          `Data Limite GDPR Art. 14: ${gdprDeadline} (30 giorni da oggi)\n` +
+          "- Includi SEMPRE il campo profileUrl con l'URL esatto del profilo\n" +
+          "- Rispondi ESCLUSIVAMENTE in formato JSON valido secondo lo schema fornito";
 
         const llmResponse = await ai.generate({
           model: "googleai/gemini-3.6-flash",
@@ -2410,4 +2416,4 @@ export const processScheduledSourcingDispatcher = onSchedule(
     await Promise.allSettled(jobPromises);
     logger.info("processScheduledSourcingDispatcher: tick completed", { nowIso });
   },
-); /*end processScheduledSourcingDispatcher*/
+); /* end processScheduledSourcingDispatcher */

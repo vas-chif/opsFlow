@@ -283,10 +283,10 @@ const ELITE_COLUMN_WIDTHS_PX = [120, 160, 220, 110, 320, 320, 130, 220, 380] as 
  * Applies the OpsFlow "Elite" professional styling to a Google Sheet after data append.
  * Styling: frozen header row, dark navy bg (#1E293B), white bold text, text wrap, optimal column widths.
  *
- * @param sheets    - Authenticated Google Sheets API client (v4)
- * @param spreadsheetId - Target spreadsheet ID
- * @param sheetTitle - Exact tab name to style (used to resolve numeric sheetId)
- * @returns void — non-blocking; errors are logged but do not fail the parent approval
+ * @param {any} sheets - Authenticated Google Sheets API client (v4)
+ * @param {string} spreadsheetId - Target spreadsheet ID
+ * @param {string} sheetTitle - Exact tab name to style (used to resolve numeric sheetId)
+ * @return {Promise<void>} Resolves when styling is applied or logged
  *
  * @performance
  * - 2 API calls: spreadsheets.get (resolve sheetId) + spreadsheets.batchUpdate (style)
@@ -378,5 +378,5 @@ export async function applyProfessionalSheetStyling(
     spreadsheetId,
     requestBody: { requests: batchRequests },
   });
-} /*end applyProfessionalSheetStyling*/
+} /* end applyProfessionalSheetStyling */
 
