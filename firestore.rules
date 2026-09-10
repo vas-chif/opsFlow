@@ -66,6 +66,26 @@ service cloud.firestore {
       allow delete: if isActiveAndVerified() && isAdmin() && belongsToTenant(tenantId);
     }
 
+    // Step 19: Scheduled Sourcing Jobs — Principle of Least Privilege (§3 AGENTS.md)
+    match /tenants/{tenantId}/workspaces/{workspaceId}/scheduledJobs/{jobId} {
+      // All active tenant members can read and create scheduled jobs
+      allow read: if isActiveAndVerified() && belongsToTenant(tenantId);
+      allow create: if isActiveAndVerified() && belongsToTenant(tenantId)
+        && (isAdmin() || isUser());
+      // Only admin can update (pause/resume/modify) or delete scheduled jobs
+      allow update: if isActiveAndVerified() && isAdmin() && belongsToTenant(tenantId)
+        && !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['tenantId', 'workspaceId', 'createdAt']);
+      allow delete: if isActiveAndVerified() && isAdmin() && belongsToTenant(tenantId);
+    }
+
+    // Execution logs: written by Cloud Functions (server-side, bypass client rules)
+    // Client read-only for audit trail visibility (GDPR Art. 30)
+    match /tenants/{tenantId}/workspaces/{workspaceId}/scheduledJobs/{jobId}/executionLogs/{logId} {
+      allow read: if isActiveAndVerified() && belongsToTenant(tenantId);
+      allow write: if false; // Server-only via Cloud Functions Admin SDK
+    }
+
     match /tenants/{tenantId}/workspaces/{workspaceId}/tasks/{taskId} {
       // Tasks: all members read/create; admin can delete; immutable fields protected
       allow read: if isActiveAndVerified() && belongsToTenant(tenantId);

@@ -19,6 +19,7 @@ import type {
   TaskTimelineEvent,
   TaskChatMessage,
   ApprovalRecord,
+  LinkedGoogleResource,
 } from "../types/models";
 
 // ── Stores ───────────────────────────────────────────────────────────────────
@@ -35,6 +36,7 @@ import { useWebSpeech } from "../composables/useWebSpeech";
 import TaskKeyPointsCard from "./TaskKeyPointsCard.vue";
 import ApprovalCard from "./ApprovalCard.vue";
 import TaskSettingsModal from "./TaskSettingsModal.vue";
+import ScheduleTaskModal from "./ScheduleTaskModal.vue";
 
 const props = defineProps<{
   windowState: FloatingWindow;
@@ -70,6 +72,39 @@ const workspace = computed(
         w.id === task.value?.workspaceId,
     ) ?? null,
 );
+
+const allAvailableSheets = computed<LinkedGoogleResource[]>(() => {
+  const map = new Map<string, LinkedGoogleResource>();
+
+  // 1. Workspace linked sheets
+  const wsSheets = workspace.value?.linkedResources?.linkedSheets;
+  if (Array.isArray(wsSheets)) {
+    for (const s of wsSheets) {
+      if (s?.id) map.set(s.id, s);
+    }
+  }
+
+  // 2. Legacy/default workspace sheet
+  const defId = workspace.value?.linkedResources?.defaultSheetId;
+  if (defId && !map.has(defId)) {
+    map.set(defId, {
+      id: defId,
+      name: workspace.value?.linkedResources?.defaultSheetName || "Foglio Predefinito",
+      type: "sheet",
+      isMaster: true,
+    });
+  }
+
+  // 3. Task-level selected sheets
+  const taskSheets = task.value?.settings?.selectedSheets;
+  if (Array.isArray(taskSheets)) {
+    for (const s of taskSheets) {
+      if (s?.id && !map.has(s.id)) map.set(s.id, s);
+    }
+  }
+
+  return Array.from(map.values());
+});
 
 const chatMessage = ref("");
 const isSending = ref(false);
@@ -121,6 +156,7 @@ const initialPos = ref({ x: 0, y: 0 });
 // UI window state (minimized, maximized, size, position)
 const isExpanded = ref(false);
 const showTaskSettingsModal = ref<boolean>(false);
+const showScheduleModal = ref<boolean>(false);
 const isResizing = ref(false);
 const resizeStart = ref({ x: 0, y: 0, w: 0, h: 0 });
 
@@ -740,6 +776,38 @@ const handleApproveAction = async (
     const result = await res.json().catch(() => null);
     if (res.ok && result?.success) {
       chatStore.resolveApprovalInSession(taskId, approvalId, "approved");
+
+      // Synchronize task settings if user changed the target sheet or range
+      if (
+        editedData?.spreadsheetId &&
+        typeof editedData.spreadsheetId === "string" &&
+        task.value?.settings
+      ) {
+        const newSheetId = editedData.spreadsheetId;
+        const matched = allAvailableSheets.value.find((s) => s.id === newSheetId);
+        const existingIds = task.value.settings.selectedSheetIds || [];
+        const updatedIds = existingIds.includes(newSheetId)
+          ? existingIds
+          : [...existingIds, newSheetId];
+        const existingSheets = task.value.settings.selectedSheets || [];
+        const updatedSheets =
+          matched && !existingSheets.some((s) => s.id === newSheetId)
+            ? [...existingSheets, matched]
+            : existingSheets;
+
+        void taskStore.updateTask(workspaceId, taskId, {
+          settings: {
+            ...task.value.settings,
+            selectedSheetId: newSheetId,
+            selectedSheetName:
+              matched?.name || task.value.settings.selectedSheetName || "Foglio Google",
+            selectedSheetIds: updatedIds,
+            selectedSheets: updatedSheets,
+            selectedSheetTab: (editedData.range as string) || task.value.settings.selectedSheetTab,
+          },
+        });
+      }
+
       q.notify({
         type: "positive",
         message: result.alreadyResolved
@@ -1736,11 +1804,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                           workspace?.linkedResources?.defaultEmailSignature ||
                           ''
                         "
-                        :available-sheets="
-                          task?.settings?.selectedSheets?.length
-                            ? task.settings.selectedSheets
-                            : workspace?.linkedResources?.linkedSheets || []
-                        "
+                        :available-sheets="allAvailableSheets"
                         class="q-my-sm q-ml-sm"
                         @approve="handleApproveAction"
                         @reject="handleRejectAction"
@@ -2104,6 +2168,16 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
       :task="task"
       :workspace="workspace"
       @saved="taskStore.fetchTasks()"
+    />
+
+    <!-- Step 19: Schedule Sourcing Modal -->
+    <ScheduleTaskModal
+      v-if="task"
+      v-model="showScheduleModal"
+      :task="task"
+      :workspace="workspace"
+      @saved="() => {}"
+      @deleted="() => {}"
     />
   </div>
 </template>

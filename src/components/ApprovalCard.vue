@@ -57,6 +57,8 @@ const editableBody = ref<string>("");
 const editableSpreadsheetId = ref<string>("");
 const editableRange = ref<string>("A1");
 const editableRows = ref<(string | number)[][]>([]);
+const isCustomSheet = ref<boolean>(false);
+const customSheetInput = ref<string>("");
 
 // ── Computed ──────────────────────────────────────────────────────────────────
 const isGmailDraft = computed(() => props.approval.actionType === "gmail_draft");
@@ -173,11 +175,56 @@ watch(
 );
 
 // ── Editing Helpers ───────────────────────────────────────────────────────────
+const extractSheetId = (input: string): string => {
+  const trimmed = input.trim();
+  const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (match?.[1]) return match[1];
+  return trimmed;
+}; /*end extractSheetId*/
+
+const onCustomSheetChange = (val: string | number | null): void => {
+  const str = String(val || "").trim();
+  customSheetInput.value = str;
+  const extracted = extractSheetId(str);
+  if (extracted) {
+    editableSpreadsheetId.value = extracted;
+  }
+}; /*end onCustomSheetChange*/
+
+const toggleCustomSheet = (): void => {
+  isCustomSheet.value = !isCustomSheet.value;
+  if (!isCustomSheet.value && props.availableSheets?.length) {
+    const exists = props.availableSheets.some((s) => s.id === editableSpreadsheetId.value);
+    if (!exists) {
+      editableSpreadsheetId.value = props.availableSheets[0]?.id || "";
+    }
+  }
+}; /*end toggleCustomSheet*/
+
+const isCurrentSheetMaster = computed<boolean>(() => {
+  const found = props.availableSheets?.find((s) => s.id === editableSpreadsheetId.value);
+  return Boolean(found?.isMaster);
+}); /*end isCurrentSheetMaster*/
+
 const sheetSelectOptions = computed(() => {
-  return (props.availableSheets || []).map((s) => ({
-    label: `${s.name}${s.isMaster ? " ⭐" : ""}`,
+  const list = (props.availableSheets || []).map((s) => ({
+    label: `${s.name}${s.isMaster ? " ⭐ (Master)" : ""}`,
     value: s.id,
+    isMaster: s.isMaster,
+    id: s.id,
   }));
+
+  const currentId = editableSpreadsheetId.value || sheetPreview.value?.spreadsheetId;
+  if (currentId && !list.some((item) => item.value === currentId)) {
+    list.unshift({
+      label: `Foglio proposto (${currentId.slice(0, 12)}...)`,
+      value: currentId,
+      isMaster: false,
+      id: currentId,
+    });
+  }
+
+  return list;
 });
 
 const getSheetDisplayName = (sheetId: string): string => {
@@ -364,67 +411,115 @@ const onReject = (): void => {
         </div>
       </q-card-section>
 
-      <!-- Google Sheets: EDIT MODE -->
-      <q-card-section
-        v-else-if="isSheetAppend && isEditing && isPending"
-        class="q-pa-md q-gutter-y-sm"
-      >
-        <div class="row q-col-gutter-sm items-center">
-          <div v-if="sheetSelectOptions.length > 0" class="col-12 q-mb-xs">
-            <q-select
-              v-model="editableSpreadsheetId"
-              :options="sheetSelectOptions"
-              emit-value
-              map-options
-              dense
-              outlined
-              label="Foglio Google di destinazione"
+      <!-- Google Sheets (Pending or Resolved) -->
+      <q-card-section v-else-if="isSheetAppend && sheetPreview" class="q-pa-md">
+        <!-- Destination Sheet Selector Widget -->
+        <div class="approval-card__destination-box q-pa-sm q-mb-sm rounded-borders">
+          <div class="row items-center justify-between q-col-gutter-xs">
+            <div class="col-grow" style="max-width: 320px">
+              <q-select
+                v-if="!isCustomSheet && isPending"
+                v-model="editableSpreadsheetId"
+                :options="sheetSelectOptions"
+                emit-value
+                map-options
+                dense
+                outlined
+                bg-color="white"
+                label="Foglio Google di destinazione"
+              >
+                <template #prepend>
+                  <q-icon name="table_chart" color="positive" size="18px" />
+                </template>
+              </q-select>
+              <q-input
+                v-else-if="isCustomSheet && isPending"
+                v-model="customSheetInput"
+                dense
+                outlined
+                bg-color="white"
+                placeholder="Incolla Link o ID Google Sheet"
+                @update:model-value="onCustomSheetChange"
+              >
+                <template #prepend>
+                  <q-icon name="link" color="primary" size="18px" />
+                </template>
+              </q-input>
+              <div v-else class="text-weight-bold text-navy">
+                {{ getSheetDisplayName(editableSpreadsheetId || sheetPreview.spreadsheetId) }}
+              </div>
+            </div>
+
+            <div v-if="isPending" class="col-auto row items-center q-gutter-xs">
+              <q-btn
+                flat
+                dense
+                round
+                size="xs"
+                :icon="isCustomSheet ? 'list' : 'add_link'"
+                :color="isCustomSheet ? 'primary' : 'grey-7'"
+                @click="toggleCustomSheet"
+              >
+                <q-tooltip>{{ isCustomSheet ? "Lista fogli" : "Altro link/ID" }}</q-tooltip>
+              </q-btn>
+              <q-input
+                v-model="editableRange"
+                dense
+                outlined
+                bg-color="white"
+                style="width: 90px"
+                placeholder="Range"
+              />
+              <q-btn
+                v-if="isEditing"
+                outline
+                dense
+                no-caps
+                size="xs"
+                color="primary"
+                icon="add"
+                label="Riga"
+                @click="addRow"
+              />
+            </div>
+          </div>
+          <div
+            class="text-caption text-grey-7 q-mt-xs row items-center justify-between"
+            style="font-size: 0.72rem"
+          >
+            <span class="text-mono ellipsis" style="max-width: 250px"
+              >ID: {{ editableSpreadsheetId || sheetPreview.spreadsheetId }}</span
             >
-              <template #prepend>
-                <q-icon name="table_chart" color="positive" size="18px" />
-              </template>
-            </q-select>
-          </div>
-          <div class="col-8">
-            <q-input
-              v-model="editableRange"
-              label="Foglio / Range (es. Foglio1!A1 o A1)"
-              dense
-              outlined
-            />
-          </div>
-          <div class="col-4 text-right">
-            <q-btn
-              outline
-              dense
-              no-caps
-              size="xs"
-              color="primary"
-              icon="add"
-              label="Aggiungi Riga"
-              @click="addRow"
-            />
+            <span class="text-grey-6">Scheda: {{ editableRange || sheetPreview.range }}</span>
           </div>
         </div>
 
-        <div class="approval-card__table-wrapper q-mt-xs">
-          <table class="approval-card__table approval-card__table--editable">
+        <q-separator class="q-my-sm" />
+        <div class="approval-card__table-wrapper">
+          <table
+            class="approval-card__table"
+            :class="{ 'approval-card__table--editable': isEditing && isPending }"
+          >
             <tbody>
               <tr
-                v-for="(row, rowIdx) in editableRows"
+                v-for="(row, rowIdx) in editableRows.length > 0
+                  ? editableRows.slice(0, 5)
+                  : sheetPreview.previewRows"
                 :key="rowIdx"
                 :class="rowIdx === 0 ? 'approval-card__table-header' : ''"
               >
                 <td v-for="(cell, cellIdx) in row" :key="cellIdx" class="approval-card__table-cell">
                   <input
+                    v-if="isEditing && isPending"
                     :value="cell"
                     class="approval-card__cell-input"
                     :placeholder="rowIdx === 0 ? `Colonna ${cellIdx + 1}` : ''"
                     @input="onCellInput(rowIdx, cellIdx, ($event.target as HTMLInputElement).value)"
                   />
+                  <span v-else>{{ cell }}</span>
                 </td>
                 <td
-                  v-if="rowIdx > 0"
+                  v-if="isEditing && isPending && rowIdx > 0"
                   class="approval-card__table-cell text-center"
                   style="width: 32px"
                 >
@@ -437,40 +532,6 @@ const onReject = (): void => {
                     color="negative"
                     @click="removeRow(rowIdx)"
                   />
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </q-card-section>
-
-      <!-- Google Sheets: READ-ONLY DISPLAY -->
-      <q-card-section v-else-if="isSheetAppend && sheetPreview" class="q-pa-md">
-        <div class="approval-card__preview-row">
-          <span class="approval-card__label">Foglio:</span>
-          <span class="approval-card__value text-weight-bold text-navy">
-            {{ getSheetDisplayName(editableSpreadsheetId || sheetPreview.spreadsheetId) }}
-          </span>
-        </div>
-        <div class="approval-card__preview-row q-mt-xs">
-          <span class="approval-card__label">Intervallo / Scheda:</span>
-          <span class="approval-card__value text-mono">{{
-            editableRange || sheetPreview.range
-          }}</span>
-        </div>
-        <q-separator class="q-my-sm" />
-        <div class="approval-card__table-wrapper">
-          <table class="approval-card__table">
-            <tbody>
-              <tr
-                v-for="(row, rowIdx) in editableRows.length > 0
-                  ? editableRows.slice(0, 5)
-                  : sheetPreview.previewRows"
-                :key="rowIdx"
-                :class="rowIdx === 0 ? 'approval-card__table-header' : ''"
-              >
-                <td v-for="(cell, cellIdx) in row" :key="cellIdx" class="approval-card__table-cell">
-                  {{ cell }}
                 </td>
               </tr>
             </tbody>
@@ -655,55 +716,159 @@ const onReject = (): void => {
 
             <!-- SHEETS FULLSCREEN VIEW -->
             <template v-else-if="isSheetAppend">
-              <div class="row items-center justify-between q-mb-md">
-                <div>
-                  <span class="text-subtitle1 text-weight-bold text-navy">
-                    {{
-                      getSheetDisplayName(
-                        editableSpreadsheetId || sheetPreview?.spreadsheetId || "",
-                      ) || "Tabella Dati Google Sheets"
-                    }}
-                  </span>
-                  <div class="text-caption text-grey-7">
-                    ID: {{ editableSpreadsheetId || sheetPreview?.spreadsheetId }} | Intervallo /
-                    Scheda:
-                    {{ editableRange || sheetPreview?.range }}
-                  </div>
-                </div>
+              <!-- Destination Banner / Selector Header (Elite Design) -->
+              <div class="approval-destination-banner q-pa-md q-mb-md rounded-borders">
+                <div class="row items-center justify-between q-col-gutter-sm">
+                  <!-- Left side: Sheet selection -->
+                  <div class="col-12 col-md-7">
+                    <div class="row items-center q-mb-xs">
+                      <q-icon name="table_chart" color="positive" size="22px" class="q-mr-sm" />
+                      <span class="text-subtitle2 text-weight-bold text-navy">
+                        Foglio Google di Salvataggio:
+                      </span>
+                      <q-badge
+                        v-if="isCurrentSheetMaster"
+                        color="amber-8"
+                        text-color="navy"
+                        class="q-ml-sm text-weight-bold"
+                      >
+                        ⭐ Master
+                      </q-badge>
+                    </div>
 
-                <div v-if="isEditing && isPending" class="row q-gutter-sm items-center">
-                  <q-select
-                    v-if="sheetSelectOptions.length > 0"
-                    v-model="editableSpreadsheetId"
-                    :options="sheetSelectOptions"
-                    emit-value
-                    map-options
-                    dense
-                    outlined
-                    label="Foglio Destinazione"
-                    style="min-width: 220px"
-                  >
-                    <template #prepend>
-                      <q-icon name="table_chart" color="positive" size="18px" />
-                    </template>
-                  </q-select>
-                  <q-input
-                    v-model="editableRange"
-                    label="Range"
-                    dense
-                    outlined
-                    style="width: 140px"
-                  />
-                  <q-btn
-                    outline
-                    dense
-                    no-caps
-                    size="sm"
-                    color="primary"
-                    icon="add"
-                    label="Aggiungi Riga"
-                    @click="addRow"
-                  />
+                    <!-- Dropdown or Custom Input when isPending -->
+                    <div v-if="isPending" class="row items-center q-gutter-sm q-mt-xs">
+                      <div class="col-grow" style="max-width: 440px">
+                        <q-select
+                          v-if="!isCustomSheet"
+                          v-model="editableSpreadsheetId"
+                          :options="sheetSelectOptions"
+                          emit-value
+                          map-options
+                          dense
+                          outlined
+                          bg-color="white"
+                          class="destination-sheet-select"
+                          label="Seleziona foglio di destinazione"
+                        >
+                          <template #prepend>
+                            <q-icon name="description" color="primary" size="18px" />
+                          </template>
+                          <template #option="scope">
+                            <q-item v-bind="scope.itemProps">
+                              <q-item-section avatar>
+                                <q-icon
+                                  name="table_chart"
+                                  :color="scope.opt.isMaster ? 'amber-8' : 'positive'"
+                                  size="18px"
+                                />
+                              </q-item-section>
+                              <q-item-section>
+                                <q-item-label class="text-weight-bold">{{
+                                  scope.opt.label
+                                }}</q-item-label>
+                                <q-item-label
+                                  caption
+                                  class="text-mono ellipsis"
+                                  style="max-width: 260px"
+                                >
+                                  ID: {{ scope.opt.id }}
+                                </q-item-label>
+                              </q-item-section>
+                              <q-item-section v-if="scope.opt.isMaster" side>
+                                <q-badge color="amber-8" text-color="navy" label="Master" />
+                              </q-item-section>
+                            </q-item>
+                          </template>
+                        </q-select>
+
+                        <q-input
+                          v-else
+                          v-model="customSheetInput"
+                          dense
+                          outlined
+                          bg-color="white"
+                          placeholder="Incolla Link o ID Google Sheet"
+                          @update:model-value="onCustomSheetChange"
+                        >
+                          <template #prepend>
+                            <q-icon name="link" color="primary" size="18px" />
+                          </template>
+                        </q-input>
+                      </div>
+
+                      <!-- Toggle custom link / id -->
+                      <q-btn
+                        flat
+                        dense
+                        no-caps
+                        size="sm"
+                        :color="isCustomSheet ? 'primary' : 'grey-8'"
+                        :icon="isCustomSheet ? 'list' : 'add_link'"
+                        :label="isCustomSheet ? 'Scegli dai collegati' : 'Altro file (Link/ID)'"
+                        class="q-px-sm"
+                        @click="toggleCustomSheet"
+                      >
+                        <q-tooltip>
+                          {{
+                            isCustomSheet
+                              ? "Torna alla lista dei fogli collegati"
+                              : "Inserisci link o ID di un altro foglio Google"
+                          }}
+                        </q-tooltip>
+                      </q-btn>
+                    </div>
+
+                    <!-- Read-only view when resolved -->
+                    <div v-else class="text-subtitle1 text-weight-bold text-navy q-mt-xs">
+                      {{
+                        getSheetDisplayName(
+                          editableSpreadsheetId || sheetPreview?.spreadsheetId || "",
+                        )
+                      }}
+                    </div>
+
+                    <div class="text-caption text-grey-7 q-mt-xs">
+                      <span class="text-mono"
+                        >ID: {{ editableSpreadsheetId || sheetPreview?.spreadsheetId }}</span
+                      >
+                    </div>
+                  </div>
+
+                  <!-- Right side: Range / Tab & Add Row -->
+                  <div class="col-12 col-md-5 row items-center justify-end q-gutter-sm">
+                    <q-input
+                      v-if="isPending"
+                      v-model="editableRange"
+                      label="Intervallo / Scheda"
+                      dense
+                      outlined
+                      bg-color="white"
+                      style="width: 170px"
+                      placeholder="es. A1 o Foglio1!A1"
+                    >
+                      <template #prepend>
+                        <q-icon name="grid_on" color="grey-7" size="16px" />
+                      </template>
+                    </q-input>
+                    <div v-else class="text-caption text-grey-8">
+                      <strong>Intervallo / Scheda:</strong>
+                      {{ editableRange || sheetPreview?.range }}
+                    </div>
+
+                    <q-btn
+                      v-if="isEditing && isPending"
+                      outline
+                      dense
+                      no-caps
+                      size="sm"
+                      color="primary"
+                      icon="add"
+                      label="Aggiungi Riga"
+                      class="q-px-sm"
+                      @click="addRow"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1024,5 +1189,19 @@ const onReject = (): void => {
 
 .approval-dialog__footer {
   border-top: 1px solid rgba(197, 160, 101, 0.2);
+}
+
+.approval-destination-banner {
+  background: linear-gradient(135deg, rgba(10, 35, 66, 0.04) 0%, rgba(197, 160, 101, 0.08) 100%);
+  border: 1px solid rgba(197, 160, 101, 0.35);
+  border-left: 4px solid #c5a065;
+  border-radius: 8px;
+}
+
+.approval-card__destination-box {
+  background: rgba(10, 35, 66, 0.03);
+  border: 1px solid rgba(197, 160, 101, 0.25);
+  border-left: 3px solid #c5a065;
+  border-radius: 6px;
 }
 </style>

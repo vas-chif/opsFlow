@@ -717,38 +717,48 @@ const handleSave = async (): Promise<void> => {
 
 <template>
   <q-dialog v-model="isOpen" persistent backdrop-filter="blur(14px)">
-    <q-card style="width: 720px; max-width: 95vw; border-radius: 20px" class="q-pa-md">
-      <q-card-section class="row items-center justify-between q-pb-none">
+    <q-card class="attitude-modal-card column no-wrap">
+      <!-- ── Fixed Header ──────────────────────────────────────────────── -->
+      <q-card-section
+        class="attitude-modal-card__header row items-center justify-between q-py-md q-px-lg shrink-0"
+      >
         <div class="row items-center q-gutter-sm">
-          <q-avatar icon="psychology" color="amber-8" text-color="white" />
+          <q-avatar icon="psychology" color="amber-8" text-color="white" size="38px" />
           <div>
             <div class="text-h6 text-weight-bold text-navy">AI Attitude &amp; Linked Resources</div>
             <div class="text-caption text-grey-7">Workspace: {{ workspace?.name }}</div>
           </div>
         </div>
-        <q-btn flat round dense icon="close" v-close-popup />
+        <q-btn flat round dense icon="close" color="grey-7" v-close-popup />
       </q-card-section>
 
-      <!-- 4-Tab Header -->
-      <q-card-section class="q-pt-sm">
+      <!-- ── Fixed Tabs Bar ────────────────────────────────────────────── -->
+      <div class="attitude-modal-card__tabs shrink-0 q-px-md">
         <q-tabs
           v-model="activeTab"
           dense
-          class="text-grey"
+          class="text-grey-7"
           active-color="primary"
           indicator-color="primary"
           align="justify"
           narrow-indicator
         >
-          <q-tab name="behavior" icon="tune" label="1. Behavior" />
-          <q-tab name="resources" icon="cloud_sync" label="2. Google Resources" />
-          <q-tab name="agents" icon="smart_toy" label="3. AI Agents" />
-          <q-tab name="sandbox" icon="science" label="4. Sandbox Test" />
+          <q-tab name="behavior" icon="tune" label="1. Behavior" no-caps />
+          <q-tab name="resources" icon="cloud_sync" label="2. Google Resources" no-caps />
+          <q-tab name="agents" icon="smart_toy" label="3. AI Agents" no-caps />
+          <q-tab name="sandbox" icon="science" label="4. Sandbox Test" no-caps />
         </q-tabs>
+      </div>
 
-        <q-separator />
+      <q-separator />
 
-        <q-tab-panels v-model="activeTab" animated class="q-pt-md">
+      <!-- ── Scrollable Tab Panels Body ────────────────────────────────── -->
+      <q-card-section class="col attitude-modal-card__body q-pa-none">
+        <q-tab-panels
+          v-model="activeTab"
+          animated
+          class="full-height attitude-scroll-area custom-scrollbar q-px-lg q-py-md"
+        >
           <!-- TAB 1: Behavior & Prompt -->
           <q-tab-panel name="behavior" class="q-pa-none">
             <!-- Preset Buttons -->
@@ -1046,17 +1056,20 @@ const handleSave = async (): Promise<void> => {
               </div>
 
               <!-- Add Sheet Form -->
-              <div class="row q-col-gutter-xs items-center bg-grey-1 q-pa-xs rounded-borders">
-                <div class="col-12 col-md-4">
+              <div
+                class="row q-col-gutter-sm items-center bg-grey-1 q-pa-sm rounded-borders"
+                style="margin-left: 0; margin-right: 0"
+              >
+                <div class="col-12 col-sm-4">
                   <q-input
                     v-model="newSheetNameInput"
                     outlined
                     dense
-                    placeholder="Nome Foglio (es. Listino Servizi)"
+                    placeholder="Nome Foglio (es. Listino)"
                     bg-color="white"
                   />
                 </div>
-                <div class="col-12 col-md-6">
+                <div class="col-12 col-sm-5">
                   <q-input
                     v-model="newSheetUrlInput"
                     outlined
@@ -1065,7 +1078,7 @@ const handleSave = async (): Promise<void> => {
                     bg-color="white"
                   />
                 </div>
-                <div class="col-12 col-md-2">
+                <div class="col-12 col-sm-3">
                   <q-btn
                     unelevated
                     color="positive"
@@ -1073,7 +1086,7 @@ const handleSave = async (): Promise<void> => {
                     label="Aggiungi"
                     no-caps
                     dense
-                    class="full-width"
+                    class="full-width text-weight-bold"
                     :disabled="!newSheetUrlInput.trim()"
                     @click="addSheetResource"
                   />
@@ -1140,8 +1153,11 @@ const handleSave = async (): Promise<void> => {
               </q-list>
 
               <!-- Add Folder Form -->
-              <div class="row q-col-gutter-xs items-center bg-grey-1 q-pa-xs rounded-borders">
-                <div class="col-12 col-md-4">
+              <div
+                class="row q-col-gutter-sm items-center bg-grey-1 q-pa-sm rounded-borders"
+                style="margin-left: 0; margin-right: 0"
+              >
+                <div class="col-12 col-sm-4">
                   <q-input
                     v-model="newFolderNameInput"
                     outlined
@@ -1150,7 +1166,7 @@ const handleSave = async (): Promise<void> => {
                     bg-color="white"
                   />
                 </div>
-                <div class="col-12 col-md-6">
+                <div class="col-12 col-sm-5">
                   <q-input
                     v-model="newFolderUrlInput"
                     outlined
@@ -1159,7 +1175,7 @@ const handleSave = async (): Promise<void> => {
                     bg-color="white"
                   />
                 </div>
-                <div class="col-12 col-md-2">
+                <div class="col-12 col-sm-3">
                   <q-btn
                     unelevated
                     color="amber-9"
@@ -1246,12 +1262,21 @@ const handleSave = async (): Promise<void> => {
         </q-tab-panels>
       </q-card-section>
 
-      <q-card-actions align="right" class="q-pt-none">
-        <q-btn flat label="Cancel" v-close-popup />
+      <q-separator />
+
+      <!-- ── Fixed Footer Actions ──────────────────────────────────────── -->
+      <q-card-actions
+        align="right"
+        class="attitude-modal-card__footer q-px-lg q-py-sm bg-white shrink-0"
+      >
+        <q-btn flat label="Cancel" color="grey-8" no-caps v-close-popup />
         <q-btn
+          unelevated
           color="primary"
           icon="save"
           label="Save Configuration"
+          no-caps
+          class="text-weight-bold q-px-md"
           :loading="isSaving"
           @click="handleSave"
         />
@@ -1259,3 +1284,53 @@ const handleSave = async (): Promise<void> => {
     </q-card>
   </q-dialog>
 </template>
+
+<style scoped lang="scss">
+.attitude-modal-card {
+  width: 760px;
+  max-width: 95vw;
+  height: 85vh;
+  max-height: 880px;
+  border-radius: 24px;
+  overflow: hidden; /* Garanzia assoluta: angoli arrotondati perfetti a 24px */
+  background: #ffffff;
+  box-shadow: 0 20px 60px rgba(10, 35, 66, 0.22);
+  border: 1px solid rgba(197, 160, 101, 0.25);
+}
+
+.attitude-modal-card__header {
+  background: #ffffff;
+  border-bottom: 1px solid rgba(10, 35, 66, 0.08);
+}
+
+.attitude-modal-card__tabs {
+  background: #faf8f5;
+  border-bottom: 1px solid rgba(197, 160, 101, 0.2);
+}
+
+.attitude-scroll-area {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  height: 100%;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+    margin: 8px 0;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(197, 160, 101, 0.45);
+    border-radius: 6px;
+    &:hover {
+      background: rgba(197, 160, 101, 0.75);
+    }
+  }
+}
+
+.attitude-modal-card__footer {
+  background: #ffffff;
+  border-top: 1px solid rgba(10, 35, 66, 0.08);
+}
+</style>

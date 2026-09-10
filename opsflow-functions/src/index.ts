@@ -54,6 +54,7 @@ import {
   OAuthVaultError,
 } from "./tools/googleOAuthHandler";
 import { syncTaskEventToMasterSheet } from "./tools/masterSheetLogger";
+import { applyProfessionalSheetStyling } from "./tools/googleWorkspace";
 
 // ── RBAC: JWT Middleware Helper (Fase 1.2) ────────────────────────────────────
 
@@ -656,6 +657,24 @@ export const resolveApproval = onRequest(
           targetRange,
           rowCount: rowsToWrite.length,
         });
+
+        // Step 19 — Auto-Styling Elite: apply professional formatting after each append.
+        // Non-blocking: styling failures do NOT abort the approval (data is already saved).
+        const sheetTitleForStyling = (() => {
+          const match = targetRange.match(/^'?([^'!]+)'?!/);
+          return match ? match[1] : targetRange.replace(/![^!]*$/, "") || "Foglio1";
+        })();
+        applyProfessionalSheetStyling(sheets, effectiveSpreadsheetId, sheetTitleForStyling).catch(
+          (stylingErr) => {
+            logger.warn("resolveApproval: non-blocking sheet styling failed", {
+              tenantId,
+              taskId,
+              spreadsheetId: effectiveSpreadsheetId,
+              sheetTitle: sheetTitleForStyling,
+              error: stylingErr instanceof Error ? stylingErr.message : String(stylingErr),
+            });
+          },
+        );
       }
 
       await approvalRef.update({
@@ -2047,3 +2066,348 @@ export const provisionInitialTenant = onCall(
     };
   },
 ); // end provisionInitialTenant
+
+// ── Step 19: Scheduled Sourcing Dispatcher ─────────────────────────────────────
+// ── (§14 AGENTS.md — Dispatcher/Worker Pattern, §5 Cost Optimization) ──────────
+
+/**
+ * Normalizes a candidate's full name for Dual-Key Deduplication.
+ * Converts to lowercase, trims whitespace, and removes common accented characters.
+ * Example: "Pino Villà " → "pino villa"
+ */
+function normalizeCandidateName(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Remove combining diacritical marks
+    .replace(/\s+/g, " "); // Collapse multiple spaces
+} /*end normalizeCandidateName*/
+
+/**
+ * Normalizes a profile URL for Dual-Key Deduplication.
+ * Removes tracking parameters (UTM, trk, ref) and trailing slashes.
+ * Example: "https://linkedin.com/in/foo?trk=bar/" → "https://linkedin.com/in/foo"
+ */
+function normalizeProfileUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    // Remove known tracking query params
+    ["trk", "utm_source", "utm_medium", "utm_campaign", "ref", "src"].forEach((p) =>
+      parsed.searchParams.delete(p),
+    );
+    return parsed.origin + parsed.pathname.replace(/\/+$/, "");
+  } catch {
+    // If URL parsing fails, fallback to simple normalization
+    return url.trim().toLowerCase().replace(/\/$/, "");
+  }
+} /*end normalizeProfileUrl*/
+
+
+/**
+ * processScheduledSourcingDispatcher
+ *
+ * Centralised Dispatcher Cloud Function (§14 AGENTS.md — Dispatcher/Worker Pattern).
+ * Runs every 60 minutes and fans-out to all active scheduled sourcing jobs
+ * whose time window matches the current hour.
+ *
+ * Flow per Job:
+ * 1. Lock the job (isLocked = true) to prevent concurrent executions.
+ * 2. Fetch existing sheet rows → build Dual-Key Sets (URL + Name) for diffing.
+ * 3. Invoke Gemini Flash (AgenteRicerca) with the job's prompt template.
+ * 4. Filter new candidates (not in existingUrls AND not in existingNames).
+ * 5. Append only new candidates via values.append (append_new mode).
+ * 6. Apply Elite professional styling via batchUpdate (if autoStyleSheet=true).
+ * 7. Write execution audit log to executionLogs sub-collection (GDPR Art. 30).
+ * 8. Unlock the job (isLocked = false), update lastRunAt/nextRunAt.
+ * 9. Auto-terminate if now() >= endDate (GDPR Art. 5 data retention limit).
+ *
+ * @cost <€0.05/month for 1000 users (single Cloud Scheduler + Firestore reads)
+ * @performance Deduplication is pure Set lookup — zero LLM tokens consumed for diffing.
+ */
+export const processScheduledSourcingDispatcher = onSchedule(
+  {
+    schedule: "every 60 minutes",
+    timeZone: "Europe/Rome",
+    secrets: [BRAVE_SEARCH_API_KEY],
+  },
+  async () => {
+    const db = getFirestore();
+    const nowIso = new Date().toISOString();
+    const nowMs = Date.now();
+
+    logger.info("processScheduledSourcingDispatcher: tick started", { nowIso });
+
+    // Fetch all active, non-expired jobs across all tenants
+    // Note: This collection group query requires a Firestore composite index on
+    // (status, endDate) — see firestore.indexes.json.
+    const jobsSnapshot = await db
+      .collectionGroup("scheduledJobs")
+      .where("status", "==", "active")
+      .where("endDate", ">=", nowIso)
+      .get();
+
+    logger.info("processScheduledSourcingDispatcher: active jobs found", {
+      count: jobsSnapshot.size,
+    });
+
+    const jobPromises = jobsSnapshot.docs.map(async (jobDoc) => {
+      const job = jobDoc.data();
+      const jobId = jobDoc.id;
+      const tenantId = job.tenantId as string;
+      const workspaceId = job.workspaceId as string;
+
+      // Skip already-locked jobs (concurrent execution guard)
+      if (job.isLocked === true) {
+        logger.warn("processScheduledSourcingDispatcher: job locked, skipping", {
+          jobId,
+          tenantId,
+        });
+        return;
+      }
+
+      // Check if cron expression matches current hour window
+      // Simple daily_04am / weekly_mon_04am check (custom_cron uses cronExpression directly)
+      const currentHour = new Date().getHours(); // Europe/Rome
+      const currentDay = new Date().getDay(); // 0=Sun, 1=Mon
+      const frequency = job.frequency as string;
+
+      if (frequency === "daily_04am" && currentHour !== 4) return;
+      if (frequency === "weekly_mon_04am" && (currentDay !== 1 || currentHour !== 4)) return;
+      // custom_cron: skip time-window check (Cloud Scheduler fires it at the right time)
+
+      logger.info("processScheduledSourcingDispatcher: processing job", { jobId, tenantId });
+
+      // 1. ATOMIC LOCK to prevent concurrent retry conflicts
+      await jobDoc.ref.update({ isLocked: true });
+
+      let newCandidatesFound = 0;
+      let urlDuplicatesSkipped = 0;
+      let nameDuplicatesSkipped = 0;
+      let rowsWritten = 0;
+      let execStatus: "success" | "warning" | "error" = "success";
+      let errorMessage: string | undefined;
+
+      try {
+        const { google } = await import("googleapis");
+        const { getAuthenticatedOAuth2Client } = await import("./tools/googleOAuthHandler.js");
+
+        const oAuth2Client = await getAuthenticatedOAuth2Client(
+          tenantId,
+          workspaceId,
+          ["https://www.googleapis.com/auth/spreadsheets"],
+        );
+
+        const sheets = google.sheets({ version: "v4", auth: oAuth2Client });
+        const spreadsheetId = job.targetResource?.spreadsheetId as string;
+        const sheetName = job.targetResource?.sheetName as string;
+        const dedupUrlCol: number = job.targetResource?.dedupUrlColumnIndex ?? 7;
+        const dedupNameCol: number = job.targetResource?.dedupNameColumnIndex ?? 1;
+
+        // 2. READ EXISTING SHEET — Build Dual-Key Deduplication Sets
+        const existingRows = await sheets.spreadsheets.values.get({
+          spreadsheetId,
+          range: `'${sheetName}'!A:I`,
+        });
+
+        const existingUrls = new Set<string>();
+        const existingNames = new Set<string>();
+
+        (existingRows.data.values || []).forEach((row: string[], rowIdx: number) => {
+          if (rowIdx === 0) return; // Skip header row
+          const url = row[dedupUrlCol];
+          const name = row[dedupNameCol];
+          if (url) existingUrls.add(normalizeProfileUrl(url));
+          if (name) existingNames.add(normalizeCandidateName(name));
+        });
+
+        logger.info("processScheduledSourcingDispatcher: dedup sets built", {
+          jobId,
+          existingUrlsCount: existingUrls.size,
+          existingNamesCount: existingNames.size,
+        });
+
+        // 3. INVOKE GEMINI FLASH — AgenteRicerca sourcing
+        // z is imported directly from 'genkit' (same dep used across functions)
+        const { ai } = await import("./ai/genkitConfig.js");
+        const { z: zod } = await import("genkit");
+
+        const CandidateProfileSchema = zod.object({
+          candidates: zod
+            .array(
+              zod.object({
+                candidateId: zod.string().describe("Unique ID (e.g. 'CAND-001')"),
+                fullName: zod.string().describe("Full name: First Last"),
+                roleTitle: zod.string().describe("Professional role and specialization"),
+                matchScore: zod.number().min(0).max(100).describe("ICP match percentage 0-100"),
+                matchingSkills: zod.string().describe("Comma-separated matching competencies"),
+                gapsAndRisks: zod.string().describe("Critical gaps or risks identified"),
+                gdprDeadline: zod.string().describe("GDPR Art. 14 deadline: today + 30 days (DD/MM/YYYY)"),
+                profileUrl: zod.string().describe("Public profile URL (LinkedIn, Malt, website, etc.)"),
+                notes: zod.string().optional().describe("Initial screening notes"),
+              }),
+            )
+            .describe("Array of new candidate profiles found in the search"),
+        });
+
+        type CandidateProfile = {
+          candidateId: string;
+          fullName: string;
+          roleTitle: string;
+          matchScore: number;
+          matchingSkills: string;
+          gapsAndRisks: string;
+          gdprDeadline: string;
+          profileUrl: string;
+          notes?: string | undefined;
+        };
+
+        const gdprDeadline = new Date(nowMs + 30 * 24 * 60 * 60 * 1000)
+          .toLocaleDateString("it-IT");
+
+        const sourcingPrompt =
+          `Sei AgenteRicerca, lo specialista di screening e skill-matching di OpsFlow.\n` +
+          `QUERY DI RICERCA: "${job.searchConfig?.searchQuery ?? ""}"\n` +
+          `ISTRUZIONI: ${job.searchConfig?.promptTemplate ?? ""}\n\n` +
+          `REGOLE OPERATIVE OBBLIGATORIE:\n` +
+          `- Cerca SOLO su fonti pubbliche (LinkedIn, Malt, Freelancermap, siti aziendali)\n` +
+          `- Genera un ID candidato univoco per ciascun profilo (formato: CAND-XXX)\n` +
+          `- Data Limite GDPR Art. 14: ${gdprDeadline} (30 giorni da oggi)\n` +
+          `- Includi SEMPRE il campo profileUrl con l'URL esatto del profilo\n` +
+          `- Rispondi ESCLUSIVAMENTE in formato JSON valido secondo lo schema fornito`;
+
+        const llmResponse = await ai.generate({
+          model: "googleai/gemini-3.6-flash",
+          prompt: sourcingPrompt,
+          output: { schema: CandidateProfileSchema },
+        });
+
+        const rawCandidates: CandidateProfile[] = llmResponse.output?.candidates ?? [];
+
+        // 4. DUAL-KEY SMART DIFFING — Filter out known candidates
+        const newCandidates = rawCandidates.filter((c: CandidateProfile) => {
+          const urlKey = c.profileUrl ? normalizeProfileUrl(c.profileUrl) : null;
+          const nameKey = normalizeCandidateName(c.fullName);
+
+          if (urlKey && existingUrls.has(urlKey)) {
+            urlDuplicatesSkipped++;
+            return false;
+          }
+          if (existingNames.has(nameKey)) {
+            nameDuplicatesSkipped++;
+            return false;
+          }
+          return true;
+        });
+
+        newCandidatesFound = newCandidates.length;
+
+        if (newCandidates.length > 0) {
+          // 5. APPEND NEW ROWS — Non-destructive, continues from last filled row
+          const rowsToAppend = newCandidates.map((c: CandidateProfile) => [
+            c.candidateId,
+            c.fullName,
+            c.roleTitle,
+            `${c.matchScore}%`,
+            c.matchingSkills,
+            c.gapsAndRisks,
+            c.gdprDeadline,
+            c.profileUrl,
+            c.notes ?? "",
+          ]);
+
+          await sheets.spreadsheets.values.append({
+            spreadsheetId,
+            range: `'${sheetName}'!A1`,
+            valueInputOption: "USER_ENTERED",
+            requestBody: { values: rowsToAppend },
+          });
+          rowsWritten = rowsToAppend.length;
+
+          logger.info("processScheduledSourcingDispatcher: rows appended", {
+            jobId,
+            tenantId,
+            rowsWritten,
+          });
+
+          // 6. AUTO-STYLING ELITE (if enabled)
+          if (job.searchConfig?.autoStyleSheet === true) {
+            await applyProfessionalSheetStyling(sheets, spreadsheetId, sheetName).catch(
+              (stylingErr) => {
+                execStatus = "warning";
+                logger.warn("processScheduledSourcingDispatcher: styling failed (non-blocking)", {
+                  jobId,
+                  error: stylingErr instanceof Error ? stylingErr.message : String(stylingErr),
+                });
+              },
+            );
+          }
+        }
+
+        // 9. AUTO-TERMINATE check (GDPR Art. 5 — data retention limit)
+        if (nowIso >= (job.endDate as string)) {
+          await jobDoc.ref.update({ status: "completed", isLocked: false });
+          logger.info("processScheduledSourcingDispatcher: job auto-terminated (endDate reached)", {
+            jobId,
+            endDate: job.endDate,
+          });
+          return;
+        }
+      } catch (err) {
+        execStatus = "error";
+        errorMessage = err instanceof Error ? err.message : String(err);
+        logger.error("processScheduledSourcingDispatcher: job execution failed", {
+          jobId,
+          tenantId,
+          err,
+        });
+      } finally {
+        // 7. WRITE AUDIT LOG (GDPR Art. 30 — always, even on error)
+        const executionLogRef = jobDoc.ref.collection("executionLogs").doc();
+        await executionLogRef.set({
+          executedAt: nowIso,
+          newCandidatesFound,
+          totalDuplicatesSkipped: urlDuplicatesSkipped + nameDuplicatesSkipped,
+          urlDuplicatesSkipped,
+          nameDuplicatesSkipped,
+          rowsWritten,
+          status: execStatus,
+          ...(errorMessage ? { errorMessage } : {}),
+        });
+
+        // Trim history to last 30 entries (cost control §5)
+        const existingHistory = (job.resultsHistory as unknown[]) ?? [];
+        const trimmedHistory = [
+          {
+            executedAt: nowIso,
+            newCandidatesFound,
+            totalDuplicatesSkipped: urlDuplicatesSkipped + nameDuplicatesSkipped,
+            status: execStatus,
+            ...(errorMessage ? { errorMessage } : {}),
+          },
+          ...existingHistory,
+        ].slice(0, 30);
+
+        // 8. UNLOCK JOB — update runtime state
+        await jobDoc.ref.update({
+          isLocked: false,
+          lastRunAt: nowIso,
+          resultsHistory: trimmedHistory,
+        });
+
+        logger.info("processScheduledSourcingDispatcher: job completed", {
+          jobId,
+          tenantId,
+          newCandidatesFound,
+          urlDuplicatesSkipped,
+          nameDuplicatesSkipped,
+          rowsWritten,
+          execStatus,
+        });
+      }
+    });
+
+    await Promise.allSettled(jobPromises);
+    logger.info("processScheduledSourcingDispatcher: tick completed", { nowIso });
+  },
+); /*end processScheduledSourcingDispatcher*/

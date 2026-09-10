@@ -269,3 +269,114 @@ export const manageGoogleSheetTool = ai.defineTool(
     };
   },
 ); /* end manageGoogleSheetTool */
+
+// ── Step 19: Auto-Styling Helper ─────────────────────────────────────────────
+
+/**
+ * Column width configuration for Elite sheet styling (pixels).
+ * Follows the §6 Design System spec from Step 19 plan.
+ * Index: 0=ID, 1=Nome, 2=Ruolo, 3=Score, 4=Competenze, 5=Gap, 6=GDPR, 7=Fonte, 8=Note
+ */
+const ELITE_COLUMN_WIDTHS_PX = [120, 160, 220, 110, 320, 320, 130, 220, 380] as const;
+
+/**
+ * Applies the OpsFlow "Elite" professional styling to a Google Sheet after data append.
+ * Styling: frozen header row, dark navy bg (#1E293B), white bold text, text wrap, optimal column widths.
+ *
+ * @param sheets    - Authenticated Google Sheets API client (v4)
+ * @param spreadsheetId - Target spreadsheet ID
+ * @param sheetTitle - Exact tab name to style (used to resolve numeric sheetId)
+ * @returns void — non-blocking; errors are logged but do not fail the parent approval
+ *
+ * @performance
+ * - 2 API calls: spreadsheets.get (resolve sheetId) + spreadsheets.batchUpdate (style)
+ * - Estimated cost: ~€0.0000001 per execution
+ */
+export async function applyProfessionalSheetStyling(
+  sheets: Awaited<ReturnType<typeof import("googleapis")["google"]["sheets"]>>,
+  spreadsheetId: string,
+  sheetTitle: string,
+): Promise<void> {
+  // Resolve numeric sheetId from sheet title (required by batchUpdate API)
+  const metaResponse = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: "sheets.properties",
+  });
+
+  const targetSheet = (metaResponse.data.sheets || []).find(
+    (s) => s.properties?.title === sheetTitle,
+  );
+
+  if (!targetSheet?.properties) {
+    // Sheet not found — skip styling silently (non-critical path)
+    return;
+  }
+
+  const sheetId: number = targetSheet.properties.sheetId ?? 0;
+
+
+  const batchRequests = [
+    // 1. Freeze first row (header stays visible while scrolling)
+    {
+      updateSheetProperties: {
+        properties: {
+          sheetId,
+          gridProperties: { frozenRowCount: 1 },
+        },
+        fields: "gridProperties.frozenRowCount",
+      },
+    },
+    // 2. Header row: Dark Slate #1E293B background, white bold text 10pt, MIDDLE aligned
+    {
+      repeatCell: {
+        range: { sheetId, startRowIndex: 0, endRowIndex: 1 },
+        cell: {
+          userEnteredFormat: {
+            backgroundColor: { red: 0.118, green: 0.161, blue: 0.231 },
+            textFormat: {
+              bold: true,
+              fontSize: 10,
+              foregroundColor: { red: 1, green: 1, blue: 1 },
+            },
+            verticalAlignment: "MIDDLE",
+            horizontalAlignment: "CENTER",
+          },
+        },
+        fields:
+          "userEnteredFormat(backgroundColor,textFormat,verticalAlignment,horizontalAlignment)",
+      },
+    },
+    // 3. Data rows: WRAP text + TOP vertical alignment (prevents text clipping)
+    {
+      repeatCell: {
+        range: { sheetId, startRowIndex: 1 },
+        cell: {
+          userEnteredFormat: {
+            wrapStrategy: "WRAP",
+            verticalAlignment: "TOP",
+          },
+        },
+        fields: "userEnteredFormat(wrapStrategy,verticalAlignment)",
+      },
+    },
+    // 4. Column widths (Elite spec §6: readable, non-compressed layout)
+    ...ELITE_COLUMN_WIDTHS_PX.map((pixelSize, colIdx) => ({
+      updateDimensionProperties: {
+        range: {
+          sheetId,
+          dimension: "COLUMNS",
+          startIndex: colIdx,
+          endIndex: colIdx + 1,
+        },
+        properties: { pixelSize },
+        fields: "pixelSize",
+      },
+    })),
+  ];
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: { requests: batchRequests },
+  });
+} /*end applyProfessionalSheetStyling*/
+

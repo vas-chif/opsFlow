@@ -3,7 +3,7 @@
  * @description Central Firestore document models for OpsFlow Task Management & AI Knowledge Base.
  * @author Vasile Chifeac
  * @created 2026-07-16
- * @modified 2026-08-14
+ * @modified 2026-09-10
  *
  * @notes
  * - Multi-tenant isolation: every document MUST have tenantId (validated by Firestore rules)
@@ -513,3 +513,98 @@ export interface RefinedTaskDraft {
   estimatedMinutes: number;
   subtasks: RefinedSubTask[];
 } // UI-only — not Firestore data
+
+// ── Step 19: Scheduled Sourcing & Smart Diffing Engine ───────────────────────
+
+/**
+ * Frequency cadence for automated recurring sourcing jobs.
+ * Maps to a cron expression managed by the Dispatcher Cloud Function.
+ */
+export type ScheduledJobFrequency = "daily_04am" | "weekly_mon_04am" | "custom_cron";
+
+/**
+ * Update behavior when integrating newly discovered candidates.
+ * - append_new: Non-destructive — only adds profiles not already in the sheet.
+ * - re_rank_all: Merges existing + new, sorts by Match Score descending.
+ */
+export type SheetUpdateMode = "append_new" | "re_rank_all";
+
+/**
+ * Audit log entry for a single scheduled sourcing job execution.
+ * Path: tenants/{tenantId}/workspaces/{workspaceId}/scheduledJobs/{jobId}/executionLogs/{logId}
+ */
+export interface ScheduledJobExecutionLog {
+  executedAt: string; // ISO 8601
+  newCandidatesFound: number;
+  totalDuplicatesSkipped: number;
+  urlDuplicatesSkipped: number;
+  nameDuplicatesSkipped: number;
+  status: "success" | "warning" | "error";
+  errorMessage?: string | undefined;
+  rowsWritten: number;
+} /*end ScheduledJobExecutionLog*/
+
+/**
+ * Operational definition of a Scheduled Sourcing Job stored in Firestore.
+ * Path: tenants/{tenantId}/workspaces/{workspaceId}/scheduledJobs/{jobId}
+ *
+ * @notes
+ * - Dual-Key Deduplication: profileUrl (normalized) + candidateName (lowercased)
+ * - GDPR Art. 5: mandatory endDate ensures processes are time-limited
+ * - isLocked prevents concurrent execution on Cloud Function retries
+ *
+ * @performance
+ * - Single Firestore query per dispatcher tick (every 60 min)
+ * - Zero LLM tokens consumed for deduplication (pure Set lookup)
+ */
+export interface ScheduledSourcingJob {
+  id: string;
+  tenantId: string;
+  workspaceId: string;
+  taskId: string;
+  title: string;
+  status: "active" | "paused" | "completed";
+
+  /** Frequency & Lifecycle */
+  frequency: ScheduledJobFrequency;
+  /** Cron expression e.g. '0 4 * * *' (daily 04:00) or '0 4 * * 1' (Mon) */
+  cronExpression: string;
+  /** IANA timezone e.g. 'Europe/Rome' */
+  timeZone: string;
+  /** ISO 8601 start date */
+  startDate: string;
+  /** ISO 8601 mandatory end date (GDPR Art. 5 — data retention limit) */
+  endDate: string;
+
+  /** Target Google Sheet resource & Dual-Key Deduplication config */
+  targetResource: {
+    type: "google_sheet";
+    spreadsheetId: string;
+    sheetName: string;
+    /** 0-based column index for Profile URL (Dual-Key: URL) */
+    dedupUrlColumnIndex: number;
+    /** 0-based column index for Full Name (Dual-Key: Name) */
+    dedupNameColumnIndex: number;
+    /** Human-readable label for the URL column (e.g. 'Fonte / Profilo Pubblico') */
+    dedupColumnHeader: string;
+  };
+
+  /** Search & Output Configuration */
+  searchConfig: {
+    /** The sourcing prompt template for the AgenteRicerca */
+    promptTemplate: string;
+    /** Structured search query sent to the web search tool */
+    searchQuery: string;
+    /** How new results are merged into the existing sheet */
+    updateMode: SheetUpdateMode;
+    /** When true, applies Elite batchUpdate styling after each write */
+    autoStyleSheet: boolean;
+  };
+
+  /** Runtime State & Locking (prevents concurrent Cloud Function retry conflicts) */
+  isLocked?: boolean | undefined;
+  lastRunAt?: string | undefined; // ISO 8601
+  nextRunAt?: string | undefined; // ISO 8601
+  /** Summary history of last N executions (capped at 30 for cost control) */
+  resultsHistory?: ScheduledJobExecutionLog[] | undefined;
+} /*end ScheduledSourcingJob*/
