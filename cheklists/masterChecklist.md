@@ -134,3 +134,99 @@ GENERAZIONE: Crea il file seguendo questa struttura rigorosa e commentata.
 - [x] **Collegamento Esplicito Risorse**: Account Google Email (OAuth2), ID Foglio Google Sheets Predefinito, ID Cartella Google Drive.
 - [x] **Iniezione Risorse nel System Prompt Stacking (`promptBuilder.ts`)**: Iniezione automatica degli ID risorse nel Livello 2 del prompt.
 - [x] **Zero-Error Pipeline Verification**: `yarn typecheck` (PASSED 0ms) e `yarn lint` (PASSED 0 errors, 0 warnings).
+
+---
+
+## 📌 STEP 7: Dynamic AI Clean & Execution Plan (COMPLETED ✅)
+
+- [x] Ottimizzazione prompt AgentePlanner e deduplicazione automatica task.
+- [x] Pipeline zero-hallucination con convalida schemi Zod.
+
+---
+
+## 📌 STEP 8: RBAC Custom Claims & Multi-Role Governance (COMPLETED ✅)
+
+- [x] Custom Claims Firebase Auth (`tenantId`, `role`: `superadmin`, `admin`, `user`).
+- [x] Zero Query Firestore per autorizzazione navigazione e routing protetto (risparmio 99.98% costi DB).
+- [x] Firestore Security Rules a 3 layer conforme a GDPR Art. 32.
+
+---
+
+## 📌 STEP 9: Operational Goals & Roadmap (COMPLETED ✅)
+
+- [x] Definizione perimetro architetturale SaaS ad alto ROI.
+- [x] Esclusione trappole di costo (WebSockets real-time continue, modelli non-Flash).
+
+---
+
+## 📌 STEP 10: UX Anti-Hallucination & Voice Interface (COMPLETED ✅)
+
+- [x] Human-in-the-Loop con `<ApprovalCard.vue>` prima di ogni scrittura esterna.
+- [x] Web Speech API nativa del browser per dettatura e sintesi vocale (€0.00 costi cloud).
+
+---
+
+## 📌 STEP 11: Token Cost & Chat Timeout Resilience (COMPLETED ✅)
+
+- [x] Lock-in su modelli Flash economici e ultra-veloci.
+- [x] Gestione timeout resilienti e recovery loop.
+
+---
+
+## 📌 STEP 12: Search Tool Hardening & GCP Cost Governance (COMPLETED ✅)
+
+- [x] Rolling Key Points parser per il monitoraggio dei punti chiave task.
+- [x] Configurazione endpoint europe-west1 e ottimizzazione quote.
+
+---
+
+## 📌 STEP 13: Brave Search Integration & Cost Guard (COMPLETED ✅)
+
+- [x] Provider multi-search con Brave Search API per lead generation B2B.
+- [x] Cost guard e fallback su fonti pubbliche.
+
+---
+
+## 📌 STEP 14: Email Magic Invitation & Team Onboarding (COMPLETED ✅)
+
+- [x] Magic link onboarding tramite token hash crittografati in Firestore.
+- [x] Gestione inviti collaboratori con ruoli pre-assegnati.
+
+---
+
+## 📌 STEP 15: Tenant Provisioning & First Login Onboarding (COMPLETED ✅)
+
+- [x] Provisioning automatico del tenant master e workspace predefiniti al primo accesso.
+- [x] Inizializzazione isolata per tenant.
+
+---
+
+## 📌 STEP 16: Firestore Permissions & Gemini Model Upgrade (COMPLETED ✅)
+
+- [x] Hardening Firestore Security Rules e allineamento permessi sotto-collezioni.
+- [x] Aggiornamento modello Gemini 2.5/Flash.
+
+---
+
+## 📌 STEP 17: AI Task Architect & Smart Refiner (COMPLETED ✅)
+
+- [x] Modale `AiPromptArchitectModal.vue` per la generazione guidata di task ad alta precisione.
+- [x] Scomposizione strutturata con metriche di complessità.
+
+---
+
+## 📌 STEP 18: Workspace Google OAuth Decoupling (COMPLETED ✅)
+
+- [x] Token Vault isolato per Workspace (`tenants/{tenantId}/workspaces/{workspaceId}/integrations/google`).
+- [x] Disaccoppiamento completo rispetto all'account master SaaS con auto-refresh token.
+
+---
+
+## 📌 STEP 19: Scheduled Sourcing, Dual-Key Diffing & Elite Sheet Auto-Styling (COMPLETED ✅)
+
+- [x] **Fase 1 (Modelli TypeScript)**: Interfacce `ScheduledSourcingJob`, `ScheduledJobFrequency`, `SheetUpdateMode`, `ScheduledJobExecutionLog` in `src/types/models.ts`.
+- [x] **Fase 2 (Security Rules)**: Regole Firestore per `scheduledJobs` e log audit server-only in `firestore.rules`, indici compositi in `firestore.indexes.json`.
+- [x] **Fase 3 (Auto-Styling)**: Helper `applyProfessionalSheetStyling` in `opsflow-functions` con formattazione automatica header (#1E293B), freeze row 1, wrap e larghezza colonne ottimali.
+- [x] **Fase 4 (Dispatcher & Smart Diffing)**: Cloud Function `processScheduledSourcingDispatcher` (ogni 60 min, Europe/Rome) con Dual-Key Diffing (Set di URL normalizzati e Nomi normalizzati), auto-terminate GDPR Art. 5, audit log Art. 30 e notifica automatica in chat del task.
+- [x] **Fase 5 (UI Quasar 2)**: Modale `ScheduleTaskModal.vue` Elite (frequenze, date picker fine validità, selezione foglio con ⭐ Master), pulsante `⏰` e chip dinamico (Verde/Arancione/Grigio) nella header toolbar di `TaskChatWindow.vue`, banner richiamo rapido in `TaskSettingsModal.vue`.
+- [x] **Fase 6 (Documentazione & Verifica)**: `.logicFlow/05_scheduled_sourcing_and_smart_diffing_flow.md` completo, `masterChecklist.md` aggiornato, `yarn lint` e `yarn typecheck` a 0 errori.

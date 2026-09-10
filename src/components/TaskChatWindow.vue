@@ -11,6 +11,9 @@
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { useQuasar, copyToClipboard } from "quasar";
 
+// ── Firebase ─────────────────────────────────────────────────────────────────
+import { getFirestore, collection, query, where, getDocs, limit } from "firebase/firestore";
+
 // ── Types ────────────────────────────────────────────────────────────────────
 import type {
   TaskStatus,
@@ -20,6 +23,7 @@ import type {
   TaskChatMessage,
   ApprovalRecord,
   LinkedGoogleResource,
+  ScheduledSourcingJob,
 } from "../types/models";
 
 // ── Stores ───────────────────────────────────────────────────────────────────
@@ -159,6 +163,86 @@ const showTaskSettingsModal = ref<boolean>(false);
 const showScheduleModal = ref<boolean>(false);
 const isResizing = ref(false);
 const resizeStart = ref({ x: 0, y: 0, w: 0, h: 0 });
+
+// Step 19: Active Scheduled Sourcing Job state & management
+const activeScheduledJob = ref<ScheduledSourcingJob | null>(null);
+
+const scheduledJobStatusColor = computed<string>(() => {
+  if (!activeScheduledJob.value) return "grey-6";
+  switch (activeScheduledJob.value.status) {
+    case "active":
+      return "positive";
+    case "paused":
+      return "warning";
+    case "completed":
+      return "grey-7";
+    default:
+      return "grey-6";
+  }
+});
+
+const scheduledJobStatusIcon = computed<string>(() => {
+  if (!activeScheduledJob.value) return "schedule";
+  switch (activeScheduledJob.value.status) {
+    case "active":
+      return "schedule";
+    case "paused":
+      return "pause_circle";
+    case "completed":
+      return "check_circle";
+    default:
+      return "schedule";
+  }
+});
+
+const scheduledJobStatusLabel = computed<string>(() => {
+  if (!activeScheduledJob.value) return "";
+  switch (activeScheduledJob.value.status) {
+    case "active":
+      return "⏰ 04:00 AM Attiva";
+    case "paused":
+      return "⏸️ In Pausa";
+    case "completed":
+      return "✔️ Conclusa";
+    default:
+      return "⏰ Programmata";
+  }
+});
+
+const fetchActiveScheduledJob = async (): Promise<void> => {
+  const tId = authStore.tenantId;
+  const wsId = workspace.value?.id || task.value?.workspaceId;
+  const taskId = task.value?.id;
+  if (!tId || !wsId || !taskId) return;
+
+  try {
+    const db = getFirestore();
+    const qCol = query(
+      collection(db, "tenants", tId, "workspaces", wsId, "scheduledJobs"),
+      where("taskId", "==", taskId),
+      limit(1),
+    );
+    const snap = await getDocs(qCol);
+    if (!snap.empty && snap.docs[0]) {
+      activeScheduledJob.value = {
+        id: snap.docs[0].id,
+        ...(snap.docs[0].data() as Omit<ScheduledSourcingJob, "id">),
+      };
+    } else {
+      activeScheduledJob.value = null;
+    }
+  } catch (err) {
+    logger.warn("TaskChatWindow", "Failed to fetch active scheduled job", { err });
+  }
+}; /*end fetchActiveScheduledJob*/
+
+const handleScheduledJobSaved = (job: ScheduledSourcingJob): void => {
+  activeScheduledJob.value = job;
+}; /*end handleScheduledJobSaved*/
+
+const handleScheduledJobDeleted = (): void => {
+  activeScheduledJob.value = null;
+}; /*end handleScheduledJobDeleted*/
 
 // Fullscreen & Layout View Mode
 const isFullscreen = computed(() => !!props.windowState.isFullscreen);
@@ -377,7 +461,15 @@ const initTaskTimeline = (): void => {
 onMounted(() => {
   window.addEventListener("keydown", handleKeyDown);
   initTaskTimeline();
+  fetchActiveScheduledJob();
 });
+
+watch(
+  () => task.value?.id,
+  () => {
+    fetchActiveScheduledJob();
+  },
+);
 
 onUnmounted(() => {
   window.removeEventListener("keydown", handleKeyDown);
@@ -1159,6 +1251,58 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
             </q-item>
           </q-list>
         </q-btn-dropdown>
+
+        <!-- Active Scheduled Job Chip (Step 19 §5.3) -->
+        <q-chip
+          v-if="activeScheduledJob"
+          dense
+          clickable
+          size="sm"
+          :color="scheduledJobStatusColor"
+          text-color="white"
+          :icon="scheduledJobStatusIcon"
+          class="cursor-pointer text-weight-bold"
+          @click.stop="showScheduleModal = true"
+          @mousedown.stop
+        >
+          {{ scheduledJobStatusLabel }}
+          <q-tooltip>
+            Pianificazione ricorrente ({{ activeScheduledJob.frequency }}): Scadenza
+            {{ activeScheduledJob.endDate }} — Clicca per gestire
+          </q-tooltip>
+        </q-chip>
+
+        <!-- Scheduled Sourcing Button (Step 19 §5.2) -->
+        <q-btn
+          flat
+          round
+          dense
+          size="sm"
+          icon="schedule"
+          :color="
+            activeScheduledJob
+              ? activeScheduledJob.status === 'active'
+                ? 'positive'
+                : 'warning'
+              : 'teal-4'
+          "
+          @click.stop="showScheduleModal = true"
+          @mousedown.stop
+        >
+          <q-tooltip>
+            {{
+              activeScheduledJob
+                ? `Pianificazione Ricorrente: ${activeScheduledJob.title} (${activeScheduledJob.status})`
+                : "Pianifica Ricerca Ricorrente (04:00 AM)"
+            }}
+          </q-tooltip>
+          <q-badge
+            v-if="activeScheduledJob"
+            floating
+            rounded
+            :color="activeScheduledJob.status === 'active' ? 'positive' : 'warning'"
+          />
+        </q-btn>
 
         <!-- Task Settings Button -->
         <q-btn
@@ -2168,6 +2312,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
       :task="task"
       :workspace="workspace"
       @saved="taskStore.fetchTasks()"
+      @open-schedule-modal="showScheduleModal = true"
     />
 
     <!-- Step 19: Schedule Sourcing Modal -->
@@ -2176,8 +2321,9 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
       v-model="showScheduleModal"
       :task="task"
       :workspace="workspace"
-      @saved="() => {}"
-      @deleted="() => {}"
+      :existing-job="activeScheduledJob"
+      @saved="handleScheduledJobSaved"
+      @deleted="handleScheduledJobDeleted"
     />
   </div>
 </template>

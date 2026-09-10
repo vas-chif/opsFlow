@@ -2381,6 +2381,42 @@ export const processScheduledSourcingDispatcher = onSchedule(
           ...(errorMessage ? { errorMessage } : {}),
         });
 
+        // Step 19 Punto 4.8: Write summary notification message into task chat
+        const targetTaskId = job.taskId as string;
+        if (targetTaskId && execStatus !== "error") {
+          const taskMessagesRef = db
+            .collection("tenants")
+            .doc(tenantId)
+            .collection("workspaces")
+            .doc(workspaceId)
+            .collection("tasks")
+            .doc(targetTaskId)
+            .collection("messages");
+
+          const totalDupes = urlDuplicatesSkipped + nameDuplicatesSkipped;
+          const notificationText =
+            "🤖 Monitoraggio programmato completato:\n" +
+            `• Nuovi profili aggiunti: ${rowsWritten}\n` +
+            `• Duplicati scartati preventivamente: ${totalDupes} ` +
+            `(URL: ${urlDuplicatesSkipped}, Nome: ${nameDuplicatesSkipped})\n` +
+            `• Timestamp: ${new Date(nowMs).toLocaleString("it-IT", { timeZone: "Europe/Rome" })}`;
+
+          await taskMessagesRef.add({
+            taskId: targetTaskId,
+            sender: "agent",
+            agentName: "AgenteRicerca (Scheduled)",
+            text: notificationText,
+            timestamp: nowIso,
+            toolsUsed: ["searchWebAndPlatformsTool", "manageGoogleSheetTool"],
+          }).catch((msgErr) => {
+            logger.warn("processScheduledSourcingDispatcher: failed writing chat message", {
+              jobId,
+              targetTaskId,
+              error: msgErr instanceof Error ? msgErr.message : String(msgErr),
+            });
+          });
+        }
+
         // Trim history to last 30 entries (cost control §5)
         const existingHistory = (job.resultsHistory as unknown[]) ?? [];
         const trimmedHistory = [

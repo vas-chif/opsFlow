@@ -34,6 +34,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "update:modelValue", val: boolean): void;
   (e: "saved"): void;
+  (e: "openScheduleModal"): void;
 }>();
 
 const q = useQuasar();
@@ -540,6 +541,33 @@ const handleSave = async (): Promise<void> => {
                 </div>
               </div>
             </div>
+
+            <!-- Step 19 §5.2: Scheduled Sourcing Card in Settings -->
+            <div
+              class="scheduled-sourcing-banner q-mt-lg q-pa-md rounded-borders row items-center justify-between"
+            >
+              <div class="row items-center no-wrap col-grow q-pr-md">
+                <q-icon name="schedule" size="26px" color="teal-8" class="q-mr-md" />
+                <div>
+                  <div class="text-subtitle2 text-weight-bold text-teal-10">
+                    ⏰ Ricerca Programmata & Monitoraggio Notturno (04:00 AM)
+                  </div>
+                  <div class="text-caption text-grey-8">
+                    Automatizza l'AgenteRicerca: diffing a doppia chiave preventivo e aggiunta dei
+                    soli profili nuovi.
+                  </div>
+                </div>
+              </div>
+              <q-btn
+                outline
+                color="teal-9"
+                icon="alarm_on"
+                label="Pianifica"
+                no-caps
+                class="text-weight-bold"
+                @click="emit('openScheduleModal')"
+              />
+            </div>
           </q-tab-panel>
 
           <!-- TAB 2: EMAIL SIGNATURE -->
@@ -657,6 +685,15 @@ const handleSave = async (): Promise<void> => {
 
 .task-settings-card__tabs {
   border-bottom: 1px solid rgba(197, 160, 101, 0.2);
+}
+
+.border-amber-3 {
+  border: 1px solid #ffd54f !important;
+}
+
+.scheduled-sourcing-banner {
+  background: linear-gradient(135deg, rgba(38, 166, 154, 0.1) 0%, rgba(38, 166, 154, 0.04) 100%);
+  border: 1px solid rgba(38, 166, 154, 0.3);
 }
 
 .border-gold-light {
