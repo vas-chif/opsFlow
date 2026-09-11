@@ -378,98 +378,103 @@ function getStatusLabel(status: string): string {
 </script>
 
 <template>
-  <q-dialog
-    v-model="isOpen"
-    persistent
-    maximized
-    transition-show="slide-up"
-    transition-hide="slide-down"
-  >
-    <q-card class="schedule-modal-card">
-      <!-- ── Header ──────────────────────────────────────────────────── -->
-      <q-card-section class="schedule-modal-header row items-center q-px-xl q-py-lg">
-        <div class="col">
-          <div class="row items-center q-gutter-sm">
-            <q-icon name="schedule" size="28px" class="text-gold" />
-            <div>
-              <h2 class="schedule-modal-title">
-                {{ isEditMode ? "Gestisci Monitoraggio" : "⏰ Pianifica Ricerca Ricorrente" }}
-              </h2>
-              <p class="schedule-modal-subtitle">{{ task.title }}</p>
-            </div>
+  <q-dialog v-model="isOpen" persistent transition-show="scale" transition-hide="scale">
+    <q-card
+      class="schedule-modal-card"
+      style="width: 860px; max-width: 95vw; max-height: 92vh; display: flex; flex-direction: column"
+    >
+      <!-- ── Header (Elite Navy & Gold - identical to TaskSettingsModal) ────────── -->
+      <q-card-section class="schedule-modal-card__header row items-center q-py-md q-px-lg">
+        <q-icon name="schedule" size="22px" color="amber-5" class="q-mr-sm" />
+        <div>
+          <div class="text-subtitle1 text-weight-bold text-white">
+            {{ isEditMode ? "Gestisci Monitoraggio" : "⏰ Pianifica Ricerca Ricorrente" }}
+          </div>
+          <div class="text-caption text-amber-2">
+            Task: {{ task.title }} | Workspace: {{ workspace?.name }}
           </div>
         </div>
+        <q-space />
 
         <!-- Status chip (edit mode) -->
-        <div v-if="isEditMode && existingJob" class="q-mr-md">
-          <q-chip
-            :color="getStatusColor(existingJob.status)"
-            text-color="white"
-            :icon="existingJob.status === 'active' ? 'radio_button_checked' : 'pause_circle'"
-            class="schedule-status-chip"
-          >
-            {{ getStatusLabel(existingJob.status) }}
-          </q-chip>
-        </div>
+        <q-chip
+          v-if="isEditMode && existingJob"
+          :color="getStatusColor(existingJob.status)"
+          text-color="white"
+          dense
+          :icon="existingJob.status === 'active' ? 'radio_button_checked' : 'pause_circle'"
+          class="q-mr-sm text-weight-bold"
+        >
+          {{ getStatusLabel(existingJob.status) }}
+        </q-chip>
 
-        <q-btn flat round icon="close" class="text-grey-4" @click="isOpen = false" />
+        <q-btn flat round dense icon="close" color="white" v-close-popup />
       </q-card-section>
 
-      <q-separator class="separator-gold" />
-
-      <!-- ── Body ──────────────────────────────────────────────────────── -->
-      <q-card-section class="q-px-xl q-py-lg schedule-modal-body">
+      <!-- ── Body (Off-White #f9f7f2) ──────────────────────────────────── -->
+      <q-card-section class="schedule-modal-body q-pa-lg">
         <div class="schedule-grid">
           <!-- ── LEFT COLUMN: Frequency & Lifecycle ────────────────── -->
           <div class="schedule-section">
-            <div class="section-label">
-              <q-icon name="repeat" size="18px" class="text-gold q-mr-sm" />
+            <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs">
+              <q-icon name="repeat" size="18px" color="amber-9" class="q-mr-xs" />
               Frequenza di Esecuzione
             </div>
 
-            <!-- Frequency cards -->
-            <div class="frequency-cards q-gutter-sm">
-              <div
+            <!-- Frequency cards list -->
+            <q-list bordered separator class="rounded-borders bg-white q-mb-md">
+              <q-item
                 v-for="opt in FREQUENCY_OPTIONS"
                 :key="opt.value"
-                class="frequency-card"
-                :class="{ 'frequency-card--active': selectedFrequency === opt.value }"
+                clickable
+                :active="selectedFrequency === opt.value"
+                active-class="bg-amber-1"
                 @click="selectedFrequency = opt.value"
+                class="frequency-item"
               >
-                <q-icon :name="opt.icon" size="20px" class="q-mr-sm" />
-                <div>
-                  <div class="freq-label">{{ opt.label }}</div>
-                  <div class="freq-desc">{{ opt.desc }}</div>
-                </div>
-              </div>
-            </div>
+                <q-item-section avatar style="min-width: 36px">
+                  <q-radio v-model="selectedFrequency" :val="opt.value" color="amber-9" />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label
+                    class="text-subtitle2"
+                    :class="{ 'text-weight-bold': selectedFrequency === opt.value }"
+                  >
+                    {{ opt.label }}
+                  </q-item-label>
+                  <q-item-label caption class="text-grey-7">
+                    {{ opt.desc }}
+                  </q-item-label>
+                </q-item-section>
+              </q-item>
+            </q-list>
 
             <!-- End date (GDPR Art. 5 mandatory) -->
-            <div class="section-label q-mt-lg">
-              <q-icon name="event" size="18px" class="text-gold q-mr-sm" />
+            <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs q-mt-md">
+              <q-icon name="event" size="18px" color="amber-9" class="q-mr-xs" />
               Data Limite (GDPR Art. 5)
-              <q-badge color="negative" label="Obbligatoria" class="q-ml-sm" />
+              <q-badge color="negative" text-color="white" label="Obbligatoria" class="q-ml-sm" />
             </div>
             <q-input
               v-model="endDate"
               label="Data scadenza monitoraggio"
               outlined
-              dark
-              class="schedule-input q-mb-sm"
+              dense
+              class="bg-white rounded-borders q-mb-sm"
               readonly
               :hint="
                 endDateFormatted ? `Scade il: ${endDateFormatted}` : 'Seleziona una data limite'
               "
             >
               <template #prepend>
-                <q-icon name="event" class="text-gold cursor-pointer">
+                <q-icon name="event" color="amber-9" class="cursor-pointer">
                   <q-popup-proxy cover transition-show="scale" transition-hide="scale">
                     <q-date
                       v-model="endDate"
                       mask="YYYY/MM/DD"
                       :options="(d: string) => d >= minEndDate"
                       today-btn
-                      dark
+                      color="amber-9"
                       class="schedule-datepicker"
                     />
                   </q-popup-proxy>
@@ -478,90 +483,109 @@ function getStatusLabel(status: string): string {
             </q-input>
 
             <!-- Update mode -->
-            <div class="section-label q-mt-lg">
-              <q-icon name="merge" size="18px" class="text-gold q-mr-sm" />
+            <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs q-mt-md">
+              <q-icon name="merge" size="18px" color="amber-9" class="q-mr-xs" />
               Modalità Integrazione Dati
             </div>
-            <div class="update-mode-cards q-gutter-sm">
-              <div
+            <q-list bordered separator class="rounded-borders bg-white q-mb-md">
+              <q-item
                 v-for="opt in UPDATE_MODE_OPTIONS"
                 :key="opt.value"
-                class="update-mode-card"
-                :class="{ 'update-mode-card--active': updateMode === opt.value }"
+                clickable
+                :active="updateMode === opt.value"
+                active-class="bg-amber-1"
                 @click="updateMode = opt.value"
+                class="update-mode-item"
               >
-                <q-icon :name="opt.icon" size="18px" class="q-mr-sm text-gold" />
-                <div>
-                  <div class="freq-label">{{ opt.label }}</div>
-                  <div class="freq-desc">{{ opt.desc }}</div>
-                </div>
-              </div>
-            </div>
+                <q-item-section avatar style="min-width: 36px">
+                  <q-radio v-model="updateMode" :val="opt.value" color="amber-9" />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label
+                    class="text-subtitle2"
+                    :class="{ 'text-weight-bold': updateMode === opt.value }"
+                  >
+                    {{ opt.label }}
+                  </q-item-label>
+                  <q-item-label caption class="text-grey-7">
+                    {{ opt.desc }}
+                  </q-item-label>
+                </q-item-section>
+              </q-item>
+            </q-list>
 
             <!-- Auto-style toggle -->
-            <q-item class="schedule-toggle q-mt-md" tag="label">
-              <q-item-section avatar>
-                <q-toggle v-model="autoStyleSheet" color="amber-6" />
-              </q-item-section>
-              <q-item-section>
-                <q-item-label class="text-white">Auto-Styling Elite 🎨</q-item-label>
-                <q-item-label caption class="text-grey-5">
-                  Applica header scuro, wrap e larghezze ottimali ad ogni aggiornamento
-                </q-item-label>
-              </q-item-section>
-            </q-item>
+            <q-card
+              bordered
+              flat
+              class="bg-white rounded-borders q-pa-sm border-gold-light q-mt-md"
+            >
+              <q-item tag="label" class="q-pa-xs">
+                <q-item-section avatar>
+                  <q-toggle v-model="autoStyleSheet" color="amber-9" />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label class="text-weight-bold text-grey-9"
+                    >Auto-Styling Elite 🎨</q-item-label
+                  >
+                  <q-item-label caption class="text-grey-7">
+                    Applica automaticamente header scuro, testo a capo e larghezze colonne ottimali
+                  </q-item-label>
+                </q-item-section>
+              </q-item>
+            </q-card>
           </div>
 
           <!-- ── RIGHT COLUMN: Search config & Sheet target ────────── -->
           <div class="schedule-section">
             <!-- Job title -->
-            <div class="section-label">
-              <q-icon name="label" size="18px" class="text-gold q-mr-sm" />
+            <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs">
+              <q-icon name="label" size="18px" color="amber-9" class="q-mr-xs" />
               Nome del Monitoraggio
             </div>
             <q-input
               v-model="jobTitle"
               label="Es. Monitoraggio Trainer Kubernetes Italia"
               outlined
-              dark
-              class="schedule-input q-mb-lg"
+              dense
+              class="bg-white rounded-borders q-mb-md"
               maxlength="120"
               counter
             />
 
             <!-- Search query -->
-            <div class="section-label">
-              <q-icon name="search" size="18px" class="text-gold q-mr-sm" />
+            <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs">
+              <q-icon name="search" size="18px" color="amber-9" class="q-mr-xs" />
               Query di Ricerca
             </div>
             <q-input
               v-model="searchQuery"
               label="Es. Trainer Kubernetes certificati Italia"
               outlined
-              dark
-              class="schedule-input q-mb-sm"
+              dense
+              class="bg-white rounded-borders q-mb-md"
               hint="Query inviata all'AgenteRicerca ad ogni esecuzione"
             />
 
             <!-- Prompt template -->
-            <div class="section-label q-mt-lg">
-              <q-icon name="smart_toy" size="18px" class="text-gold q-mr-sm" />
+            <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs">
+              <q-icon name="smart_toy" size="18px" color="amber-9" class="q-mr-xs" />
               Istruzioni per AgenteRicerca
             </div>
             <q-input
               v-model="promptTemplate"
               label="Istruzioni di screening personalizzate..."
               outlined
-              dark
+              dense
               type="textarea"
               :rows="3"
-              class="schedule-input q-mb-lg"
+              class="bg-white rounded-borders q-mb-md"
               hint="Criteri di match, focus competenze, esclusioni, etc."
             />
 
             <!-- Sheet selector -->
-            <div class="section-label">
-              <q-icon name="table_chart" size="18px" class="text-gold q-mr-sm" />
+            <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs">
+              <q-icon name="table_chart" size="18px" color="amber-9" class="q-mr-xs" />
               Foglio Google di Destinazione
             </div>
             <q-select
@@ -572,41 +596,55 @@ function getStatusLabel(status: string): string {
               emit-value
               map-options
               outlined
-              dark
-              class="schedule-input q-mb-sm"
+              dense
+              class="bg-white rounded-borders q-mb-md"
               label="Seleziona il foglio di destinazione"
               no-options-label="Nessun Google Sheet collegato al workspace"
             >
               <template #prepend>
-                <q-icon name="table_chart" class="text-gold" />
+                <q-icon name="table_chart" color="amber-9" />
               </template>
               <template #option="scope">
                 <q-item v-bind="scope.itemProps">
                   <q-item-section avatar>
-                    <q-icon name="table_chart" :color="scope.opt.isMaster ? 'amber-6' : 'blue-4'" />
+                    <q-icon
+                      name="table_chart"
+                      :color="scope.opt.isMaster ? 'amber-9' : 'primary'"
+                    />
                   </q-item-section>
                   <q-item-section>
-                    <q-item-label>{{ scope.opt.name }}</q-item-label>
-                    <q-item-label caption>{{ scope.opt.id?.slice(0, 20) }}...</q-item-label>
+                    <q-item-label class="text-weight-medium">{{ scope.opt.name }}</q-item-label>
+                    <q-item-label caption class="text-grey-6"
+                      >{{ scope.opt.id?.slice(0, 24) }}...</q-item-label
+                    >
                   </q-item-section>
                   <q-item-section side>
-                    <q-badge v-if="scope.opt.isMaster" color="amber-6" label="⭐ Master" />
+                    <q-badge
+                      v-if="scope.opt.isMaster"
+                      color="amber-9"
+                      text-color="dark"
+                      label="⭐ Master"
+                    />
                   </q-item-section>
                 </q-item>
               </template>
             </q-select>
 
             <!-- Tab name -->
+            <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs">
+              <q-icon name="tab" size="18px" color="amber-9" class="q-mr-xs" />
+              Nome Scheda (tab) Interna del Foglio
+            </div>
             <q-input
               v-model="selectedSheetTab"
               label="Nome scheda (tab)"
               outlined
-              dark
-              class="schedule-input q-mb-lg"
+              dense
+              class="bg-white rounded-borders q-mb-md"
               hint="Nome del foglio interno. Verrà creato automaticamente se non esiste."
             >
               <template #prepend>
-                <q-icon name="tab" class="text-grey-5" />
+                <q-icon name="tab" color="grey-7" />
               </template>
             </q-input>
 
@@ -614,12 +652,12 @@ function getStatusLabel(status: string): string {
             <q-expansion-item
               icon="security"
               label="Configurazione Deduplicazione Avanzata"
-              class="schedule-expansion"
-              header-class="text-grey-4"
+              header-class="text-weight-bold text-navy"
+              class="bg-white rounded-borders border-gold-light q-mb-sm"
             >
-              <div class="dedup-config q-pa-md q-gutter-sm">
-                <div class="dedup-info">
-                  <q-icon name="info" class="text-gold q-mr-sm" />
+              <div class="dedup-config q-pa-md bg-grey-1 rounded-borders">
+                <div class="row items-center text-caption text-grey-8 q-mb-sm">
+                  <q-icon name="info" color="amber-9" size="16px" class="q-mr-xs" />
                   <span>Dual-Key: URL profilo + Nome e Cognome (case-insensitive)</span>
                 </div>
                 <div class="row q-gutter-sm">
@@ -627,18 +665,18 @@ function getStatusLabel(status: string): string {
                     v-model.number="dedupNameColumnIndex"
                     label="Indice colonna Nome (0-based)"
                     outlined
-                    dark
+                    dense
                     type="number"
-                    class="col schedule-input"
+                    class="col bg-white rounded-borders"
                     hint="Default: 1 = colonna B"
                   />
                   <q-input
                     v-model.number="dedupUrlColumnIndex"
                     label="Indice colonna URL (0-based)"
                     outlined
-                    dark
+                    dense
                     type="number"
-                    class="col schedule-input"
+                    class="col bg-white rounded-borders"
                     hint="Default: 7 = colonna H"
                   />
                 </div>
@@ -648,8 +686,10 @@ function getStatusLabel(status: string): string {
         </div>
       </q-card-section>
 
-      <!-- ── Footer Actions ────────────────────────────────────────────── -->
-      <q-card-actions class="schedule-modal-footer q-px-xl q-py-lg">
+      <q-separator />
+
+      <!-- ── Footer Actions (Clean White & Amber-9) ───────────────────────── -->
+      <q-card-actions align="right" class="q-pa-md bg-white">
         <!-- Delete / Pause (edit mode only) -->
         <template v-if="isEditMode && existingJob">
           <q-btn
@@ -657,8 +697,9 @@ function getStatusLabel(status: string): string {
             icon="delete"
             label="Elimina"
             color="negative"
+            no-caps
             :loading="isDeleting"
-            class="q-mr-sm"
+            class="q-mr-xs"
             @click="handleDelete"
           />
           <q-btn
@@ -666,22 +707,25 @@ function getStatusLabel(status: string): string {
             :icon="existingJob.status === 'active' ? 'pause' : 'play_arrow'"
             :label="existingJob.status === 'active' ? 'Metti in Pausa' : 'Riattiva'"
             color="warning"
+            no-caps
+            class="q-mr-sm"
             @click="handleTogglePause"
           />
         </template>
 
         <q-space />
 
-        <q-btn flat label="Annulla" class="text-grey-4" @click="isOpen = false" />
+        <q-btn flat label="Annulla" color="grey-8" no-caps v-close-popup />
         <q-btn
           unelevated
-          icon="save"
-          :label="isEditMode ? 'Salva Modifiche' : 'Attiva Monitoraggio'"
-          color="amber-7"
+          color="amber-9"
           text-color="dark"
+          icon="schedule"
+          :label="isEditMode ? 'Salva Modifiche' : 'Attiva Monitoraggio'"
+          no-caps
+          class="text-weight-bold q-px-lg"
           :loading="isSaving"
           :disable="!canSave"
-          class="schedule-save-btn q-ml-sm"
           @click="handleSave"
         />
       </q-card-actions>
@@ -690,41 +734,15 @@ function getStatusLabel(status: string): string {
 </template>
 
 <style scoped lang="scss">
-@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600&family=Mulish:wght@300;400;500;600&display=swap");
-
 .schedule-modal-card {
-  background: linear-gradient(160deg, #0d1b2e 0%, #0a2342 50%, #091928 100%);
-  color: #f9f7f2;
-  font-family: "Mulish", sans-serif;
-  display: flex;
-  flex-direction: column;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f9f7f2;
 }
 
-.schedule-modal-header {
-  background: rgba(255, 255, 255, 0.03);
-  border-bottom: 1px solid rgba(197, 160, 101, 0.2);
-}
-
-.schedule-modal-title {
-  font-family: "Playfair Display", serif;
-  font-size: 1.4rem;
-  font-weight: 600;
-  color: #f9f7f2;
-  margin: 0;
-  line-height: 1.2;
-}
-
-.schedule-modal-subtitle {
-  font-size: 0.8rem;
-  color: #c5a065;
-  margin: 2px 0 0;
-  opacity: 0.8;
-}
-
-.separator-gold {
-  background: linear-gradient(90deg, transparent, #c5a065 30%, #c5a065 70%, transparent);
-  height: 1px;
-  opacity: 0.4;
+.schedule-modal-card__header {
+  background: #0a2342;
+  border-bottom: 2px solid #c5a065;
 }
 
 .schedule-modal-body {
@@ -735,145 +753,28 @@ function getStatusLabel(status: string): string {
 .schedule-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 2rem;
-  max-width: 1100px;
-  margin: 0 auto;
+  gap: 1.5rem;
 
-  @media (max-width: 768px) {
+  @media (max-width: 800px) {
     grid-template-columns: 1fr;
   }
 }
 
-.schedule-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+.text-navy {
+  color: #0a2342;
 }
 
-.section-label {
-  display: flex;
-  align-items: center;
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #c5a065;
-  margin-bottom: 0.5rem;
-  margin-top: 0.25rem;
+.border-gold-light {
+  border: 1px solid rgba(197, 160, 101, 0.35);
 }
 
-.text-gold {
-  color: #c5a065 !important;
-}
-
-.frequency-cards,
-.update-mode-cards {
-  display: flex;
-  flex-direction: column;
-}
-
-.frequency-card,
-.update-mode-card {
-  display: flex;
-  align-items: flex-start;
-  padding: 0.75rem 1rem;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  cursor: pointer;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: rgba(197, 160, 101, 0.08);
-    border-color: rgba(197, 160, 101, 0.3);
-  }
-
-  &--active {
-    background: rgba(197, 160, 101, 0.15) !important;
-    border-color: #c5a065 !important;
-    box-shadow: 0 0 12px rgba(197, 160, 101, 0.2);
-  }
-}
-
-.freq-label {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #f9f7f2;
-}
-
-.freq-desc {
-  font-size: 0.72rem;
-  color: rgba(249, 247, 242, 0.5);
-  margin-top: 2px;
-}
-
-.schedule-input {
-  :deep(.q-field__control) {
-    background: rgba(255, 255, 255, 0.04);
-    border-radius: 10px;
-  }
-  :deep(.q-field__label),
-  :deep(.q-field__native),
-  :deep(.q-field__input) {
-    color: #f9f7f2;
-  }
-  :deep(.q-field__bottom) {
-    color: rgba(249, 247, 242, 0.5);
-  }
+.frequency-item,
+.update-mode-item {
+  transition: background-color 0.15s ease;
 }
 
 .schedule-datepicker {
-  background: #0d1b2e !important;
-  border: 1px solid rgba(197, 160, 101, 0.3);
-  border-radius: 12px;
-}
-
-.schedule-toggle {
-  background: rgba(255, 255, 255, 0.03);
+  background: #ffffff;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  padding: 0.5rem 1rem;
-}
-
-.schedule-expansion {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.dedup-config {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 8px;
-}
-
-.dedup-info {
-  display: flex;
-  align-items: center;
-  font-size: 0.78rem;
-  color: rgba(249, 247, 242, 0.6);
-  margin-bottom: 0.5rem;
-}
-
-.schedule-status-chip {
-  font-weight: 600;
-  font-size: 0.8rem;
-}
-
-.schedule-modal-footer {
-  background: rgba(0, 0, 0, 0.3);
-  border-top: 1px solid rgba(197, 160, 101, 0.15);
-}
-
-.schedule-save-btn {
-  font-weight: 700;
-  border-radius: 10px;
-  padding: 0 1.5rem;
-  font-size: 0.9rem;
-  transition: transform 0.15s ease;
-
-  &:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 16px rgba(197, 160, 101, 0.3);
-  }
 }
 </style>
