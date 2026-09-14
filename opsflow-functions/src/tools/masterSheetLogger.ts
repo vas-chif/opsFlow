@@ -74,16 +74,21 @@ export interface MasterSheetEvent {
 /**
  * Sanitizes a task title for use as a Google Sheets tab name.
  * Google Sheets rules: max 31 chars, no backslash / ? * [ ] : characters.
+ * @param {string} title - Raw task title to sanitize.
+ * @return {string} Sanitized tab name, guaranteed non-empty (fallback: 'Task').
  */
 function sanitizeTabName(title: string): string {
   return title.replace(/[\\/?*[\]:]/g, "").trim().slice(0, 31) || "Task";
-} /*end sanitizeTabName*/
+} /* end sanitizeTabName */
 
 // Sheets client type inferred from googleapis at runtime
 type SheetsClient = ReturnType<typeof import("googleapis")["google"]["sheets"]>;
 
 /**
  * Returns all existing tab titles in the given spreadsheet.
+ * @param {SheetsClient} sheets - Authenticated Google Sheets API client.
+ * @param {string} spreadsheetId - Target spreadsheet ID.
+ * @return {Promise<string[]>} Array of existing tab title strings.
  */
 async function fetchSheetTitles(sheets: SheetsClient, spreadsheetId: string): Promise<string[]> {
   const meta = await sheets.spreadsheets.get({
@@ -93,10 +98,15 @@ async function fetchSheetTitles(sheets: SheetsClient, spreadsheetId: string): Pr
   return (meta.data.sheets ?? [])
     .map((s) => s.properties?.title)
     .filter((t): t is string => Boolean(t));
-} /*end fetchSheetTitles*/
+} /* end fetchSheetTitles */
 
 /**
  * Creates a new tab if it does not already exist. Idempotent.
+ * @param {SheetsClient} sheets - Authenticated Google Sheets API client.
+ * @param {string} spreadsheetId - Target spreadsheet ID.
+ * @param {string} tabTitle - Name of the tab to create.
+ * @param {string[]} existingTitles - Currently known tab titles (to skip API call if already present).
+ * @return {Promise<void>}
  */
 async function createTabIfMissing(
   sheets: SheetsClient,
@@ -109,11 +119,15 @@ async function createTabIfMissing(
     spreadsheetId,
     requestBody: { requests: [{ addSheet: { properties: { title: tabTitle } } }] },
   });
-} /*end createTabIfMissing*/
+} /* end createTabIfMissing */
 
 /**
  * Ensures the Index Tab exists with a header row and Elite styling.
- * Returns the updated list of all existing tab titles.
+ * Creates and styles the tab if it is new; idempotent if already present.
+ * @param {SheetsClient} sheets - Authenticated Google Sheets API client.
+ * @param {string} spreadsheetId - Target spreadsheet ID.
+ * @param {string[]} existingTitles - Currently known tab titles.
+ * @return {Promise<string[]>} Updated list of tab titles (including the index tab if newly created).
  */
 async function ensureIndexTab(
   sheets: SheetsClient,
@@ -135,11 +149,16 @@ async function ensureIndexTab(
     });
   });
   return [INDEX_TAB_TITLE, ...existingTitles];
-} /*end ensureIndexTab*/
+} /* end ensureIndexTab */
 
 /**
  * Ensures the dedicated task tab exists with a header row and Elite styling.
- * Returns the sanitized tab title to use for subsequent appends.
+ * Creates and styles the tab if it is new; idempotent if already present.
+ * @param {SheetsClient} sheets - Authenticated Google Sheets API client.
+ * @param {string} spreadsheetId - Target spreadsheet ID.
+ * @param {string} taskTitle - Original task title (will be sanitized for tab name).
+ * @param {string[]} existingTitles - Currently known tab titles.
+ * @return {Promise<string>} Sanitized tab title to use for appending rows.
  */
 async function ensureTaskTab(
   sheets: SheetsClient,
@@ -164,11 +183,18 @@ async function ensureTaskTab(
     });
   }
   return tabTitle;
-} /*end ensureTaskTab*/
+} /* end ensureTaskTab */
 
 /**
  * Appends the task to the Index tab if not already registered.
  * Idempotent: scans column B for the taskId before appending.
+ * @param {SheetsClient} sheets - Authenticated Google Sheets API client.
+ * @param {string} spreadsheetId - Target spreadsheet ID.
+ * @param {string} taskId - Unique Firestore task document ID.
+ * @param {string} taskTitle - Human-readable task title for the index row.
+ * @param {string} tabTitle - Sanitized tab name for the task's dedicated sheet.
+ * @param {string} nowStr - Locale-formatted timestamp string (Rome timezone).
+ * @return {Promise<void>}
  */
 async function registerTaskInIndex(
   sheets: SheetsClient,
@@ -192,7 +218,7 @@ async function registerTaskInIndex(
     insertDataOption: "INSERT_ROWS",
     requestBody: { values: [[taskTitle, taskId, nowStr, tabTitle]] },
   });
-} /*end registerTaskInIndex*/
+} /* end registerTaskInIndex */
 
 // ── Main Export ───────────────────────────────────────────────────────────────
 
@@ -204,14 +230,14 @@ async function registerTaskInIndex(
  *  - Tab "<Task Name>":    all events for that specific task, with Elite formatting.
  *
  * @param {MasterSheetEvent} event - The event metadata to log.
- * @returns {Promise<boolean>} True if appended successfully, false on error or disabled toggle.
+ * @return {Promise<boolean>} True if appended successfully, false on error or disabled toggle.
  */
 export async function syncTaskEventToMasterSheet(event: MasterSheetEvent): Promise<boolean> {
   try {
     const db = getFirestore();
 
     // 1. Fetch Task — verify syncToMasterSheet toggle is enabled
-    let taskRef = db.doc(
+    const taskRef = db.doc(
       `tenants/${event.tenantId}/workspaces/${event.workspaceId}/tasks/${event.taskId}`,
     );
     let taskSnap = await taskRef.get();

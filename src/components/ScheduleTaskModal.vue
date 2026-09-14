@@ -232,8 +232,7 @@ function initializeForm(): void {
       "Assegna un Match Score da 0 a 100 basato sull'aderenza al profilo cercato.";
     // Pre-populate sheet from task primary sheet (🎯 Primario), fallback to workspace default
     const taskPrimarySheetId =
-      props.task.settings?.selectedSheetId ||
-      (props.task.settings?.selectedSheetIds?.[0] ?? "");
+      props.task.settings?.selectedSheetId || (props.task.settings?.selectedSheetIds?.[0] ?? "");
     const wsFallbackSheetId = props.workspace?.linkedResources?.defaultSheetId || "";
     const resolvedSheetId = taskPrimarySheetId || wsFallbackSheetId;
     selectedSheetId.value = resolvedSheetId;
@@ -556,7 +555,9 @@ function getStatusLabel(status: string): string {
           <!-- ── RIGHT COLUMN: Search config & Sheet target ────────── -->
           <div class="schedule-section">
             <!-- Job title — read-only by default, unlock with edit button -->
-            <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs row items-center justify-between">
+            <div
+              class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs row items-center justify-between"
+            >
               <div class="row items-center">
                 <q-icon name="label" size="18px" color="amber-9" class="q-mr-xs" />
                 Nome del Monitoraggio
@@ -592,7 +593,7 @@ function getStatusLabel(status: string): string {
               class="locked-field-display q-mb-md"
               @click="isJobTitleLocked = false"
             >
-              <div class="locked-field-display__text">{{ jobTitle || '—' }}</div>
+              <div class="locked-field-display__text">{{ jobTitle || "—" }}</div>
               <q-tooltip>Clicca per modificare</q-tooltip>
             </div>
             <!-- Unlocked: editable textarea -->
@@ -612,7 +613,9 @@ function getStatusLabel(status: string): string {
             />
 
             <!-- Search query — read-only by default, unlock with edit button -->
-            <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs row items-center justify-between">
+            <div
+              class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs row items-center justify-between"
+            >
               <div class="row items-center">
                 <q-icon name="search" size="18px" color="amber-9" class="q-mr-xs" />
                 Query di Ricerca
@@ -648,7 +651,7 @@ function getStatusLabel(status: string): string {
               class="locked-field-display q-mb-sm"
               @click="isSearchQueryLocked = false"
             >
-              <div class="locked-field-display__text">{{ searchQuery || '—' }}</div>
+              <div class="locked-field-display__text">{{ searchQuery || "—" }}</div>
               <q-tooltip>Clicca per modificare</q-tooltip>
             </div>
             <div v-if="isSearchQueryLocked" class="text-caption text-grey-7 q-mb-md">
