@@ -788,11 +788,10 @@ export const resolveApproval = onRequest(
               });
             }
           } catch (subtaskBatchErr) {
+            const subtaskErrMsg =
+              subtaskBatchErr instanceof Error ? subtaskBatchErr.message : String(subtaskBatchErr);
             logger.warn("resolveApproval: Non-blocking subtasks auto-generation failed", {
-              error:
-                subtaskBatchErr instanceof Error
-                  ? subtaskBatchErr.message
-                  : String(subtaskBatchErr),
+              error: subtaskErrMsg,
               tenantId,
               taskId,
             });
