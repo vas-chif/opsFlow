@@ -47,15 +47,6 @@ const chatScrollRef = ref<HTMLDivElement | null>(null);
 const statusOptions: { label: string; value: TaskStatus; color: string; icon: string }[] = [
   { label: "In Attesa", value: "pending", color: "warning", icon: "schedule" },
   { label: "In Corso", value: "in-progress", color: "primary", icon: "play_arrow" },
-  { label: "Contattato", value: "contacted", color: "info", icon: "mail" },
-  { label: "Risposta Positiva", value: "positive-response", color: "positive", icon: "thumb_up" },
-  { label: "Risposta Negativa", value: "negative-response", color: "negative", icon: "thumb_down" },
-  {
-    label: "Follow-up 30gg",
-    value: "follow-up-30-days",
-    color: "deep-orange",
-    icon: "event_repeat",
-  },
   { label: "Completato", value: "completed", color: "positive", icon: "check_circle" },
   { label: "Annullato", value: "cancelled", color: "grey", icon: "cancel" },
 ];
@@ -109,7 +100,7 @@ watch(
   },
 );
 
-const handleStatusChange = async (newStatus: TaskStatus): Promise<void> => {
+const executeStatusUpdate = async (newStatus: TaskStatus): Promise<void> => {
   if (!props.task || !props.workspace) return;
   try {
     await taskStore.updateTaskStatus(props.workspace.id, props.task.id, newStatus);
@@ -126,6 +117,36 @@ const handleStatusChange = async (newStatus: TaskStatus): Promise<void> => {
       position: "top",
     });
   }
+}; /*end executeStatusUpdate*/
+
+const handleStatusChange = async (newStatus: TaskStatus): Promise<void> => {
+  if (!props.task || !props.workspace) return;
+  const currentStatus = props.task.status;
+  if (currentStatus === newStatus) return;
+
+  if (newStatus === "completed" || newStatus === "cancelled") {
+    q.dialog({
+      title: newStatus === "completed" ? "Completare il Task?" : "Annullare il Task?",
+      message:
+        "Completando o annullando questo task, tutti i monitoraggi e le pianificazioni ricorrenti attive collegate verranno messi in pausa automaticamente.",
+      ok: {
+        label: newStatus === "completed" ? "Completa Task" : "Annulla Task",
+        color: newStatus === "completed" ? "positive" : "negative",
+        flat: true,
+      },
+      cancel: {
+        label: "Indietro",
+        flat: true,
+        color: "grey",
+      },
+      persistent: true,
+    }).onOk(async () => {
+      await executeStatusUpdate(newStatus);
+    });
+    return;
+  }
+
+  await executeStatusUpdate(newStatus);
 }; /*end handleStatusChange*/
 
 const handleSendChatMessage = async (): Promise<void> => {

@@ -230,3 +230,14 @@ GENERAZIONE: Crea il file seguendo questa struttura rigorosa e commentata.
 - [x] **Fase 4 (Dispatcher & Smart Diffing)**: Cloud Function `processScheduledSourcingDispatcher` (ogni 60 min, Europe/Rome) con Dual-Key Diffing (Set di URL normalizzati e Nomi normalizzati), auto-terminate GDPR Art. 5, audit log Art. 30 e notifica automatica in chat del task.
 - [x] **Fase 5 (UI Quasar 2)**: Modale `ScheduleTaskModal.vue` Elite (frequenze, date picker fine validità, selezione foglio con ⭐ Master), pulsante `⏰` e chip dinamico (Verde/Arancione/Grigio) nella header toolbar di `TaskChatWindow.vue`, banner richiamo rapido in `TaskSettingsModal.vue`.
 - [x] **Fase 6 (Documentazione & Verifica)**: `.logicFlow/05_scheduled_sourcing_and_smart_diffing_flow.md` completo, `masterChecklist.md` aggiornato, `yarn lint` e `yarn typecheck` a 0 errori.
+
+---
+
+## 📌 STEP 20: Macro Task & Micro SubTasks Decoupling + Cascade Scheduler Teardown + Polymorphic Entity Management (COMPLETED 🟢)
+
+- [x] **Fase 1 (Modelli TypeScript)**: Scomposizione `MacroTaskStatus` e definizione schema `EntitySubTask`, `EntitySubTaskStatus`, `EntitySubTaskOutcome`, `EntityTimelineEvent`, `NestedMiniTask` in `src/types/models.ts`.
+- [x] **Fase 2 (Backend Cloud Functions & Batch Creation)**: Trigger `onTaskStatusUpdated` con teardown a cascata dei `scheduledJobs` (pausa immediata se task chiuso/cancellato) e generazione automatica batch dei Sub-Task in `resolveApproval` per evitare inserimenti manuali ripetitivi.
+- [x] **Fase 3 (Macro Task UI & Reopening Safety)**: Pulizia stati operativi dal Task principale (solo `Pending`, `In Progress`, `Completed`, `Cancelled`) in `TaskChatWindow.vue` e dialog di sicurezza alla riapertura task per non riattivare gli scheduler alla cieca.
+- [x] **Fase 4 (Sub-Task Entity Modal & Macro Rollup)**: Componente `SubTaskEntityModal.vue` Elite (Header con selettore stato interno senza sync bidirezionale Sheets, Note auto-save, Timeline per risorsa, mini-task nidificati, esito `won`/`lost`, trigger da tabella/timeline e suggerimento non invasivo di chiusura quando tutti i sub-task sono gestiti).
+- [x] **Fase 5 (Polimorfismo Multi-Dominio)**: Adattamento semantico dinamico per HR/Recruiting, Sanità/Ambulatorio (AES-256-GCM GDPR Art. 9), Procurement e Operations.
+- [x] **Fase 6 (Verifica & Pre-Commit)**: Checklist completa, `yarn lint` e `yarn typecheck` a 0 errori, zero leak di dati.

@@ -12,7 +12,17 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { useQuasar, copyToClipboard } from "quasar";
 
 // ── Firebase ─────────────────────────────────────────────────────────────────
-import { getFirestore, collection, query, where, getDocs, limit } from "firebase/firestore";
+import {
+  getFirestore,
+  collection,
+  query,
+  where,
+  getDocs,
+  limit,
+  doc,
+  updateDoc,
+  serverTimestamp,
+} from "firebase/firestore";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 import type {
@@ -24,6 +34,7 @@ import type {
   ApprovalRecord,
   LinkedGoogleResource,
   ScheduledSourcingJob,
+  EntitySubTask,
 } from "../types/models";
 
 // ── Stores ───────────────────────────────────────────────────────────────────
@@ -41,6 +52,7 @@ import TaskKeyPointsCard from "./TaskKeyPointsCard.vue";
 import ApprovalCard from "./ApprovalCard.vue";
 import TaskSettingsModal from "./TaskSettingsModal.vue";
 import ScheduleTaskModal from "./ScheduleTaskModal.vue";
+import SubTaskEntityModal from "./SubTaskEntityModal.vue";
 
 const props = defineProps<{
   windowState: FloatingWindow;
@@ -167,8 +179,13 @@ const resizeStart = ref({ x: 0, y: 0, w: 0, h: 0 });
 // Step 19: Active Scheduled Sourcing Job state & management
 const activeScheduledJob = ref<ScheduledSourcingJob | null>(null);
 
+const isTaskClosed = computed(() => {
+  return task.value?.status === "completed" || task.value?.status === "cancelled";
+});
+
 const scheduledJobStatusColor = computed<string>(() => {
   if (!activeScheduledJob.value) return "grey-6";
+  if (isTaskClosed.value) return "grey-6";
   switch (activeScheduledJob.value.status) {
     case "active":
       return "positive";
@@ -183,6 +200,7 @@ const scheduledJobStatusColor = computed<string>(() => {
 
 const scheduledJobStatusIcon = computed<string>(() => {
   if (!activeScheduledJob.value) return "schedule";
+  if (isTaskClosed.value) return "pause_circle";
   switch (activeScheduledJob.value.status) {
     case "active":
       return "schedule";
@@ -197,6 +215,7 @@ const scheduledJobStatusIcon = computed<string>(() => {
 
 const scheduledJobStatusLabel = computed<string>(() => {
   if (!activeScheduledJob.value) return "";
+  if (isTaskClosed.value) return "⏸️ In Pausa (Task Chiuso)";
   switch (activeScheduledJob.value.status) {
     case "active":
       return "⏰ 04:00 AM Attiva";
@@ -252,6 +271,136 @@ const handleScheduledJobSaved = (job: ScheduledSourcingJob): void => {
 const handleScheduledJobDeleted = (): void => {
   activeScheduledJob.value = null;
 }; /*end handleScheduledJobDeleted*/
+
+// ── Step 20: Polymorphic Entity SubTasks State ─────────────────────────────
+const subtasks = ref<EntitySubTask[]>([]);
+const selectedSubtask = ref<EntitySubTask | null>(null);
+const showSubtaskModal = ref<boolean>(false);
+const isLoadingSubtasks = ref<boolean>(false);
+
+const fetchSubtasks = async (): Promise<void> => {
+  const tId = authStore.tenantId;
+  const wsId = workspace.value?.id || task.value?.workspaceId;
+  const taskId = task.value?.id;
+  if (!tId || !wsId || !taskId) return;
+
+  isLoadingSubtasks.value = true;
+  try {
+    const db = getFirestore();
+    const subCol = collection(db, "tenants", tId, "workspaces", wsId, "tasks", taskId, "subtasks");
+    const snap = await getDocs(subCol);
+    const list: EntitySubTask[] = [];
+    snap.forEach((d) => {
+      list.push({ id: d.id, ...(d.data() as Omit<EntitySubTask, "id">) });
+    });
+    list.sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
+    subtasks.value = list;
+  } catch (err: unknown) {
+    logger.warn("TaskChatWindow", "Failed to fetch subtasks", err);
+  } finally {
+    isLoadingSubtasks.value = false;
+  }
+}; /*end fetchSubtasks*/
+
+const openSubtaskModal = (st: EntitySubTask): void => {
+  selectedSubtask.value = st;
+  showSubtaskModal.value = true;
+}; /*end openSubtaskModal*/
+
+const handleSubtaskSaved = (updated: EntitySubTask): void => {
+  const idx = subtasks.value.findIndex((s) => s.id === updated.id);
+  if (idx >= 0) {
+    subtasks.value[idx] = updated;
+  } else {
+    subtasks.value.push(updated);
+  }
+  selectedSubtask.value = updated;
+}; /*end handleSubtaskSaved*/
+
+const handleSubtaskDeleted = (subtaskId: string): void => {
+  subtasks.value = subtasks.value.filter((s) => s.id !== subtaskId);
+  showSubtaskModal.value = false;
+  selectedSubtask.value = null;
+}; /*end handleSubtaskDeleted*/
+
+const handleCreateManualSubtask = (): void => {
+  if (!task.value) return;
+  q.dialog({
+    title: "Nuova Risorsa / Sub-Task",
+    message: "Inserisci il nome della persona o risorsa da monitorare:",
+    prompt: {
+      model: "",
+      type: "text",
+      isValid: (val) => val.trim().length > 0,
+    },
+    cancel: true,
+    persistent: true,
+  }).onOk(async (name: string) => {
+    const tId = authStore.tenantId;
+    const wsId = workspace.value?.id || task.value?.workspaceId;
+    const taskId = task.value?.id;
+    if (!tId || !wsId || !taskId) return;
+
+    try {
+      const db = getFirestore();
+      const subCol = collection(
+        db,
+        "tenants",
+        tId,
+        "workspaces",
+        wsId,
+        "tasks",
+        taskId,
+        "subtasks",
+      );
+      const newRef = doc(subCol);
+      const nowIso = new Date().toISOString();
+      const newSubtask: EntitySubTask = {
+        id: newRef.id,
+        tenantId: tId,
+        workspaceId: wsId,
+        taskId,
+        domain: "recruiting",
+        title: name.trim(),
+        status: "new",
+        outcome: "in_progress",
+        attributes: {},
+        notes: "",
+        timeline: [
+          {
+            id: `evt_init_${Date.now()}`,
+            eventType: "status_change",
+            title: "Risorsa creata manualmente",
+            authorId: authStore.user?.uid || "user",
+            authorName: authStore.user?.displayName || "Operatore",
+            timestamp: nowIso,
+          },
+        ],
+        nestedTasks: [],
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+      const { setDoc } = await import("firebase/firestore");
+      await setDoc(newRef, newSubtask);
+
+      subtasks.value.push(newSubtask);
+      q.notify({ type: "positive", message: `Risorsa "${name}" creata con successo` });
+      openSubtaskModal(newSubtask);
+    } catch (err) {
+      logger.error("TaskChatWindow", "Failed to create manual subtask", err);
+    }
+  });
+}; /*end handleCreateManualSubtask*/
+
+// Macro Rollup Computed (Requirement 4.10)
+const allSubtasksFinished = computed(() => {
+  if (subtasks.value.length === 0) return false;
+  if (task.value?.status === "completed" || task.value?.status === "cancelled") return false;
+  return subtasks.value.every((s) => s.outcome === "won" || s.outcome === "lost");
+});
+
+const subtaskWonCount = computed(() => subtasks.value.filter((s) => s.outcome === "won").length);
+const subtaskLostCount = computed(() => subtasks.value.filter((s) => s.outcome === "lost").length);
 
 // Fullscreen & Layout View Mode
 const isFullscreen = computed(() => !!props.windowState.isFullscreen);
@@ -375,15 +524,6 @@ const activeSession = computed(() => {
 const statusOptions: { label: string; value: TaskStatus; color: string; icon: string }[] = [
   { label: "Pending", value: "pending", color: "amber-5", icon: "schedule" },
   { label: "In Progress", value: "in-progress", color: "cyan-4", icon: "play_arrow" },
-  { label: "Contacted", value: "contacted", color: "light-blue-3", icon: "mail" },
-  { label: "Positive Response", value: "positive-response", color: "positive", icon: "thumb_up" },
-  { label: "Negative Response", value: "negative-response", color: "negative", icon: "thumb_down" },
-  {
-    label: "Follow-up 30 Days",
-    value: "follow-up-30-days",
-    color: "deep-orange-4",
-    icon: "event_repeat",
-  },
   { label: "Completed", value: "completed", color: "positive", icon: "check_circle" },
   { label: "Cancelled", value: "cancelled", color: "grey-5", icon: "cancel" },
 ];
@@ -477,8 +617,10 @@ watch(
   (newTaskId) => {
     if (newTaskId) {
       fetchActiveScheduledJob();
+      fetchSubtasks();
     } else {
       activeScheduledJob.value = null;
+      subtasks.value = [];
     }
   },
   { immediate: true },
@@ -590,7 +732,40 @@ const renderFormattedMessage = (text: string): string => {
   return escaped;
 }; /*end renderFormattedMessage*/
 
-const handleStatusChange = async (newStatus: TaskStatus): Promise<void> => {
+const reactivateScheduledJob = async (): Promise<void> => {
+  if (!activeScheduledJob.value) return;
+  const tId = authStore.tenantId;
+  const wsId = workspace.value?.id || task.value?.workspaceId;
+  if (!tId || !wsId) return;
+  try {
+    const db = getFirestore();
+    const jobRef = doc(
+      db,
+      `tenants/${tId}/workspaces/${wsId}/scheduledJobs/${activeScheduledJob.value.id}`,
+    );
+    await updateDoc(jobRef, {
+      status: "active",
+      pauseReason: null,
+      updatedAt: serverTimestamp(),
+    });
+    activeScheduledJob.value = {
+      ...activeScheduledJob.value,
+      status: "active",
+      pauseReason: undefined,
+    };
+    q.notify({
+      type: "positive",
+      message: "Ricerca programmata notturna riattivata con successo.",
+      position: "top",
+    });
+  } catch (err) {
+    logger.warn("TaskChatWindow", "Failed to reactivate scheduled job", {
+      err: err instanceof Error ? err.message : String(err),
+    });
+  }
+}; /*end reactivateScheduledJob*/
+
+const executeStatusUpdate = async (newStatus: TaskStatus): Promise<void> => {
   if (!task.value || !workspace.value) return;
   try {
     await taskStore.updateTaskStatus(workspace.value.id, task.value.id, newStatus);
@@ -619,6 +794,82 @@ const handleStatusChange = async (newStatus: TaskStatus): Promise<void> => {
       position: "top",
     });
   }
+}; /*end executeStatusUpdate*/
+
+const handleStatusChange = async (newStatus: TaskStatus): Promise<void> => {
+  if (!task.value || !workspace.value) return;
+  const currentStatus = task.value.status;
+  if (currentStatus === newStatus) return;
+
+  // Reopening safety check (Requirement 3.5)
+  if (
+    (currentStatus === "completed" || currentStatus === "cancelled") &&
+    (newStatus === "in-progress" || newStatus === "pending")
+  ) {
+    const wasPausedByParent =
+      activeScheduledJob.value &&
+      activeScheduledJob.value.status === "paused" &&
+      activeScheduledJob.value.pauseReason === "parent_task_closed";
+
+    if (wasPausedByParent) {
+      q.dialog({
+        title: "Task Riaperto",
+        message:
+          "Il task è stato riaperto: desideri riattivare anche la ricerca programmata notturna collegata?",
+        ok: {
+          label: "Sì, Riattiva Ricerca",
+          color: "primary",
+          flat: true,
+        },
+        cancel: {
+          label: "No, Lascia in Pausa",
+          flat: true,
+          color: "grey",
+        },
+        persistent: true,
+      })
+        .onOk(async () => {
+          await executeStatusUpdate(newStatus);
+          await reactivateScheduledJob();
+        })
+        .onCancel(async () => {
+          await executeStatusUpdate(newStatus);
+        });
+      return;
+    }
+  }
+
+  // Teardown cascade confirmation check (Requirement 3.3)
+  if (newStatus === "completed" || newStatus === "cancelled") {
+    q.dialog({
+      title: newStatus === "completed" ? "Completare il Task?" : "Annullare il Task?",
+      message:
+        "Completando o annullando questo task, tutti i monitoraggi e le pianificazioni ricorrenti attive collegate verranno messi in pausa automaticamente.",
+      ok: {
+        label: newStatus === "completed" ? "Completa Task" : "Annulla Task",
+        color: newStatus === "completed" ? "positive" : "negative",
+        flat: true,
+      },
+      cancel: {
+        label: "Indietro",
+        flat: true,
+        color: "grey",
+      },
+      persistent: true,
+    }).onOk(async () => {
+      await executeStatusUpdate(newStatus);
+      if (activeScheduledJob.value && activeScheduledJob.value.status === "active") {
+        activeScheduledJob.value = {
+          ...activeScheduledJob.value,
+          status: "paused",
+          pauseReason: "parent_task_closed",
+        };
+      }
+    });
+    return;
+  }
+
+  await executeStatusUpdate(newStatus);
 }; /*end handleStatusChange*/
 
 const handleSendChatMessage = async (): Promise<void> => {
@@ -912,6 +1163,8 @@ const handleApproveAction = async (
           },
         });
       }
+
+      await fetchSubtasks();
 
       q.notify({
         type: "positive",
@@ -1613,6 +1866,175 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                   >
                 </q-btn>
               </div>
+
+              <!-- Macro Rollup Banner (Step 20 §4.10) -->
+              <div
+                v-if="allSubtasksFinished"
+                class="q-pa-sm q-mb-sm rounded-borders row items-center justify-between no-wrap macro-rollup-banner shadow-1"
+                style="
+                  background: linear-gradient(135deg, #fdfbf7 0%, #f4ede0 100%);
+                  border: 1.5px solid #c5a065;
+                "
+              >
+                <div class="row items-center no-wrap ellipsis q-mr-sm" style="flex: 1">
+                  <q-icon name="emoji_events" color="amber-9" size="26px" class="q-mr-xs" />
+                  <div class="text-caption text-primary ellipsis">
+                    <strong>Tutte le risorse gestite</strong> ({{ subtaskWonCount }} won,
+                    {{ subtaskLostCount }} lost). Completare il macro-task?
+                  </div>
+                </div>
+                <q-btn
+                  dense
+                  unelevated
+                  size="sm"
+                  color="positive"
+                  icon="check_circle"
+                  label="Completa Macro-Task"
+                  class="text-weight-bold q-px-sm"
+                  @click="handleStatusChange('completed')"
+                />
+              </div>
+
+              <!-- Polymorphic Entity SubTasks Panel (Step 20) -->
+              <q-expansion-item
+                default-opened
+                dense
+                icon="group_work"
+                :label="`Risorse & Sub-Task Operativi (${subtasks.filter((s) => s.outcome === 'won' || s.outcome === 'lost' || s.status === 'completed').length}/${subtasks.length})`"
+                header-class="text-caption text-weight-bold text-primary q-pa-xs bg-amber-1 rounded-borders"
+                class="q-mb-sm task-subtasks-expansion rounded-borders"
+                style="border: 1px solid rgba(197, 160, 101, 0.45)"
+              >
+                <div class="q-pa-xs bg-white rounded-borders">
+                  <div class="row items-center justify-between q-pa-xs q-mb-xs">
+                    <span class="text-caption text-grey-7" style="font-size: 0.72rem">
+                      Schede operative per risorsa (status, timeline e note)
+                    </span>
+                    <div class="row items-center q-gutter-x-2xs">
+                      <q-btn
+                        flat
+                        dense
+                        round
+                        size="xs"
+                        icon="refresh"
+                        color="grey-7"
+                        :loading="isLoadingSubtasks"
+                        @click="fetchSubtasks"
+                      >
+                        <q-tooltip>Ricarica Risorse</q-tooltip>
+                      </q-btn>
+                      <q-btn
+                        outline
+                        dense
+                        size="xs"
+                        color="primary"
+                        icon="person_add"
+                        label="Nuova Risorsa"
+                        class="q-px-xs"
+                        @click="handleCreateManualSubtask"
+                      />
+                    </div>
+                  </div>
+
+                  <q-list v-if="subtasks.length > 0" dense separator class="rounded-borders">
+                    <q-item
+                      v-for="st in subtasks"
+                      :key="st.id"
+                      clickable
+                      v-ripple
+                      class="rounded-borders q-py-xs q-px-sm"
+                      @click="openSubtaskModal(st)"
+                    >
+                      <q-item-section avatar style="min-width: 32px">
+                        <q-avatar
+                          size="28px"
+                          font-size="16px"
+                          color="navy-light"
+                          text-color="primary"
+                          :icon="
+                            st.domain === 'healthcare'
+                              ? 'medical_services'
+                              : st.domain === 'procurement'
+                                ? 'inventory_2'
+                                : st.domain === 'operations'
+                                  ? 'precision_manufacturing'
+                                  : 'person'
+                          "
+                        />
+                      </q-item-section>
+                      <q-item-section>
+                        <div class="row items-center q-gutter-x-xs no-wrap">
+                          <span class="text-caption text-weight-bolder text-dark ellipsis">
+                            {{ st.title }}
+                          </span>
+                          <q-badge
+                            v-if="st.entityExternalId"
+                            outline
+                            size="xs"
+                            color="amber-9"
+                            :label="st.entityExternalId"
+                          />
+                        </div>
+                        <div
+                          v-if="st.subtitle"
+                          class="text-caption text-grey-6 ellipsis"
+                          style="font-size: 0.72rem"
+                        >
+                          {{ st.subtitle }}
+                        </div>
+                      </q-item-section>
+                      <q-item-section side class="items-end">
+                        <div class="row items-center q-gutter-x-xs no-wrap">
+                          <q-badge
+                            v-if="st.outcome === 'won'"
+                            color="positive"
+                            size="xs"
+                            label="⭐ Won"
+                          />
+                          <q-badge
+                            v-else-if="st.outcome === 'lost'"
+                            color="grey-6"
+                            size="xs"
+                            label="❌ Lost"
+                          />
+                          <q-badge
+                            dense
+                            size="xs"
+                            :color="
+                              st.status === 'new'
+                                ? 'blue-6'
+                                : st.status === 'contacted'
+                                  ? 'light-blue-7'
+                                  : st.status === 'waiting_response'
+                                    ? 'amber-8'
+                                    : st.status === 'negotiation'
+                                      ? 'purple-6'
+                                      : 'positive'
+                            "
+                            :label="
+                              st.status === 'new'
+                                ? 'Da Contattare'
+                                : st.status === 'contacted'
+                                  ? 'Contattato'
+                                  : st.status === 'waiting_response'
+                                    ? 'In Attesa'
+                                    : st.status === 'negotiation'
+                                      ? 'In Trattativa'
+                                      : st.status
+                            "
+                          />
+                          <q-icon name="chevron_right" color="grey-5" size="18px" />
+                        </div>
+                      </q-item-section>
+                    </q-item>
+                  </q-list>
+
+                  <div v-else class="text-caption text-grey-6 text-center q-pa-sm">
+                    Nessuna risorsa/candidato generato. Verranno estratti automaticamente
+                    all'approvazione del monitoraggio o puoi crearne una con "Nuova Risorsa".
+                  </div>
+                </div>
+              </q-expansion-item>
 
               <!-- AI Operational SubTasks Checklist (AgentePlanner / AI Task Architect) -->
               <q-expansion-item
@@ -2337,6 +2759,14 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
       :existing-job="activeScheduledJob"
       @saved="handleScheduledJobSaved"
       @deleted="handleScheduledJobDeleted"
+    />
+
+    <!-- Step 20: Polymorphic Entity SubTask Modal -->
+    <SubTaskEntityModal
+      v-model="showSubtaskModal"
+      :subtask="selectedSubtask"
+      @saved="handleSubtaskSaved"
+      @deleted="handleSubtaskDeleted"
     />
   </div>
 </template>

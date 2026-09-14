@@ -27,6 +27,7 @@ import { z } from "genkit";
 
 // ── Firebase ──────────────────────────────────────────────────────────────────
 import { getFirestore, Firestore } from "firebase-admin/firestore";
+import { logger } from "firebase-functions";
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
 import { randomUUID } from "node:crypto";
@@ -303,12 +304,34 @@ export async function applyProfessionalSheetStyling(
     fields: "sheets.properties",
   });
 
-  const targetSheet = (metaResponse.data.sheets || []).find(
-    (s) => s.properties?.title === sheetTitle,
-  );
+  const sheetsList = metaResponse.data.sheets || [];
+  const cleanTitle = (sheetTitle || "").replace(/^'|'$/g, "").trim();
+
+  // 1. Exact match
+  // 2. Cleaned title match (without quotes/trim)
+  // 3. Case-insensitive match
+  // 4. Normalized match (ignoring spaces, e.g. "Foglio1" == "Foglio 1")
+  let targetSheet =
+    sheetsList.find((s) => s.properties?.title === sheetTitle) ||
+    sheetsList.find((s) => s.properties?.title === cleanTitle) ||
+    sheetsList.find((s) => s.properties?.title?.toLowerCase() === cleanTitle.toLowerCase()) ||
+    sheetsList.find(
+      (s) =>
+        (s.properties?.title || "").replace(/\s+/g, "").toLowerCase() ===
+        cleanTitle.replace(/\s+/g, "").toLowerCase(),
+    );
+
+  // 5. Fallback: if only 1 sheet exists in the document, apply styling to it
+  if (!targetSheet && sheetsList.length === 1) {
+    targetSheet = sheetsList[0];
+  }
 
   if (!targetSheet?.properties) {
-    // Sheet not found — skip styling silently (non-critical path)
+    logger.warn("applyProfessionalSheetStyling: Sheet tab not found, styling skipped", {
+      spreadsheetId,
+      requestedSheetTitle: sheetTitle,
+      availableTabs: sheetsList.map((s) => s.properties?.title),
+    });
     return;
   }
 

@@ -18,16 +18,16 @@
  * - Zero runtime cost (compile-time only)
  */
 
-/** Allowed task statuses in OpsFlow workflow. */
+/** Macro statuses for primary OpsFlow tasks governing overall container workflow. */
+export type MacroTaskStatus = "pending" | "in-progress" | "completed" | "cancelled";
+
+/** Allowed task statuses in OpsFlow workflow (preserves backwards compatibility with existing UI/stores). */
 export type TaskStatus =
-  | "pending"
-  | "in-progress"
+  | MacroTaskStatus
   | "contacted"
   | "positive-response"
   | "negative-response"
-  | "follow-up-30-days"
-  | "completed"
-  | "cancelled";
+  | "follow-up-30-days";
 
 /** UI & Session model for tracking Task status progression timeline. */
 export interface TaskTimelineEvent {
@@ -187,6 +187,88 @@ export interface SubTask {
   tenantId: string;
   createdAt: FirestoreTimestamp;
 } /*end SubTask*/
+
+// ── Step 20: Polymorphic Entity SubTasks ──────────────────────────────────────
+
+/** Supported operational domains for polymorphic SubTasks. */
+export type EntityDomain = "recruiting" | "healthcare" | "procurement" | "operations" | "generic";
+
+/** Granular operational status for per-entity Sub-Tasks. */
+export type EntitySubTaskStatus =
+  | "new"
+  | "contacted"
+  | "waiting_response"
+  | "negotiation"
+  | "positive_response"
+  | "negative_response"
+  | "follow_up"
+  | "completed";
+
+/** Final business outcome of an Entity Sub-Task. */
+export type EntitySubTaskOutcome = "in_progress" | "won" | "lost" | "cancelled";
+
+/** Type of event recorded in an entity's private timeline. */
+export type EntityEventType =
+  | "status_change"
+  | "call"
+  | "email"
+  | "whatsapp"
+  | "note"
+  | "mini_task";
+
+/** Single chronological event in the entity's private timeline. */
+export interface EntityTimelineEvent {
+  id: string;
+  eventType: EntityEventType;
+  title: string;
+  description?: string | undefined;
+  authorId: string;
+  authorName: string;
+  timestamp: string; // ISO 8601
+} /*end EntityTimelineEvent*/
+
+/** Nested mini-action inside an entity Sub-Task. */
+export interface NestedMiniTask {
+  id: string;
+  title: string;
+  completed: boolean;
+  dueDate?: string;
+  assignedTo?: string;
+} /*end NestedMiniTask*/
+
+/**
+ * Complete Polymorphic Entity SubTask Model.
+ * Stored at: tenants/{tenantId}/workspaces/{workspaceId}/tasks/{taskId}/subtasks/{subtaskId}
+ */
+export interface EntitySubTask {
+  id: string;
+  tenantId: string;
+  workspaceId: string;
+  taskId: string;
+  domain: EntityDomain;
+
+  /** Visual identification */
+  title: string;
+  subtitle?: string;
+  entityExternalId?: string;
+
+  /** State machine & outcome */
+  status: EntitySubTaskStatus;
+  outcome: EntitySubTaskOutcome;
+
+  /** Dynamic context inherited from table/chat */
+  contextSnippet?: string;
+  attributes: Record<string, unknown>;
+
+  /** Private timeline and notes */
+  notes: string;
+  timeline: EntityTimelineEvent[];
+  nestedTasks: NestedMiniTask[];
+
+  /** Timestamps */
+  createdAt: string;
+  updatedAt: string;
+} /*end EntitySubTask*/
 
 /**
  * AI metadata attached to tasks for learning and automation.
@@ -569,6 +651,7 @@ export interface ScheduledSourcingJob {
   taskId: string;
   title: string;
   status: "active" | "paused" | "completed";
+  pauseReason?: string | undefined;
 
   /** Frequency & Lifecycle */
   frequency: ScheduledJobFrequency;

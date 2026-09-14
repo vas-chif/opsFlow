@@ -304,6 +304,51 @@ export const onTaskUpdated = onDocumentUpdated(
         logger.error("AgenteIspettore audit failed", { tenantId, taskId, err });
       }
     }
+
+    // Step 20: Cascade Scheduler Teardown
+    // When a task transitions to 'completed' or 'cancelled', pause all active scheduledJobs immediately
+    const isNowClosed =
+      (beforeData.status !== "completed" && afterData.status === "completed") ||
+      (beforeData.status !== "cancelled" && afterData.status === "cancelled");
+
+    if (isNowClosed) {
+      try {
+        const { workspaceId } = event.params;
+        const db = getFirestore();
+        const activeJobsSnap = await db
+          .collection(`tenants/${tenantId}/workspaces/${workspaceId}/scheduledJobs`)
+          .where("taskId", "==", taskId)
+          .where("status", "==", "active")
+          .get();
+
+        if (!activeJobsSnap.empty) {
+          const batch = db.batch();
+          const nowIso = new Date().toISOString();
+          activeJobsSnap.docs.forEach((jobDoc) => {
+            batch.update(jobDoc.ref, {
+              status: "paused",
+              isLocked: false,
+              pauseReason: `parent_task_${afterData.status}`,
+              pausedAt: nowIso,
+            });
+          });
+          await batch.commit();
+          logger.info("onTaskUpdated: Cascade scheduler teardown applied", {
+            tenantId,
+            workspaceId,
+            taskId,
+            status: afterData.status,
+            pausedJobsCount: activeJobsSnap.size,
+          });
+        }
+      } catch (teardownErr) {
+        logger.warn("onTaskUpdated: Cascade scheduler teardown failed", {
+          tenantId,
+          taskId,
+          error: teardownErr instanceof Error ? teardownErr.message : String(teardownErr),
+        });
+      }
+    }
   },
 ); /* end onTaskUpdated */
 
@@ -675,6 +720,84 @@ export const resolveApproval = onRequest(
             });
           },
         );
+
+        // Step 20: Auto-Generation of per-entity SubTasks from approved rows
+        if (Array.isArray(rowsToWrite) && rowsToWrite.length > 0) {
+          try {
+            const subtasksCol = db.collection(
+              `tenants/${tenantId}/workspaces/${workspaceId}/tasks/${taskId}/subtasks`,
+            );
+            const subtaskBatch = db.batch();
+            const nowIso = new Date().toISOString();
+            let generatedCount = 0;
+
+            for (const row of rowsToWrite) {
+              if (!Array.isArray(row) || row.length === 0) continue;
+              // Identify ID, Title (Name), Subtitle (Role/Spec)
+              // Format can be [ID, Name, Role, ...] or [Name, Role, ...]
+              const firstCell = String(row[0] ?? "").trim();
+              const hasIdCol = /^[A-Z0-9_-]{3,25}$/i.test(firstCell) && row.length > 1;
+              const entityExternalId = hasIdCol ? firstCell : undefined;
+              const title = String(hasIdCol ? (row[1] || row[0]) : row[0]).trim();
+              const subtitle = String(hasIdCol ? (row[2] || "") : (row[1] || "")).trim();
+
+              if (!title) continue;
+
+              const newSubtaskRef = subtasksCol.doc();
+              subtaskBatch.set(newSubtaskRef, {
+                id: newSubtaskRef.id,
+                tenantId,
+                workspaceId,
+                taskId,
+                domain: "recruiting",
+                title,
+                subtitle: subtitle || undefined,
+                entityExternalId: entityExternalId || undefined,
+                status: "new",
+                outcome: "in_progress",
+                attributes: {
+                  extractedRow: row,
+                  approvalId,
+                },
+                notes: "",
+                timeline: [
+                  {
+                    id: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                    eventType: "status_change",
+                    title: "Entità estratta e registrata",
+                    description: `Creazione automatica da approvazione sourcing per "${title}".`,
+                    authorId: userId,
+                    authorName: "Sistema / Sourcing",
+                    timestamp: nowIso,
+                  },
+                ],
+                nestedTasks: [],
+                createdAt: nowIso,
+                updatedAt: nowIso,
+              });
+              generatedCount++;
+            }
+
+            if (generatedCount > 0) {
+              await subtaskBatch.commit();
+              logger.info("resolveApproval: Auto-generated Entity SubTasks batch", {
+                tenantId,
+                workspaceId,
+                taskId,
+                generatedCount,
+              });
+            }
+          } catch (subtaskBatchErr) {
+            logger.warn("resolveApproval: Non-blocking subtasks auto-generation failed", {
+              error:
+                subtaskBatchErr instanceof Error
+                  ? subtaskBatchErr.message
+                  : String(subtaskBatchErr),
+              tenantId,
+              taskId,
+            });
+          }
+        }
       }
 
       await approvalRef.update({
