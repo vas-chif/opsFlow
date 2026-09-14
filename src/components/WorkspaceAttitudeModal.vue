@@ -103,6 +103,8 @@ const newFolderNameInput = ref("");
 const newFolderUrlInput = ref("");
 const isOAuthConnected = ref(false);
 const isConnectingGoogle = ref(false);
+/** Workspace-level flag: when true, all tasks write to the Master Sheet by default. */
+const autoSyncToMasterSheet = ref<boolean>(true);
 
 const extractIdFromUrl = (input: string): string => {
   const trimmed = input.trim();
@@ -542,6 +544,7 @@ const syncFromWorkspace = (newWs: Workspace | null): void => {
   defaultSheetId.value = res.defaultSheetId || "";
   defaultDriveFolderId.value = res.defaultDriveFolderId || "";
   defaultEmailSignature.value = res.defaultEmailSignature || "";
+  autoSyncToMasterSheet.value = res.autoSyncToMasterSheet !== false;
 
   linkedSheets.value = res.linkedSheets ? [...res.linkedSheets] : [];
   if (linkedSheets.value.length === 0 && res.defaultSheetId) {
@@ -675,6 +678,7 @@ const handleSave = async (): Promise<void> => {
       defaultEmailSignature: defaultEmailSignature.value.trim(),
       isOAuthConnected: isOAuthConnected.value,
       assignedAgents: assignedAgents.value,
+      autoSyncToMasterSheet: autoSyncToMasterSheet.value,
     };
 
     await taskStore.updateWorkspaceLinkedResources(
@@ -1194,6 +1198,33 @@ const handleSave = async (): Promise<void> => {
 
             <q-separator class="q-my-md" />
 
+            <!-- Master Sheet Workspace-Level Toggle -->
+            <div
+              class="master-sheet-toggle-card q-pa-md q-mb-md rounded-borders row items-center justify-between no-wrap"
+            >
+              <div class="col">
+                <div class="row items-center q-gutter-xs q-mb-xs">
+                  <q-icon name="table_chart" color="amber-8" size="18px" />
+                  <span class="text-subtitle2 text-weight-bold text-navy"
+                    >Scrittura Automatica sul Foglio Master</span
+                  >
+                </div>
+                <p class="text-caption text-grey-7 q-mb-none">
+                  Quando attivo, tutti i task di questo Workspace scrivono automaticamente i
+                  risultati sul Foglio Master Google. Puoi disattivarlo per ogni singolo task.
+                </p>
+              </div>
+              <q-toggle
+                v-model="autoSyncToMasterSheet"
+                color="amber-8"
+                size="lg"
+                class="q-ml-md"
+                :label="autoSyncToMasterSheet ? 'Attivo' : 'Disattivo'"
+              />
+            </div>
+
+            <q-separator class="q-my-md" />
+
             <!-- Default Email Signature for the Workspace -->
             <div class="q-mb-md">
               <div class="text-subtitle2 text-weight-bold text-navy q-mb-xs">
@@ -1332,5 +1363,16 @@ const handleSave = async (): Promise<void> => {
 .attitude-modal-card__footer {
   background: #ffffff;
   border-top: 1px solid rgba(10, 35, 66, 0.08);
+}
+
+.master-sheet-toggle-card {
+  background: rgba(197, 160, 101, 0.08);
+  border: 1px solid rgba(197, 160, 101, 0.35);
+  border-radius: 10px;
+  transition: background 0.2s ease;
+
+  &:hover {
+    background: rgba(197, 160, 101, 0.14);
+  }
 }
 </style>

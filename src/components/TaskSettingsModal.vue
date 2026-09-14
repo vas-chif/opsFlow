@@ -50,7 +50,7 @@ const primarySheetId = ref<string>("");
 const selectedSheetTab = ref<string>("");
 const emailSignature = ref<string>("");
 const emailHeader = ref<string>("");
-const syncToMasterSheet = ref<boolean>(false);
+const syncToMasterSheet = ref<boolean>(true);
 
 // Add new sheet on the fly
 const isAddingNewSheet = ref<boolean>(false);
@@ -122,7 +122,10 @@ const syncFromTask = (): void => {
   emailSignature.value =
     s?.emailSignature || props.workspace?.linkedResources?.defaultEmailSignature || "";
   emailHeader.value = s?.emailHeader || "";
-  syncToMasterSheet.value = s?.syncToMasterSheet || false;
+  // Inherit workspace-level autoSyncToMasterSheet as default (true unless workspace disables it).
+  // If the task has an explicit stored value, use that instead.
+  const wsAutoSync = props.workspace?.linkedResources?.autoSyncToMasterSheet !== false;
+  syncToMasterSheet.value = s?.syncToMasterSheet !== undefined ? s.syncToMasterSheet : wsAutoSync;
 }; /*end syncFromTask*/
 
 watch(

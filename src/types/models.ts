@@ -3,7 +3,7 @@
  * @description Central Firestore document models for OpsFlow Task Management & AI Knowledge Base.
  * @author Vasile Chifeac
  * @created 2026-07-16
- * @modified 2026-09-10
+ * @modified 2026-09-14
  *
  * @notes
  * - Multi-tenant isolation: every document MUST have tenantId (validated by Firestore rules)
@@ -299,6 +299,11 @@ export interface WorkspaceLinkedResources {
   defaultEmailSignature?: string | undefined;
   isOAuthConnected?: boolean | undefined;
   assignedAgents?: string[] | undefined;
+  /**
+   * When true, all tasks in this workspace will sync their results to the Master Google Sheet
+   * by default. Individual tasks can override this via TaskSettings.syncToMasterSheet.
+   */
+  autoSyncToMasterSheet?: boolean | undefined;
   /** @deprecated Migrated to WorkspaceAttitude.rules.doList */
   doList?: string[] | undefined;
   /** @deprecated Migrated to WorkspaceAttitude.rules.dontList */

@@ -1988,23 +1988,7 @@ export const provisionInitialTenant = onCall(
       { merge: true },
     );
 
-    // 2. Default workspace: tenants/{tenantId}/workspaces/main
-    const workspaceRef = tenantRef.collection("workspaces").doc("main");
-    batch.set(
-      workspaceRef,
-      {
-        id: "main",
-        name: "Workspace Principale",
-        description: "Spazio di lavoro operativo predefinito",
-        tenantId,
-        isPinned: true,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-      },
-      { merge: true },
-    );
-
-    // 3. User profile: users/{uid}
+    // 2. User profile: users/{uid}
     const userRef = db.collection("users").doc(uid);
     batch.set(
       userRef,
@@ -2021,7 +2005,7 @@ export const provisionInitialTenant = onCall(
       { merge: true },
     );
 
-    // 4. Tenant membership: tenants/{tenantId}/members/{uid}
+    // 3. Tenant membership: tenants/{tenantId}/members/{uid}
     const memberRef = tenantRef.collection("members").doc(uid);
     batch.set(
       memberRef,
@@ -2034,7 +2018,7 @@ export const provisionInitialTenant = onCall(
       { merge: true },
     );
 
-    // 5. GDPR Art. 30 audit log
+    // 4. GDPR Art. 30 audit log
     const auditRef = db.collection("audit").doc();
     batch.set(auditRef, {
       action: "provisionInitialTenant",
@@ -2061,7 +2045,6 @@ export const provisionInitialTenant = onCall(
     return {
       success: true,
       tenantId,
-      workspaceId: "main",
       alreadyExisted: false,
     };
   },
