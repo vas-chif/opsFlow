@@ -4,7 +4,7 @@
  * @description Modal for creating and managing Scheduled Sourcing Jobs (Step 19).
  * @author Vasile Chifeac
  * @created 2026-09-10
- * @modified 2026-09-10
+ * @modified 2026-09-14
  *
  * @notes
  * - Allows users to schedule recurring AgenteRicerca sourcing jobs (daily/weekly/custom).
@@ -76,6 +76,12 @@ const updateMode = ref<SheetUpdateMode>("append_new");
 const autoStyleSheet = ref<boolean>(true);
 const searchQuery = ref<string>("");
 const promptTemplate = ref<string>("");
+
+// Read-only lock flags (true = locked/read-only; false = editable after user clicks 🔓)
+/** When true, the job title field is in read-only display mode, protected from accidental edits. */
+const isJobTitleLocked = ref<boolean>(true);
+/** When true, the search query field is in read-only display mode, protected from accidental edits. */
+const isSearchQueryLocked = ref<boolean>(true);
 
 // Sheet target
 const selectedSheetId = ref<string>("");
@@ -211,23 +217,34 @@ function initializeForm(): void {
     dedupUrlColumnIndex.value = j.targetResource.dedupUrlColumnIndex;
     dedupNameColumnIndex.value = j.targetResource.dedupNameColumnIndex;
   } else {
-    // Create mode — reset to defaults
+    // Create mode — defaults auto-populated from task context (zero-friction UX)
     jobTitle.value = props.task.title ? `Monitoraggio: ${props.task.title}` : "";
     selectedFrequency.value = "daily_04am";
     endDate.value = defaultEndDate.value;
     updateMode.value = "append_new";
     autoStyleSheet.value = true;
-    searchQuery.value = "";
+    // Pre-populate searchQuery with task title (same as human intent of the task)
+    searchQuery.value = props.task.title || "";
     promptTemplate.value =
       "Cerca professionisti corrispondenti al profilo richiesto. " +
       "Per ciascun candidato, valuta il match con il profilo ICP, " +
       "identifica le competenze combacianti e i gap critici. " +
       "Assegna un Match Score da 0 a 100 basato sull'aderenza al profilo cercato.";
-    selectedSheetId.value = "";
-    selectedSheetName.value = "";
+    // Pre-populate sheet from task primary sheet (🎯 Primario), fallback to workspace default
+    const taskPrimarySheetId =
+      props.task.settings?.selectedSheetId ||
+      (props.task.settings?.selectedSheetIds?.[0] ?? "");
+    const wsFallbackSheetId = props.workspace?.linkedResources?.defaultSheetId || "";
+    const resolvedSheetId = taskPrimarySheetId || wsFallbackSheetId;
+    selectedSheetId.value = resolvedSheetId;
+    const matchedSheet = availableSheets.value.find((s) => s.id === resolvedSheetId);
+    selectedSheetName.value = matchedSheet?.name || "";
     selectedSheetTab.value = "Candidati";
     dedupUrlColumnIndex.value = 7;
     dedupNameColumnIndex.value = 1;
+    // Lock both read-only on open so user sees pre-filled values clearly before any edit
+    isJobTitleLocked.value = true;
+    isSearchQueryLocked.value = true;
   }
 } /*end initializeForm*/
 
@@ -538,33 +555,118 @@ function getStatusLabel(status: string): string {
 
           <!-- ── RIGHT COLUMN: Search config & Sheet target ────────── -->
           <div class="schedule-section">
-            <!-- Job title -->
-            <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs">
-              <q-icon name="label" size="18px" color="amber-9" class="q-mr-xs" />
-              Nome del Monitoraggio
+            <!-- Job title — read-only by default, unlock with edit button -->
+            <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs row items-center justify-between">
+              <div class="row items-center">
+                <q-icon name="label" size="18px" color="amber-9" class="q-mr-xs" />
+                Nome del Monitoraggio
+              </div>
+              <q-btn
+                v-if="isJobTitleLocked"
+                flat
+                dense
+                round
+                size="sm"
+                icon="edit"
+                color="amber-9"
+                @click="isJobTitleLocked = false"
+              >
+                <q-tooltip>Modifica nome monitoraggio</q-tooltip>
+              </q-btn>
+              <q-btn
+                v-else
+                flat
+                dense
+                round
+                size="sm"
+                icon="lock"
+                color="positive"
+                @click="isJobTitleLocked = true"
+              >
+                <q-tooltip>Blocca (Read-Only)</q-tooltip>
+              </q-btn>
             </div>
+            <!-- Locked: expandable read-only display -->
+            <div
+              v-if="isJobTitleLocked"
+              class="locked-field-display q-mb-md"
+              @click="isJobTitleLocked = false"
+            >
+              <div class="locked-field-display__text">{{ jobTitle || '—' }}</div>
+              <q-tooltip>Clicca per modificare</q-tooltip>
+            </div>
+            <!-- Unlocked: editable textarea -->
             <q-input
+              v-else
               v-model="jobTitle"
               label="Es. Monitoraggio Trainer Kubernetes Italia"
               outlined
               dense
+              type="textarea"
+              :rows="2"
+              autogrow
               class="bg-white rounded-borders q-mb-md"
               maxlength="120"
               counter
+              autofocus
             />
 
-            <!-- Search query -->
-            <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs">
-              <q-icon name="search" size="18px" color="amber-9" class="q-mr-xs" />
-              Query di Ricerca
+            <!-- Search query — read-only by default, unlock with edit button -->
+            <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs row items-center justify-between">
+              <div class="row items-center">
+                <q-icon name="search" size="18px" color="amber-9" class="q-mr-xs" />
+                Query di Ricerca
+              </div>
+              <q-btn
+                v-if="isSearchQueryLocked"
+                flat
+                dense
+                round
+                size="sm"
+                icon="edit"
+                color="amber-9"
+                @click="isSearchQueryLocked = false"
+              >
+                <q-tooltip>Modifica query di ricerca</q-tooltip>
+              </q-btn>
+              <q-btn
+                v-else
+                flat
+                dense
+                round
+                size="sm"
+                icon="lock"
+                color="positive"
+                @click="isSearchQueryLocked = true"
+              >
+                <q-tooltip>Blocca (Read-Only)</q-tooltip>
+              </q-btn>
             </div>
+            <!-- Locked: expandable read-only display -->
+            <div
+              v-if="isSearchQueryLocked"
+              class="locked-field-display q-mb-sm"
+              @click="isSearchQueryLocked = false"
+            >
+              <div class="locked-field-display__text">{{ searchQuery || '—' }}</div>
+              <q-tooltip>Clicca per modificare</q-tooltip>
+            </div>
+            <div v-if="isSearchQueryLocked" class="text-caption text-grey-7 q-mb-md">
+              Query inviata all&apos;AgenteRicerca ad ogni esecuzione
+            </div>
+            <!-- Unlocked: editable -->
             <q-input
+              v-else
               v-model="searchQuery"
               label="Es. Trainer Kubernetes certificati Italia"
               outlined
               dense
+              type="textarea"
+              :rows="2"
+              autogrow
               class="bg-white rounded-borders q-mb-md"
               hint="Query inviata all'AgenteRicerca ad ogni esecuzione"
+              autofocus
             />
 
             <!-- Prompt template -->
@@ -776,5 +878,29 @@ function getStatusLabel(status: string): string {
 .schedule-datepicker {
   background: #ffffff;
   border-radius: 10px;
+}
+
+// Read-only locked field display: shows pre-filled text with visual affordance
+.locked-field-display {
+  background: rgba(197, 160, 101, 0.08);
+  border: 1px solid rgba(197, 160, 101, 0.4);
+  border-radius: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: rgba(197, 160, 101, 0.16);
+  }
+
+  &__text {
+    color: #0a2342;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 120px;
+    overflow-y: auto;
+  }
 }
 </style>
