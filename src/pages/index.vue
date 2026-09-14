@@ -163,6 +163,19 @@ const handleAttitudeApplied = async (): Promise<void> => {
   await taskStore.fetchWorkspaces();
 }; /*end handleAttitudeApplied*/
 
+/**
+ * Check whether Google integration is active for a given workspace.
+ * Supports both Step 18 vault metadata and linked resources OAuth / configuration.
+ */
+const isWorkspaceGoogleActive = (ws: Workspace): boolean => {
+  return Boolean(
+    ws.googleIntegration?.connected ||
+    ws.linkedResources?.isOAuthConnected ||
+    (ws.linkedResources?.googleEmail && ws.linkedResources.googleEmail.trim().length > 0) ||
+    (ws.linkedResources?.linkedSheets && ws.linkedResources.linkedSheets.length > 0),
+  );
+}; /*end isWorkspaceGoogleActive*/
+
 const confirmCreateTask = async (): Promise<void> => {
   if (!selectedWorkspace.value || !newTaskTitle.value.trim() || !newTaskPrompt.value.trim()) return;
 
@@ -567,12 +580,19 @@ onMounted(async () => {
                   </div>
                 </div>
                 <q-badge
-                  v-if="ws.googleIntegration?.connected"
+                  v-if="isWorkspaceGoogleActive(ws)"
                   color="positive"
                   class="text-caption"
                   outline
                 >
                   Google Active
+                  <q-tooltip>
+                    {{
+                      ws.googleIntegration?.connectedEmail ||
+                      ws.linkedResources?.googleEmail ||
+                      "Google Workspace Active"
+                    }}
+                  </q-tooltip>
                 </q-badge>
               </div>
 

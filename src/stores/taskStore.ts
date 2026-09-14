@@ -594,6 +594,19 @@ export const useTaskStore = defineStore("tasks", {
           updatePayload.systemPrompt = systemPrompt;
         }
 
+        if (mergedResources.isOAuthConnected) {
+          const connectedEmail = (
+            mergedResources.googleEmail ||
+            ws?.googleIntegration?.connectedEmail ||
+            ""
+          ).trim();
+          updatePayload.googleIntegration = {
+            connected: true,
+            connectedEmail,
+            connectedAt: ws?.googleIntegration?.connectedAt || new Date().toISOString(),
+          };
+        }
+
         await firestore.updateTenantDoc(
           firestore.COLLECTIONS.WORKSPACES,
           workspaceId,
@@ -604,6 +617,9 @@ export const useTaskStore = defineStore("tasks", {
           ws.linkedResources = mergedResources;
           if (systemPrompt !== undefined) {
             ws.systemPrompt = systemPrompt;
+          }
+          if (updatePayload.googleIntegration) {
+            ws.googleIntegration = updatePayload.googleIntegration;
           }
           ws.updatedAt = new Date();
         }

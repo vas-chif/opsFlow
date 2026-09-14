@@ -287,6 +287,14 @@ const handleConnectGoogle = (): void => {
       isOAuthConnected.value = true;
       isConnectingGoogle.value = false;
 
+      if (props.workspace) {
+        props.workspace.googleIntegration = {
+          connected: true,
+          connectedEmail: email,
+          connectedAt: new Date().toISOString(),
+        };
+      }
+
       logger.success(
         "WorkspaceOAuth",
         "Google Workspace account linked successfully via OAuth 2.0",
