@@ -323,74 +323,356 @@ const handleSubtaskDeleted = (subtaskId: string): void => {
   selectedSubtask.value = null;
 }; /*end handleSubtaskDeleted*/
 
-const handleCreateManualSubtask = (): void => {
-  if (!task.value) return;
-  q.dialog({
-    title: "Nuova Risorsa / Sub-Task",
-    message: "Inserisci il nome della persona o risorsa da monitorare:",
-    prompt: {
-      model: "",
-      type: "text",
-      isValid: (val) => val.trim().length > 0,
-    },
-    cancel: true,
-    persistent: true,
-  }).onOk(async (name: string) => {
-    const tId = authStore.tenantId;
-    const wsId = workspace.value?.id || task.value?.workspaceId;
-    const taskId = task.value?.id;
-    if (!tId || !wsId || !taskId) return;
+const getStatusLabel = (status: string): string => {
+  switch (status) {
+    case "new":
+      return "Da Contattare";
+    case "contacted":
+      return "Contattato";
+    case "waiting_response":
+      return "In Attesa";
+    case "negotiation":
+      return "In Trattativa";
+    case "positive_response":
+      return "Positivo";
+    case "negative_response":
+      return "Negativo";
+    case "follow_up":
+      return "Follow-up";
+    case "completed":
+      return "Completato";
+    default:
+      return status;
+  }
+}; /*end getStatusLabel*/
 
-    try {
-      const db = getFirestore();
-      const subCol = collection(
-        db,
-        "tenants",
-        tId,
-        "workspaces",
-        wsId,
-        "tasks",
-        taskId,
-        "subtasks",
-      );
-      const newRef = doc(subCol);
-      const nowIso = new Date().toISOString();
-      const newSubtask: EntitySubTask = {
-        id: newRef.id,
-        tenantId: tId,
-        workspaceId: wsId,
-        taskId,
-        domain: "recruiting",
-        title: name.trim(),
-        status: "new",
-        outcome: "in_progress",
-        attributes: {},
-        notes: "",
-        timeline: [
-          {
-            id: `evt_init_${Date.now()}`,
-            eventType: "status_change",
-            title: "Risorsa creata manualmente",
-            authorId: authStore.user?.uid || "user",
-            authorName: authStore.user?.displayName || "Operatore",
-            timestamp: nowIso,
-          },
-        ],
-        nestedTasks: [],
-        createdAt: nowIso,
-        updatedAt: nowIso,
-      };
-      const { setDoc } = await import("firebase/firestore");
-      await setDoc(newRef, newSubtask);
+const getStatusColor = (status: string): string => {
+  switch (status) {
+    case "new":
+      return "blue-6";
+    case "contacted":
+      return "light-blue-7";
+    case "waiting_response":
+      return "amber-8";
+    case "negotiation":
+      return "purple-6";
+    case "positive_response":
+    case "completed":
+      return "positive";
+    case "negative_response":
+      return "deep-orange-7";
+    case "follow_up":
+      return "indigo-6";
+    default:
+      return "grey-7";
+  }
+}; /*end getStatusColor*/
 
-      subtasks.value.push(newSubtask);
-      q.notify({ type: "positive", message: `Risorsa "${name}" creata con successo` });
-      openSubtaskModal(newSubtask);
-    } catch (err) {
-      logger.error("TaskChatWindow", "Failed to create manual subtask", err);
+const isSubtasksTimelineEntry = (entry: {
+  status?: string;
+  title?: string;
+  id?: string;
+}): boolean => {
+  if (entry.status === "in-progress" || entry.title === "In Progress") return true;
+  const hasInProgress = activeSession.value?.timelineEvents?.some(
+    (e) => e.status === "in-progress" || e.title === "In Progress",
+  );
+  if (!hasInProgress && entry.status === task.value?.status) return true;
+  return false;
+}; /*end isSubtasksTimelineEntry*/
+
+interface DetectedCandidate {
+  title: string;
+  role?: string;
+  email?: string;
+  source: "sheet" | "web" | "email" | "chat";
+  notes?: string;
+}
+
+const showSmartSubtaskModal = ref<boolean>(false);
+const isCreatingSmartSubtask = ref<boolean>(false);
+const smartSubtaskForm = ref({
+  title: "",
+  role: "",
+  email: "",
+  source: "sheet" as "sheet" | "web" | "email" | "chat" | "manual",
+  notes: "",
+});
+
+const detectedCandidates = computed<DetectedCandidate[]>(() => {
+  const list: DetectedCandidate[] = [];
+  const seenTitles = new Set<string>();
+
+  // 1. Scan approvals (Google Sheet preview rows & Gmail drafts)
+  for (const app of activeSession.value?.approvals || []) {
+    const raw = app.previewData as unknown as Record<string, unknown> | undefined;
+    if (!raw) continue;
+
+    let rows: unknown[] = [];
+    if (Array.isArray(raw.previewRows)) rows = raw.previewRows;
+    else if (Array.isArray(raw.rows)) rows = raw.rows;
+    else if (typeof raw.rowsJson === "string") {
+      try {
+        const parsed = JSON.parse(raw.rowsJson);
+        if (Array.isArray(parsed)) rows = parsed;
+      } catch {}
+    } else if (typeof raw.previewRowsJson === "string") {
+      try {
+        const parsed = JSON.parse(raw.previewRowsJson);
+        if (Array.isArray(parsed)) rows = parsed;
+      } catch {}
     }
-  });
+
+    for (const row of rows) {
+      if (!row) continue;
+      let name = "";
+      let role = "";
+      let email = "";
+      let note = "";
+
+      if (Array.isArray(row)) {
+        name = String(row[0] ?? "").trim();
+        role = String(row[1] ?? "").trim();
+        email = String(row[2] ?? "").trim();
+      } else if (typeof row === "object") {
+        const rObj = row as Record<string, unknown>;
+        name = String(
+          rObj["Nome Candidato"] ||
+            rObj["Nome"] ||
+            rObj["Candidate"] ||
+            rObj["Candidato"] ||
+            rObj["Name"] ||
+            rObj["name"] ||
+            rObj["title"] ||
+            "",
+        ).trim();
+        role = String(
+          rObj["Ruolo / Specializzazione"] ||
+            rObj["Ruolo"] ||
+            rObj["Role"] ||
+            rObj["Specializzazione"] ||
+            "",
+        ).trim();
+        email = String(rObj["Email"] || rObj["email"] || rObj["E-mail"] || "").trim();
+        note = String(rObj["Note"] || rObj["Dettagli"] || "").trim();
+      }
+
+      if (name && name.length > 2 && !seenTitles.has(name.toLowerCase())) {
+        seenTitles.add(name.toLowerCase());
+        list.push({
+          title: name,
+          role,
+          email,
+          source: "sheet",
+          notes: note,
+        });
+      }
+    }
+
+    if (raw.to) {
+      const to = String(raw.to || "").trim();
+      if (to && !seenTitles.has(to.toLowerCase())) {
+        seenTitles.add(to.toLowerCase());
+        list.push({
+          title: to,
+          email: to,
+          role: String(raw.subject || "Email Recipient").trim(),
+          source: "email",
+          notes: String(raw.body || "").substring(0, 200),
+        });
+      }
+    }
+  }
+
+  // 2. Scan AI messages for structured lists
+  for (const msg of activeSession.value?.messages || []) {
+    if (msg.sender !== "agent" || !msg.text) continue;
+    const lines = msg.text.split("\n");
+    for (const line of lines) {
+      const match = line.match(
+        /^[\s*#-]*\d*\.?\s*\*?\*?([A-Z][a-zÀ-ÿ]+ [A-Z][a-zÀ-ÿ]+)\*?\*?\s*[-–:]\s*(.+)/,
+      );
+      if (match && match[1] && match[2]) {
+        const name = match[1].trim();
+        const role = match[2].trim();
+        if (!seenTitles.has(name.toLowerCase()) && name.length > 3 && name.length < 40) {
+          seenTitles.add(name.toLowerCase());
+          list.push({
+            title: name,
+            role: role.substring(0, 80),
+            source: "chat",
+          });
+        }
+      }
+    }
+  }
+
+  return list;
+});
+
+const openSmartSubtaskModal = (cand?: DetectedCandidate): void => {
+  if (cand) {
+    smartSubtaskForm.value = {
+      title: cand.title,
+      role: cand.role || "",
+      email: cand.email || "",
+      source: cand.source,
+      notes: cand.notes || "",
+    };
+  } else if (detectedCandidates.value.length > 0 && !smartSubtaskForm.value.title) {
+    const first = detectedCandidates.value[0]!;
+    smartSubtaskForm.value = {
+      title: first.title,
+      role: first.role || "",
+      email: first.email || "",
+      source: first.source,
+      notes: first.notes || "",
+    };
+  } else if (!smartSubtaskForm.value.title) {
+    smartSubtaskForm.value = {
+      title: "",
+      role: "",
+      email: "",
+      source: "manual",
+      notes: "",
+    };
+  }
+  showSmartSubtaskModal.value = true;
+}; /*end openSmartSubtaskModal*/
+
+const selectDetectedCandidate = (cand: DetectedCandidate): void => {
+  smartSubtaskForm.value = {
+    title: cand.title,
+    role: cand.role || "",
+    email: cand.email || "",
+    source: cand.source,
+    notes: cand.notes || "",
+  };
+}; /*end selectDetectedCandidate*/
+
+const handleCreateSmartSubtask = async (): Promise<void> => {
+  const name = smartSubtaskForm.value.title.trim();
+  if (!name || !task.value) return;
+
+  const tId = authStore.tenantId;
+  const wsId = workspace.value?.id || task.value?.workspaceId;
+  const taskId = task.value?.id;
+  if (!tId || !wsId || !taskId) return;
+
+  isCreatingSmartSubtask.value = true;
+  try {
+    const db = getFirestore();
+    const subCol = collection(db, "tenants", tId, "workspaces", wsId, "tasks", taskId, "subtasks");
+    const newRef = doc(subCol);
+    const nowIso = new Date().toISOString();
+
+    const attributes: Record<string, unknown> = {};
+    if (smartSubtaskForm.value.role) {
+      attributes.role = smartSubtaskForm.value.role.trim();
+    }
+    if (smartSubtaskForm.value.email) {
+      attributes.email = smartSubtaskForm.value.email.trim();
+    }
+    if (smartSubtaskForm.value.source) {
+      attributes.source = smartSubtaskForm.value.source;
+    }
+
+    const newSubtask: EntitySubTask = {
+      id: newRef.id,
+      tenantId: tId,
+      workspaceId: wsId,
+      taskId,
+      domain: "recruiting",
+      title: name,
+      ...(smartSubtaskForm.value.role.trim()
+        ? { subtitle: smartSubtaskForm.value.role.trim() }
+        : {}),
+      status: "new",
+      outcome: "in_progress",
+      attributes,
+      notes: smartSubtaskForm.value.notes.trim() || "",
+      timeline: [
+        {
+          id: `evt_init_${Date.now()}`,
+          eventType: "status_change",
+          title: "Risorsa creata",
+          description: `Creata tramite ${
+            smartSubtaskForm.value.source === "sheet"
+              ? "Google Sheet"
+              : smartSubtaskForm.value.source === "chat"
+                ? "estrazione chat"
+                : "inserimento operatore"
+          }`,
+          authorId: authStore.user?.uid || "user",
+          authorName: authStore.user?.displayName || "Operatore",
+          timestamp: nowIso,
+        },
+      ],
+      nestedTasks: [],
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    const { setDoc } = await import("firebase/firestore");
+    await setDoc(newRef, newSubtask);
+
+    subtasks.value.push(newSubtask);
+    showSmartSubtaskModal.value = false;
+    smartSubtaskForm.value = { title: "", role: "", email: "", source: "manual", notes: "" };
+    q.notify({
+      type: "positive",
+      message: `Risorsa "${name}" creata con successo!`,
+      icon: "person_add",
+      position: "top",
+    });
+    openSubtaskModal(newSubtask);
+  } catch (err) {
+    logger.error("TaskChatWindow", "Failed to create smart subtask", err);
+    q.notify({
+      type: "negative",
+      message: "Errore durante la creazione del sub-task",
+      position: "top",
+    });
+  } finally {
+    isCreatingSmartSubtask.value = false;
+  }
+}; /*end handleCreateSmartSubtask*/
+
+const handleCreateManualSubtask = (): void => {
+  openSmartSubtaskModal();
 }; /*end handleCreateManualSubtask*/
+
+const handleSyncToGoogleSheets = (): void => {
+  const pendingSheetApproval = activeSession.value?.approvals?.find(
+    (a) => a.actionType === "sheet_append" && a.status === "pending",
+  );
+  if (pendingSheetApproval) {
+    q.notify({
+      type: "info",
+      message: "Scheda di approvazione Google Sheets attiva trovata nella chat.",
+      icon: "table_chart",
+      position: "top",
+    });
+  } else {
+    q.notify({
+      type: "positive",
+      message: "Tutte le risorse sono collegate al Workspace.",
+      icon: "check_circle",
+      position: "top",
+    });
+  }
+}; /*end handleSyncToGoogleSheets*/
+
+const handleDraftEmailForSubtasks = (): void => {
+  chatMessage.value =
+    "Prepara una bozza di email formale da inviare alle risorse per verificare la disponibilità e presentare i dettagli operativi.";
+  q.notify({
+    type: "info",
+    message: "Istruzione email inserita nella chat. Invia il messaggio per generarla!",
+    icon: "mail",
+    position: "top",
+  });
+}; /*end handleDraftEmailForSubtasks*/
 
 // Macro Rollup Computed (Requirement 4.10)
 const allSubtasksFinished = computed(() => {
@@ -1744,6 +2026,124 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                 {{ entry.description }}
               </div>
 
+              <!-- Sub-Tasks Embedded under In Progress Milestone (Img 1 + Img 5) -->
+              <div
+                v-if="isSubtasksTimelineEntry(entry)"
+                class="subtasks-timeline-block q-mt-sm q-pa-xs rounded-borders bg-white shadow-1"
+                style="border: 1.5px solid #c5a065"
+                @click.stop
+              >
+                <div class="row items-center justify-between q-pa-xs border-bottom-subtle">
+                  <div class="row items-center q-gutter-2xs no-wrap ellipsis" style="flex: 1">
+                    <q-icon name="group_work" color="amber-9" size="14px" />
+                    <span
+                      class="text-caption text-weight-bold text-primary ellipsis"
+                      style="font-size: 0.72rem"
+                    >
+                      Risorse & Sub-Task ({{ subtaskWonCount + subtaskLostCount }}/{{
+                        subtasks.length
+                      }})
+                    </span>
+                  </div>
+                  <div class="row items-center q-gutter-2xs no-wrap">
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      size="2xs"
+                      icon="person_add"
+                      color="primary"
+                      @click.stop="openSmartSubtaskModal()"
+                    >
+                      <q-tooltip>Nuova Risorsa (Smart Extraction)</q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      size="2xs"
+                      icon="table_chart"
+                      color="teal-7"
+                      @click.stop="handleSyncToGoogleSheets"
+                    >
+                      <q-tooltip>Sincronizza / Verifica Google Sheets</q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      size="2xs"
+                      icon="mail"
+                      color="indigo-7"
+                      @click.stop="handleDraftEmailForSubtasks"
+                    >
+                      <q-tooltip>Bozza Email per Risorse</q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      size="2xs"
+                      icon="refresh"
+                      color="grey-7"
+                      :loading="isLoadingSubtasks"
+                      @click.stop="fetchSubtasks"
+                    >
+                      <q-tooltip>Ricarica Risorse</q-tooltip>
+                    </q-btn>
+                  </div>
+                </div>
+
+                <!-- Subtasks List (One under another, clickable) -->
+                <div v-if="subtasks.length > 0" class="column q-gutter-y-2xs q-pt-xs">
+                  <div
+                    v-for="st in subtasks"
+                    :key="st.id"
+                    class="row items-center justify-between q-pa-xs rounded-borders cursor-pointer subtask-timeline-row"
+                    style="background: #faf8f5; border: 1px solid rgba(10, 35, 66, 0.08)"
+                    @click.stop="openSubtaskModal(st)"
+                  >
+                    <div class="row items-center no-wrap ellipsis q-mr-xs" style="flex: 1">
+                      <q-avatar
+                        size="20px"
+                        font-size="12px"
+                        color="amber-1"
+                        text-color="amber-10"
+                        :icon="st.domain === 'healthcare' ? 'medical_services' : 'person'"
+                        class="q-mr-xs"
+                      />
+                      <span
+                        class="text-caption text-weight-bold text-navy ellipsis"
+                        style="font-size: 0.72rem"
+                      >
+                        {{ st.title }}
+                      </span>
+                    </div>
+                    <div class="row items-center q-gutter-2xs no-wrap">
+                      <q-badge
+                        dense
+                        rounded
+                        :color="getStatusColor(st.status)"
+                        class="text-caption text-weight-medium q-px-xs"
+                        style="font-size: 0.65rem"
+                      >
+                        {{ getStatusLabel(st.status) }}
+                      </q-badge>
+                      <q-icon name="chevron_right" size="14px" color="grey-6" />
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  v-else
+                  class="q-pa-xs text-center text-grey-6 text-caption"
+                  style="font-size: 0.7rem"
+                >
+                  Nessuna risorsa creata. Clicca
+                  <q-icon name="person_add" size="13px" color="primary" /> per iniziare.
+                </div>
+              </div>
+
               <!-- Note content display in full timeline view -->
               <div
                 v-if="entry.note && entry.showNote !== false"
@@ -1894,147 +2294,6 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                   @click="handleStatusChange('completed')"
                 />
               </div>
-
-              <!-- Polymorphic Entity SubTasks Panel (Step 20) -->
-              <q-expansion-item
-                default-opened
-                dense
-                icon="group_work"
-                :label="`Risorse & Sub-Task Operativi (${subtasks.filter((s) => s.outcome === 'won' || s.outcome === 'lost' || s.status === 'completed').length}/${subtasks.length})`"
-                header-class="text-caption text-weight-bold text-primary q-pa-xs bg-amber-1 rounded-borders"
-                class="q-mb-sm task-subtasks-expansion rounded-borders"
-                style="border: 1px solid rgba(197, 160, 101, 0.45)"
-              >
-                <div class="q-pa-xs bg-white rounded-borders">
-                  <div class="row items-center justify-between q-pa-xs q-mb-xs">
-                    <span class="text-caption text-grey-7" style="font-size: 0.72rem">
-                      Schede operative per risorsa (status, timeline e note)
-                    </span>
-                    <div class="row items-center q-gutter-x-2xs">
-                      <q-btn
-                        flat
-                        dense
-                        round
-                        size="xs"
-                        icon="refresh"
-                        color="grey-7"
-                        :loading="isLoadingSubtasks"
-                        @click="fetchSubtasks"
-                      >
-                        <q-tooltip>Ricarica Risorse</q-tooltip>
-                      </q-btn>
-                      <q-btn
-                        outline
-                        dense
-                        size="xs"
-                        color="primary"
-                        icon="person_add"
-                        label="Nuova Risorsa"
-                        class="q-px-xs"
-                        @click="handleCreateManualSubtask"
-                      />
-                    </div>
-                  </div>
-
-                  <q-list v-if="subtasks.length > 0" dense separator class="rounded-borders">
-                    <q-item
-                      v-for="st in subtasks"
-                      :key="st.id"
-                      clickable
-                      v-ripple
-                      class="rounded-borders q-py-xs q-px-sm"
-                      @click="openSubtaskModal(st)"
-                    >
-                      <q-item-section avatar style="min-width: 32px">
-                        <q-avatar
-                          size="28px"
-                          font-size="16px"
-                          color="navy-light"
-                          text-color="primary"
-                          :icon="
-                            st.domain === 'healthcare'
-                              ? 'medical_services'
-                              : st.domain === 'procurement'
-                                ? 'inventory_2'
-                                : st.domain === 'operations'
-                                  ? 'precision_manufacturing'
-                                  : 'person'
-                          "
-                        />
-                      </q-item-section>
-                      <q-item-section>
-                        <div class="row items-center q-gutter-x-xs no-wrap">
-                          <span class="text-caption text-weight-bolder text-dark ellipsis">
-                            {{ st.title }}
-                          </span>
-                          <q-badge
-                            v-if="st.entityExternalId"
-                            outline
-                            size="xs"
-                            color="amber-9"
-                            :label="st.entityExternalId"
-                          />
-                        </div>
-                        <div
-                          v-if="st.subtitle"
-                          class="text-caption text-grey-6 ellipsis"
-                          style="font-size: 0.72rem"
-                        >
-                          {{ st.subtitle }}
-                        </div>
-                      </q-item-section>
-                      <q-item-section side class="items-end">
-                        <div class="row items-center q-gutter-x-xs no-wrap">
-                          <q-badge
-                            v-if="st.outcome === 'won'"
-                            color="positive"
-                            size="xs"
-                            label="⭐ Won"
-                          />
-                          <q-badge
-                            v-else-if="st.outcome === 'lost'"
-                            color="grey-6"
-                            size="xs"
-                            label="❌ Lost"
-                          />
-                          <q-badge
-                            dense
-                            size="xs"
-                            :color="
-                              st.status === 'new'
-                                ? 'blue-6'
-                                : st.status === 'contacted'
-                                  ? 'light-blue-7'
-                                  : st.status === 'waiting_response'
-                                    ? 'amber-8'
-                                    : st.status === 'negotiation'
-                                      ? 'purple-6'
-                                      : 'positive'
-                            "
-                            :label="
-                              st.status === 'new'
-                                ? 'Da Contattare'
-                                : st.status === 'contacted'
-                                  ? 'Contattato'
-                                  : st.status === 'waiting_response'
-                                    ? 'In Attesa'
-                                    : st.status === 'negotiation'
-                                      ? 'In Trattativa'
-                                      : st.status
-                            "
-                          />
-                          <q-icon name="chevron_right" color="grey-5" size="18px" />
-                        </div>
-                      </q-item-section>
-                    </q-item>
-                  </q-list>
-
-                  <div v-else class="text-caption text-grey-6 text-center q-pa-sm">
-                    Nessuna risorsa/candidato generato. Verranno estratti automaticamente
-                    all'approvazione del monitoraggio o puoi crearne una con "Nuova Risorsa".
-                  </div>
-                </div>
-              </q-expansion-item>
 
               <!-- AI Operational SubTasks Checklist (AgentePlanner / AI Task Architect) -->
               <q-expansion-item
@@ -2597,6 +2856,132 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                           {{ entry.description }}
                         </div>
 
+                        <!-- Sub-Tasks Embedded under In Progress Milestone (Img 1 + Img 5) -->
+                        <div
+                          v-if="isSubtasksTimelineEntry(entry)"
+                          class="subtasks-timeline-block q-mt-xs q-pa-xs rounded-borders bg-white shadow-1"
+                          style="border: 1.5px solid #c5a065"
+                          @click.stop
+                        >
+                          <div
+                            class="row items-center justify-between q-pa-xs border-bottom-subtle"
+                          >
+                            <div
+                              class="row items-center q-gutter-2xs no-wrap ellipsis"
+                              style="flex: 1"
+                            >
+                              <q-icon name="group_work" color="amber-9" size="14px" />
+                              <span
+                                class="text-caption text-weight-bold text-primary ellipsis"
+                                style="font-size: 0.72rem"
+                              >
+                                Risorse & Sub-Task ({{ subtaskWonCount + subtaskLostCount }}/{{
+                                  subtasks.length
+                                }})
+                              </span>
+                            </div>
+                            <div class="row items-center q-gutter-2xs no-wrap">
+                              <q-btn
+                                flat
+                                round
+                                dense
+                                size="2xs"
+                                icon="person_add"
+                                color="primary"
+                                @click.stop="openSmartSubtaskModal()"
+                              >
+                                <q-tooltip>Nuova Risorsa (Smart Extraction)</q-tooltip>
+                              </q-btn>
+                              <q-btn
+                                flat
+                                round
+                                dense
+                                size="2xs"
+                                icon="table_chart"
+                                color="teal-7"
+                                @click.stop="handleSyncToGoogleSheets"
+                              >
+                                <q-tooltip>Sincronizza / Verifica Google Sheets</q-tooltip>
+                              </q-btn>
+                              <q-btn
+                                flat
+                                round
+                                dense
+                                size="2xs"
+                                icon="mail"
+                                color="indigo-7"
+                                @click.stop="handleDraftEmailForSubtasks"
+                              >
+                                <q-tooltip>Bozza Email per Risorse</q-tooltip>
+                              </q-btn>
+                              <q-btn
+                                flat
+                                round
+                                dense
+                                size="2xs"
+                                icon="refresh"
+                                color="grey-7"
+                                :loading="isLoadingSubtasks"
+                                @click.stop="fetchSubtasks"
+                              >
+                                <q-tooltip>Ricarica Risorse</q-tooltip>
+                              </q-btn>
+                            </div>
+                          </div>
+
+                          <!-- Subtasks List (One under another, clickable) -->
+                          <div v-if="subtasks.length > 0" class="column q-gutter-y-2xs q-pt-xs">
+                            <div
+                              v-for="st in subtasks"
+                              :key="st.id"
+                              class="row items-center justify-between q-pa-xs rounded-borders cursor-pointer subtask-timeline-row"
+                              style="background: #faf8f5; border: 1px solid rgba(10, 35, 66, 0.08)"
+                              @click.stop="openSubtaskModal(st)"
+                            >
+                              <div
+                                class="row items-center no-wrap ellipsis q-mr-xs"
+                                style="flex: 1"
+                              >
+                                <q-avatar
+                                  size="20px"
+                                  font-size="12px"
+                                  color="amber-1"
+                                  text-color="amber-10"
+                                  :icon="st.domain === 'healthcare' ? 'medical_services' : 'person'"
+                                  class="q-mr-xs"
+                                />
+                                <span
+                                  class="text-caption text-weight-bold text-navy ellipsis"
+                                  style="font-size: 0.72rem"
+                                >
+                                  {{ st.title }}
+                                </span>
+                              </div>
+                              <div class="row items-center q-gutter-2xs no-wrap">
+                                <q-badge
+                                  dense
+                                  rounded
+                                  :color="getStatusColor(st.status)"
+                                  class="text-caption text-weight-medium q-px-xs"
+                                  style="font-size: 0.65rem"
+                                >
+                                  {{ getStatusLabel(st.status) }}
+                                </q-badge>
+                                <q-icon name="chevron_right" size="14px" color="grey-6" />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div
+                            v-else
+                            class="q-pa-xs text-center text-grey-6 text-caption"
+                            style="font-size: 0.7rem"
+                          >
+                            Nessuna risorsa creata. Clicca
+                            <q-icon name="person_add" size="13px" color="primary" /> per iniziare.
+                          </div>
+                        </div>
+
                         <!-- Timeline step note card -->
                         <div
                           v-if="entry.note && entry.showNote !== false"
@@ -2768,6 +3153,143 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
       @saved="handleSubtaskSaved"
       @deleted="handleSubtaskDeleted"
     />
+
+    <!-- Smart SubTask Creation Dialog (Point 2) -->
+    <q-dialog v-model="showSmartSubtaskModal" persistent>
+      <q-card style="width: 520px; max-width: 95vw" class="rounded-borders bg-white shadow-3">
+        <q-card-section class="bg-royal-navy text-white row items-center justify-between q-pa-sm">
+          <div class="row items-center q-gutter-xs">
+            <q-avatar
+              size="28px"
+              font-size="16px"
+              color="amber-9"
+              text-color="dark"
+              icon="person_add"
+            />
+            <span class="text-subtitle2 text-weight-bold">Nuova Risorsa / Sub-Task</span>
+          </div>
+          <q-btn flat round dense icon="close" color="white" v-close-popup />
+        </q-card-section>
+
+        <q-card-section class="q-pa-md">
+          <!-- Detected Candidates from Chat / Sheets -->
+          <div v-if="detectedCandidates.length > 0" class="q-mb-md">
+            <div
+              class="text-caption text-weight-bold text-primary q-mb-xs row items-center q-gutter-xs"
+            >
+              <q-icon name="auto_awesome" color="amber-9" size="14px" />
+              <span>Profili Rilevati nella Chat / Tabella (1-Click Fill):</span>
+            </div>
+            <div class="row q-gutter-xs">
+              <q-chip
+                v-for="(cand, cIdx) in detectedCandidates"
+                :key="cIdx"
+                clickable
+                dense
+                outline
+                color="amber-9"
+                text-color="dark"
+                icon="person"
+                class="cursor-pointer text-caption text-weight-medium"
+                @click="selectDetectedCandidate(cand)"
+              >
+                {{ cand.title }}
+                <span v-if="cand.role" class="text-grey-7 text-weight-regular q-ml-xs">
+                  ({{ cand.role }})
+                </span>
+                <q-tooltip>Clicca per pre-compilare i dati di {{ cand.title }}</q-tooltip>
+              </q-chip>
+            </div>
+          </div>
+
+          <!-- Form -->
+          <div class="q-gutter-y-sm">
+            <q-input
+              v-model="smartSubtaskForm.title"
+              outlined
+              dense
+              label="Nome Risorsa / Candidato *"
+              placeholder="es. Davide Benvenuti"
+              :rules="[(val) => (val && val.trim().length > 0) || 'Nome obbligatorio']"
+            >
+              <template #prepend>
+                <q-icon name="person" color="primary" />
+              </template>
+            </q-input>
+
+            <q-input
+              v-model="smartSubtaskForm.role"
+              outlined
+              dense
+              label="Ruolo / Specializzazione"
+              placeholder="es. Senior Oracle DBA"
+            >
+              <template #prepend>
+                <q-icon name="badge" color="primary" />
+              </template>
+            </q-input>
+
+            <q-input
+              v-model="smartSubtaskForm.email"
+              outlined
+              dense
+              type="email"
+              label="Email Contatto"
+              placeholder="es. candidato@azienda.it"
+            >
+              <template #prepend>
+                <q-icon name="email" color="primary" />
+              </template>
+            </q-input>
+
+            <q-select
+              v-model="smartSubtaskForm.source"
+              outlined
+              dense
+              emit-value
+              map-options
+              label="Origine / Fonte"
+              :options="[
+                { label: 'Google Sheets', value: 'sheet' },
+                { label: 'Ricerca Web', value: 'web' },
+                { label: 'Email Ricevuta', value: 'email' },
+                { label: 'Inserimento Manuale', value: 'manual' },
+              ]"
+            >
+              <template #prepend>
+                <q-icon name="source" color="primary" />
+              </template>
+            </q-select>
+
+            <q-input
+              v-model="smartSubtaskForm.notes"
+              type="textarea"
+              outlined
+              dense
+              autogrow
+              rows="2"
+              label="Note Operative Iniziali"
+              placeholder="Inserisci dettagli, contatti o note ereditate..."
+            />
+          </div>
+        </q-card-section>
+
+        <q-card-actions align="right" class="q-pa-sm bg-grey-1 border-top-light">
+          <q-btn flat dense label="Annulla" color="grey-7" v-close-popup />
+          <q-btn
+            unelevated
+            dense
+            color="primary"
+            icon="add_circle"
+            label="Crea e Apri Scheda"
+            class="q-px-md text-weight-bold"
+            :loading="isCreatingSmartSubtask"
+            :disable="!smartSubtaskForm.title.trim()"
+            @click="handleCreateSmartSubtask"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </div>
 </template>
 

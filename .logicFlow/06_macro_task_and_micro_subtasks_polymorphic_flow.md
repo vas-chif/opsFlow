@@ -123,38 +123,60 @@ sequenceDiagram
 
 ## 🖥️ 4. Flusso UX/UI: Generazione e Gestione del Sub-Task
 
-### 4.1 Punti di Accesso per l'Apertura del Sub-Task
+### 4.1 Posizionamento Integrato nella Timeline "In Progress" & Action Bar Rapida
 
-L'utente può aprire o generare la scheda Sub-Task dell'entità da due punti chiave dell'interfaccia:
+Per massimizzare la leggibilità del flusso di chat e prevenire l'ingombro visivo nel corpo della conversazione, il blocco **"Risorse & Sub-Task Operativi"** è integrato direttamente all'interno della milestone **"Stato aggiornato a In Progress"** nella Timeline Stati del Task (`TaskChatWindow.vue`):
 
-1. **Dalla Tabella dei Risultati (Google Sheets Preview o Chat KeyPoints Card):**
-   - Clic sul nome della persona (es. _Pino Villa_) o sull'icona rapida `open_in_new` / `assignment_ind` nella riga della tabella.
-2. **Dalla Timeline del Task Principale:**
-   - Clic sull'evento di estrazione o aggiunta della persona per espandere il dettaglio o aprire direttamente il Sub-Task.
+1. **Visibilità Immediata:** L'utente visualizza sempre le risorse estratte o gestite contestualmente alla fase attiva del lavoro.
+2. **Action Bar Rapida Multi-Canale:**
+   - `[+ Nuova Risorsa]`: Apre il dialog di creazione intelligente con rilevamento automatico.
+   - `[📊 Sheets]`: Apre il foglio Google collegato o avvia la sincronizzazione delle righe estratte.
+   - `[✉️ Email]`: Precompila l'input di chat per istruire l'agente IA a redigere bozze email verso i candidati.
+   - `[🔄 Sync]`: Ricarica in tempo reale l'elenco dei sub-task dallo store Pinia / Firestore.
+3. **Elenco Risorse Verticale & Color-Coded:**
+   - Ogni risorsa compare incolonnata con avatar di dominio (`medical_services`, `person`), nome/titolo, chip di stato colorato (`Nuovo`, `Contattato`, `In Attesa`, `In Trattativa`, `Won`, `Lost`) e freccia di apertura rapida alla modale dedicata.
 
-### 4.2 Anatomia della Finestra Dedicata (`SubTaskEntityModal.vue`)
+### 4.2 Dialog Intelligente "Nuova Risorsa" con Rilevamento Candidati (1-Click Pre-fill)
 
-La finestra o drawer del Sub-Task segue il **Design System Elite (Navy/Gold/Matita §6)** ed è strutturata in 4 macro-aree:
+Il dialog di aggiunta risorsa (`showSmartSubtaskModal`) supera il semplice prompt di testo non strutturato offrendo:
+
+1. **Auto-Scansione delle Entità Rilevate (`detectedCandidates`):**
+   - Scansiona dinamicamente le righe delle anteprime di Google Sheets approvate, le bozze email Gmail e i messaggi dell'agente IA.
+   - Mostra dei chip cliccabili con i profili individuati (es. `Pino Villa - Senior SAP EWM`, `Mihai Ionescu`, ecc.).
+   - Un click sul chip precompila istantaneamente: Nome/Titolo, Ruolo, Email e Note di contesto.
+2. **Form Strutturato e Multi-Fonte:**
+   - Campi dedicati per Titolo, Ruolo/Mansione, Email di contatto, Dominio applicativo, Fonte (`Foglio Google`, `Chat / Ricerca AI`, `Email Gmail`, `Web`, `Manuale`) e Note operative iniziali.
+   - Creazione reattiva con persistenza immediata su Firestore e aggiornamento dello store Pinia `taskStore.ts`.
+
+### 4.3 Architettura Split-View del Sub-Task & Persistenza Pannelli (`SubTaskEntityModal.vue`)
+
+La finestra dedicata al Sub-Task adotta una larghezza estesa (`1080px` / `96vw`) e replica fedelmente l'architettura a due colonne del Macro-Task principale (ispirata al layout ad alta densità informativa):
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ 👤 PINO VILLA — Senior SAP EWM Consultant                [🎯 In Trattativa ▼]│
-│ ID: CAN-EWM-001  |  Fonte: LinkedIn Sourcing  |  Task: Sourcing SAP EWM     │
-├──────────────────────────────────────┬──────────────────────────────────────┤
-│ 📋 DETTAGLI & CONTESTO EREDITATO     │ 🕒 TIMELINE DEDICATA DELL'ENTITÀ    │
-│ • Competenze: SAP EWM, S/4HANA       │ 14 Set, 10:30 — Estratto da ricerca │
-│ • Tariffa indicativa: 550€/giorno    │ 14 Set, 11:15 — Primo contatto WA    │
-│ • Profilo: linkedin.com/in/...       │ 14 Set, 16:00 — Risposta: disponibile│
-│                                      │                                      │
-│ 📝 NOTE OPERATIVE (Auto-Save)        │ ➕ REGISTRA EVENTO RAPIDO            │
-│ ┌──────────────────────────────────┐ │ [Chiamata] [Email] [WhatsApp] [Nota]│
-│ │ Richiede smart working 80%.     │ │                                      │
-│ │ Disponibile da Ottobre 2026.    │ │ ⚡ MINI-TASK NIDIFICATO              │
-│ └──────────────────────────────────┘ │ [ ] Inviare NDA quadro entro giovedì │
-├──────────────────────────────────────┴──────────────────────────────────────┤
-│ [❌ Rifiuta / Archivia]             [⭐ Accetta & Concludi Sub-Task]        │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ 👤 PINO VILLA — Senior SAP EWM Consultant                              [🎯 In Trattativa ▼] [✕] │
+│ ID: CAN-EWM-001  |  Dominio: recruiting  |  Fonte: Google Sheets Sourcing                       │
+├────────────────────────────────────────────────┬────────────────────────────────────────────────┤
+│ 📋 COLONNA SINISTRA: DATI E NOTE               │ 🕒 COLONNA DESTRA: TIMELINE E MINI-TASK        │
+│                                                │                                                │
+│ 📌 Dati & Contesto Ereditato                   │ 🕒 Timeline Privata Risorsa                    │
+│ • Competenze: SAP EWM, S/4HANA                 │ ➕ [Chiamata] [Email] [WhatsApp] [Nota Rapida] │
+│ • Tariffa indicativa: 550€/giorno              │ ────────────────────────────────────────────── │
+│ • Profilo: linkedin.com/in/...                 │ 14 Set, 10:30 — Estratto da ricerca            │
+│                                                │ 14 Set, 11:15 — Primo contatto WhatsApp        │
+│ 📝 Note Operative Risorsa [💾 Salva (CTRL+S)]  │ 14 Set, 16:00 — Risposta: disponibile da Ott   │
+│ ┌────────────────────────────────────────────┐ │                                                │
+│ │ Richiede smart working 80%.                │ │ ⚡ Mini-Task Operativi Risorsa (1/2)           │
+│ │ Disponibile da Ottobre 2026.               │ │ [X] Verificare referenze passate             │
+│ └────────────────────────────────────────────┘ │ [ ] Inviare bozza NDA quadro                   │
+│ 🛡️ GDPR Art. 9: Cifratura client-side attiva   │ ➕ [+ Aggiungi Mini-Task]                      │
+├────────────────────────────────────────────────┴────────────────────────────────────────────────┤
+│ [❌ Rifiuta (Lost)]                             [🔄 Aggiorna]            [⭐ Accetta (Won)]     │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+- **Persistenza Stato Pannelli (`localStorage`):**  
+  La sezione `Mini-Task Operativi` è collassata/chiusa di default per preservare la pulizia visiva, ma l'utente può espanderla a piacimento. Lo stato di apertura/chiusura dei pannelli viene salvato in `localStorage` con la chiave `opsflow_subtask_panels_state`, garantendo che la preferenza rimanga memorizzata per le successive consultazioni.
 
 ---
 
