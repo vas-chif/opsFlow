@@ -19,7 +19,15 @@ import { useAuthStore } from "../stores/authStore";
 import { useSecureLogger } from "../composables/useSecureLogger";
 
 // ── Types ────────────────────────────────────────────────────────────────────
-import type { Workspace, WorkspaceLinkedResources, LinkedGoogleResource } from "../types/models";
+import type {
+  Workspace,
+  WorkspaceLinkedResources,
+  LinkedGoogleResource,
+  SheetUpdateMode,
+} from "../types/models";
+
+// ── Components ───────────────────────────────────────────────────────────────
+import SheetIntegrationConfigCard from "./SheetIntegrationConfigCard.vue";
 
 const props = defineProps<{
   modelValue: boolean;
@@ -105,6 +113,9 @@ const isOAuthConnected = ref(false);
 const isConnectingGoogle = ref(false);
 /** Workspace-level flag: when true, all tasks write to the Master Sheet by default. */
 const autoSyncToMasterSheet = ref<boolean>(true);
+/** Step 21 Strada 3: Workspace-level default sheet integration mode and auto-styling. */
+const workspaceSheetUpdateMode = ref<SheetUpdateMode>("append_new");
+const workspaceAutoStyleSheet = ref<boolean>(true);
 
 const extractIdFromUrl = (input: string): string => {
   const trimmed = input.trim();
@@ -553,6 +564,8 @@ const syncFromWorkspace = (newWs: Workspace | null): void => {
   defaultDriveFolderId.value = res.defaultDriveFolderId || "";
   defaultEmailSignature.value = res.defaultEmailSignature || "";
   autoSyncToMasterSheet.value = res.autoSyncToMasterSheet !== false;
+  workspaceSheetUpdateMode.value = res.sheetUpdateMode ?? "append_new";
+  workspaceAutoStyleSheet.value = res.autoStyleSheet !== false;
 
   linkedSheets.value = res.linkedSheets ? [...res.linkedSheets] : [];
   if (linkedSheets.value.length === 0 && res.defaultSheetId) {
@@ -687,6 +700,8 @@ const handleSave = async (): Promise<void> => {
       isOAuthConnected: isOAuthConnected.value,
       assignedAgents: assignedAgents.value,
       autoSyncToMasterSheet: autoSyncToMasterSheet.value,
+      sheetUpdateMode: workspaceSheetUpdateMode.value,
+      autoStyleSheet: workspaceAutoStyleSheet.value,
     };
 
     await taskStore.updateWorkspaceLinkedResources(
@@ -1104,6 +1119,13 @@ const handleSave = async (): Promise<void> => {
                   />
                 </div>
               </div>
+
+              <!-- Step 21 Strada 3: Policy Predefinita Integrazione Fogli nel Workspace -->
+              <SheetIntegrationConfigCard
+                v-model:update-mode="workspaceSheetUpdateMode"
+                v-model:auto-style-sheet="workspaceAutoStyleSheet"
+                title="Policy Predefinita Integrazione Fogli (Tutti i Task del Workspace)"
+              />
             </div>
 
             <q-separator class="q-my-md" />

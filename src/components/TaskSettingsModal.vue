@@ -20,7 +20,16 @@ import { computed, ref, watch } from "vue";
 import { useQuasar } from "quasar";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-import type { Task, TaskSettings, Workspace, LinkedGoogleResource } from "../types/models";
+import type {
+  Task,
+  TaskSettings,
+  Workspace,
+  LinkedGoogleResource,
+  SheetUpdateMode,
+} from "../types/models";
+
+// ── Components ───────────────────────────────────────────────────────────────
+import SheetIntegrationConfigCard from "./SheetIntegrationConfigCard.vue";
 
 // ── Stores ───────────────────────────────────────────────────────────────────
 import { useTaskStore } from "../stores/taskStore";
@@ -59,6 +68,10 @@ const emailSignature = ref<string>("");
 const emailHeader = ref<string>("");
 const syncToMasterSheet = ref<boolean>(true);
 
+// Step 21 Strada 3 — Sheet integration & auto-styling mode
+const taskSheetUpdateMode = ref<SheetUpdateMode>("append_new");
+const taskAutoStyleSheet = ref<boolean>(true);
+
 // Add new sheet on the fly
 const isAddingNewSheet = ref<boolean>(false);
 const newSheetNameInput = ref<string>("");
@@ -93,6 +106,13 @@ const masterSheet = computed<LinkedGoogleResource | null>(() => {
     availableWorkspaceSheets.value.find((s) => s.isMaster) ||
     availableWorkspaceSheets.value[0] ||
     null
+  );
+});
+
+const isSheetConfigInherited = computed<boolean>(() => {
+  return (
+    props.task.settings?.sheetUpdateMode === undefined &&
+    props.task.settings?.autoStyleSheet === undefined
   );
 });
 
@@ -138,6 +158,12 @@ const syncFromTask = (): void => {
   // If the task has an explicit stored value, use that instead.
   const wsAutoSync = props.workspace?.linkedResources?.autoSyncToMasterSheet !== false;
   syncToMasterSheet.value = s?.syncToMasterSheet !== undefined ? s.syncToMasterSheet : wsAutoSync;
+
+  // Step 21 Strada 3 — Sheet integration mode & auto-styling with workspace default fallback
+  const wsSheetMode = props.workspace?.linkedResources?.sheetUpdateMode ?? "append_new";
+  const wsAutoStyle = props.workspace?.linkedResources?.autoStyleSheet !== false;
+  taskSheetUpdateMode.value = s?.sheetUpdateMode ?? wsSheetMode;
+  taskAutoStyleSheet.value = s?.autoStyleSheet !== undefined ? s.autoStyleSheet : wsAutoStyle;
 }; /*end syncFromTask*/
 
 watch(
@@ -323,6 +349,8 @@ const handleSave = async (): Promise<void> => {
       emailSignature: emailSignature.value.trim() || undefined,
       emailHeader: emailHeader.value.trim() || undefined,
       syncToMasterSheet: syncToMasterSheet.value,
+      sheetUpdateMode: taskSheetUpdateMode.value,
+      autoStyleSheet: taskAutoStyleSheet.value,
     };
 
     await taskStore.updateTask(props.workspace.id, props.task.id, {
@@ -692,6 +720,14 @@ const handleSave = async (): Promise<void> => {
                 </div>
               </div>
             </div>
+
+            <!-- Step 21 Strada 3: Modalità Integrazione Dati & Auto-Styling Elite -->
+            <SheetIntegrationConfigCard
+              v-model:update-mode="taskSheetUpdateMode"
+              v-model:auto-style-sheet="taskAutoStyleSheet"
+              :is-task-level="true"
+              :is-inherited="isSheetConfigInherited"
+            />
 
             <!-- Step 19 §5.2: Scheduled Sourcing Card in Settings -->
             <div

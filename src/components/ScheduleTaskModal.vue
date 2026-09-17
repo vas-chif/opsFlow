@@ -43,6 +43,9 @@ import type {
   LinkedGoogleResource,
 } from "../types/models";
 
+// ── Components ───────────────────────────────────────────────────────────────
+import SheetIntegrationConfigCard from "./SheetIntegrationConfigCard.vue";
+
 // ── Stores ───────────────────────────────────────────────────────────────────
 import { useAuthStore } from "../stores/authStore";
 
@@ -123,21 +126,6 @@ const FREQUENCY_TO_CRON: Record<ScheduledJobFrequency, string> = {
   custom_cron: "0 4 * * *",
 };
 
-const UPDATE_MODE_OPTIONS = [
-  {
-    label: "Aggiungi solo nuovi",
-    value: "append_new" as SheetUpdateMode,
-    desc: "Non sovrascrive le righe esistenti — appende solo i profili mai visti prima (deduplicazione doppia chiave)",
-    icon: "add_circle",
-  },
-  {
-    label: "Ricalcola graduatoria",
-    value: "re_rank_all" as SheetUpdateMode,
-    desc: "Unisce esistenti + nuovi, riordina per Match Score decrescente",
-    icon: "sort",
-  },
-];
-
 // ── Computed ──────────────────────────────────────────────────────────────────
 const isOpen = computed({
   get: () => props.modelValue,
@@ -217,12 +205,18 @@ function initializeForm(): void {
     dedupUrlColumnIndex.value = j.targetResource.dedupUrlColumnIndex;
     dedupNameColumnIndex.value = j.targetResource.dedupNameColumnIndex;
   } else {
-    // Create mode — defaults auto-populated from task context (zero-friction UX)
     jobTitle.value = props.task.title ? `Monitoraggio: ${props.task.title}` : "";
     selectedFrequency.value = "daily_04am";
     endDate.value = defaultEndDate.value;
-    updateMode.value = "append_new";
-    autoStyleSheet.value = true;
+    // Step 21 Strada 3: Pre-populate from task settings or workspace default
+    const taskMode = props.task.settings?.sheetUpdateMode;
+    const wsMode = props.workspace?.linkedResources?.sheetUpdateMode;
+    updateMode.value = taskMode || wsMode || "append_new";
+
+    const taskAutoStyle = props.task.settings?.autoStyleSheet;
+    const wsAutoStyle = props.workspace?.linkedResources?.autoStyleSheet;
+    autoStyleSheet.value =
+      taskAutoStyle !== undefined ? taskAutoStyle : wsAutoStyle !== undefined ? wsAutoStyle : true;
     // Pre-populate searchQuery with task title (same as human intent of the task)
     searchQuery.value = props.task.title || "";
     promptTemplate.value =
@@ -498,58 +492,11 @@ function getStatusLabel(status: string): string {
               </template>
             </q-input>
 
-            <!-- Update mode -->
-            <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs q-mt-md">
-              <q-icon name="merge" size="18px" color="amber-9" class="q-mr-xs" />
-              Modalità Integrazione Dati
-            </div>
-            <q-list bordered separator class="rounded-borders bg-white q-mb-md">
-              <q-item
-                v-for="opt in UPDATE_MODE_OPTIONS"
-                :key="opt.value"
-                clickable
-                :active="updateMode === opt.value"
-                active-class="bg-amber-1"
-                @click="updateMode = opt.value"
-                class="update-mode-item"
-              >
-                <q-item-section avatar style="min-width: 36px">
-                  <q-radio v-model="updateMode" :val="opt.value" color="amber-9" />
-                </q-item-section>
-                <q-item-section>
-                  <q-item-label
-                    class="text-subtitle2"
-                    :class="{ 'text-weight-bold': updateMode === opt.value }"
-                  >
-                    {{ opt.label }}
-                  </q-item-label>
-                  <q-item-label caption class="text-grey-7">
-                    {{ opt.desc }}
-                  </q-item-label>
-                </q-item-section>
-              </q-item>
-            </q-list>
-
-            <!-- Auto-style toggle -->
-            <q-card
-              bordered
-              flat
-              class="bg-white rounded-borders q-pa-sm border-gold-light q-mt-md"
-            >
-              <q-item tag="label" class="q-pa-xs">
-                <q-item-section avatar>
-                  <q-toggle v-model="autoStyleSheet" color="amber-9" />
-                </q-item-section>
-                <q-item-section>
-                  <q-item-label class="text-weight-bold text-grey-9"
-                    >Auto-Styling Elite 🎨</q-item-label
-                  >
-                  <q-item-label caption class="text-grey-7">
-                    Applica automaticamente header scuro, testo a capo e larghezze colonne ottimali
-                  </q-item-label>
-                </q-item-section>
-              </q-item>
-            </q-card>
+            <!-- Step 21 Strada 3: Update mode & Auto-style (DRY Reusable Component) -->
+            <SheetIntegrationConfigCard
+              v-model:update-mode="updateMode"
+              v-model:auto-style-sheet="autoStyleSheet"
+            />
           </div>
 
           <!-- ── RIGHT COLUMN: Search config & Sheet target ────────── -->

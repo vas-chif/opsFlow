@@ -153,6 +153,10 @@ export interface TaskSettings {
   emailSignature?: string | undefined;
   emailHeader?: string | undefined;
   syncToMasterSheet?: boolean | undefined;
+  /** Data integration mode for Google Sheets (Step 19 / Step 21 Strada 3). */
+  sheetUpdateMode?: SheetUpdateMode | undefined;
+  /** Whether to automatically apply Elite Styling to target Google Sheets. */
+  autoStyleSheet?: boolean | undefined;
 }
 
 /**
@@ -392,6 +396,10 @@ export interface WorkspaceLinkedResources {
   dontList?: string[] | undefined;
   /** @deprecated Migrated to WorkspaceAttitude.tone */
   toneOfVoice?: "formal" | "informal" | "operational" | "roi_synthetic" | undefined;
+  /** Default data integration mode for Google Sheets in this workspace (Step 19 / Step 21 Strada 3). */
+  sheetUpdateMode?: SheetUpdateMode | undefined;
+  /** Whether to automatically apply Elite Styling to target Google Sheets by default. */
+  autoStyleSheet?: boolean | undefined;
 }
 
 /**

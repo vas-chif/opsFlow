@@ -113,17 +113,27 @@ sequenceDiagram
 
 ## 📋 4. Matrice Operativa delle Fasi di Implementazione (Checklist)
 
-### 📌 FASE 1: Live Editing Prompt, Titolo e Categoria in `TaskSettingsModal.vue`
+### 📌 FASE 1: Live Editing Prompt, Titolo e Categoria in `TaskSettingsModal.vue` + Modalità Integrazione Fogli
 
-- [ ] **1.1** In [src/components/TaskSettingsModal.vue](file:///home/chif-vas/projects/opsflow/src/components/TaskSettingsModal.vue), aggiungere il tab prioritario `prompt` (_"1. Obiettivo & Prompt IA"_), riordinando gli altri tab (`prompt`, `sheet`, `email`, `sync`).
-- [ ] **1.2** Legare in modo bidirezionale i campi del task corrente:
+- [x] **1.1** In [src/components/TaskSettingsModal.vue](file:///home/chif-vas/projects/opsflow/src/components/TaskSettingsModal.vue), aggiungere il tab prioritario `prompt` (_"1. Obiettivo & Prompt IA"_), riordinando gli altri tab (`prompt`, `sheet`, `email`, `sync`).
+- [x] **1.2** Legare in modo bidirezionale i campi del task corrente:
   - `editTitle = ref(props.task.title)`
   - `editCategory = ref(props.task.category || 'general')`
   - `editPrompt = ref(props.task.description || '')`
-- [ ] **1.3** Sincronizzare i campi al variare della prop `task` (`watch(() => props.task, ...)`).
-- [ ] **1.4** Nel metodo `handleSave`, aggiornare il documento del task in Firestore tramite `taskStore.updateTask(props.workspace.id, props.task.id, { title, category, description })`.
-- [ ] **1.5** Aggiungere un pulsante opzionale _"Rigenera Sotto-Task con AgentePlanner"_ che, se cliccato dall'utente, invoca la logica di pianificazione automatica per aggiornare le sotto-task operative in base al nuovo prompt.
-- [ ] **1.6** Mostrare notifica Quasar di conferma salvataggio e aggiornare reattivamente il titolo nell'header della modale e della chat.
+- [x] **1.3** Sincronizzare i campi al variare della prop `task` (`watch(() => props.task, ...)`).
+- [x] **1.4** Nel metodo `handleSave`, aggiornare il documento del task in Firestore tramite `taskStore.updateTask(props.workspace.id, props.task.id, { title, category, description })`.
+- [x] **1.5** Aggiungere un pulsante opzionale _"Rigenera Sotto-Task con AgentePlanner"_ che, se cliccato dall'utente, invoca la logica di pianificazione automatica per aggiornare le sotto-task operative in base al nuovo prompt.
+- [x] **1.6** Mostrare notifica Quasar di conferma salvataggio e aggiornare reattivamente il titolo nell'header della modale e della chat.
+- [x] **1.7** **Strada 3 Ibrida (Componente Unico DRY `SheetIntegrationConfigCard.vue`):**
+  - Creato `src/components/SheetIntegrationConfigCard.vue` per selezionare:
+    - _Modalità Integrazione Dati_ (`append_new` = "Aggiungi solo nuovi" con deduplicazione a doppia chiave vs `re_rank_all` = "Ricalcola graduatoria").
+    - _Auto-Styling Elite 🎨_ (toggle intestazione navy, wrap testo e larghezze ottimali).
+    - Supporto visivo all'ereditarietà delle policy da Workspace.
+  - Aggiornato `src/types/models.ts`: esteso `TaskSettings` e `WorkspaceLinkedResources` con `sheetUpdateMode?: SheetUpdateMode` e `autoStyleSheet?: boolean`.
+- [x] **1.8** **Integrazione Full-Stack del Componente Unico:**
+  - In [src/components/TaskSettingsModal.vue](file:///home/chif-vas/projects/opsflow/src/components/TaskSettingsModal.vue) (Tab 2 "Fogli Google & Schede"): mostrato `SheetIntegrationConfigCard` per configurare o sovrascrivere la modalità per il singolo task, salvando in `task.settings`.
+  - In [src/components/WorkspaceAttitudeModal.vue](file:///home/chif-vas/projects/opsflow/src/components/WorkspaceAttitudeModal.vue) (Tab 2 "Risorse Collegate"): integrato `SheetIntegrationConfigCard` per definire la policy di default del Workspace in `workspace.linkedResources`.
+  - In [src/components/ScheduleTaskModal.vue](file:///home/chif-vas/projects/opsflow/src/components/ScheduleTaskModal.vue): refactoring DRY delle righe 501–553 sostituendo il blocco duplicato con `SheetIntegrationConfigCard`.
 
 ---
 
