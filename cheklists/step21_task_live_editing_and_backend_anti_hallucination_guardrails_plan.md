@@ -1,6 +1,6 @@
 # 📋 STEP 21 — Task Live Editing (Prompt & Card) + Deterministic Backend Anti-Hallucination Guardrails
 
-> **Status:** 🟡 IN ATTESA DI APPROVAZIONE — Piano Architetturale Definito  
+> **Status:** 🟢 APPROVATO AL 100% — In Fase di Esecuzione  
 > **Autore:** Vasile Chifeac & AI Senior Architect, AI Engineer, Security Expert & Senior Jurist  
 > **Data:** 2026-09-17  
 > **Progetto:** OpsFlow SaaS (Quasar 2, Vue 3, Pinia, Firebase Cloud Functions Gen 2, Cloud Firestore, Genkit, Gemini 3.6 Flash)  
@@ -156,26 +156,30 @@ sequenceDiagram
     };
   }
   ```
-- [ ] **3.3** Implementare il controllo **Ground-Truth Matching per gli URL**:
-  - Confronto case-insensitive del dominio e del path degli URL proposti rispetto all'insieme `groundTruthUrls`.
-  - Se un URL LinkedIn/Malt/GitHub non appartiene alla lista dei risultati reali, sostituire o annotare la cella con `[Profilo non certificato dai motori]`.
+- [ ] **3.3** Implementare il controllo **Ground-Truth Matching per gli URL** con **Normalizzazione Rigorosa**:
+  - Funzione `normalizeUrl(url: string): string`: rimozione di parametri query/tracciamento (`?utm_source=...`, `?ref=...`), strip del trailing slash finale, conversione dominio in minuscolo e neutralizzazione protocollo (`http` vs `https`).
+  - Il confronto tra l'URL proposto dall'LLM e i risultati di ricerca deve avvenire esclusivamente tra stringhe normalizzate per evitare di scartare profili reali a causa di redirect o parametri analitici.
+  - Se un URL LinkedIn/Malt/GitHub non appartiene alla whitelist dei risultati reali, sostituire o annotare la cella con `[Profilo non certificato dai motori]`.
 - [ ] **3.4** Implementare il filtro **Anti-Dati Sintetici (Email & Telefoni)**:
   - Regex per domini fittizi: `/@(example\.|test\.|example-consulting\.|company\.|fake\.)/i`.
   - Regex per telefoni sequenziali/dummy: `/^(\+?[0-9\s-]{4,})?$/` verificando assenza di sequenze ripetitive come `1234567` o `0000000`.
   - Sostituzione sicura della cella contatto: `"Contatto via InMail / Profilo Pubblico"` se non derivante da estrazione certa da sito aziendale.
 - [ ] **3.5** Implementare il calcolo **Deterministico GDPR Art. 14 (+30 giorni)**:
   - Riconoscere la colonna contenente date o riferimenti GDPR.
-  - Sovrascrivere deterministicamente il valore calcolando `new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('it-IT')`.
+  - Sovrascrivere deterministicamente il valore calcolando `new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('it-IT')` (eliminando date arbitrarie o storiche tipo 2024).
 
 ---
 
-### 📌 FASE 4: Integrazione Guardrail in `googleWorkspace.ts` e `chatFlow.ts`
+### 📌 FASE 4: Integrazione Guardrail in `googleWorkspace.ts`, `chatFlow.ts` e `ApprovalCard.vue`
 
 - [ ] **4.1** In `opsflow-functions/src/tools/googleWorkspace.ts`, aggiornare il tool `manageGoogleSheetTool`:
   - Passare le righe grezze al middleware `validateAndSanitizeRows()`.
   - Utilizzare le righe bonificate sia per `previewRows` sia per `rowsJson` nel record `approvalRecord`.
-- [ ] **4.2** In `opsflow-functions/src/ai/chatFlow.ts`, memorizzare nel contesto del turno di chat gli URL reali estratti da `searchWebAndPlatformsTool` e `jinaReaderTool` in modo che siano accessibili al middleware.
+- [ ] **4.2** In `opsflow-functions/src/ai/chatFlow.ts`, implementare il **Buffer Multi-Query nel Contesto di Turno**:
+  - Quando l'Agente esegue 2 o più ricerche progressive nello stesso turno operativo, il Set `groundTruthUrls` accumula e aggrega tutti i link estratti da tutte le chiamate di ricerca eseguite in quel turno (evitando di sovrascrivere o perdere i risultati della prima ricerca).
 - [ ] **4.3** Aggiungere un messaggio di riepilogo nella chat o nella card di approvazione se sono state applicate correzioni di sicurezza (es. _"OpsFlow Guardrail: 2 email fittizie convertite in contatto InMail, data GDPR forzata a +30gg"_).
+- [ ] **4.4** In [src/components/ApprovalCard.vue](file:///home/chif-vas/projects/opsflow/src/components/ApprovalCard.vue), aggiungere il **Badge di Certificazione Visuale**:
+  - Mostrare un chip/badge verde discreto (es. `🛡️ Link Verificato`) accanto all'URL del candidato nella card di approvazione per dare visibilità immediata all'operatore che il profilo è passato attraverso il filtro di conformità backend.
 
 ---
 
