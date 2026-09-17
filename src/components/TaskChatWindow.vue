@@ -3281,13 +3281,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
               <q-badge color="grey-5" text-color="dark" :label="idx + 1" />
             </div>
             <div class="col">
-              <q-input
-                v-model="st.title"
-                outlined
-                dense
-                size="sm"
-                placeholder="Titolo sotto-task..."
-              />
+              <q-input v-model="st.title" outlined dense placeholder="Titolo sotto-task..." />
             </div>
             <div class="col-auto">
               <q-btn
