@@ -36,7 +36,7 @@ export interface SanitizationResult {
     syntheticEmailsBlocked: number;
     gdprDatesNormalized: number;
   };
-} /*end SanitizationResult*/
+} /* end SanitizationResult */
 
 // ── Constants & Patterns ──────────────────────────────────────────────────────
 
@@ -97,13 +97,18 @@ const URL_UNVERIFIED_LABEL = "[Profilo non certificato dai motori]";
  * - Removes tracking query parameters (utm_*, ref, fbclid, etc.)
  * - Strips trailing slash
  * - Removes www. prefix for domain matching flexibility
+ * @param {string} url - Raw URL string to normalize.
+ * @return {string} Normalized URL string.
  */
 export const normalizeUrl = (url: string): string => {
   try {
     const trimmed = url.trim().replace(/^http:\/\//i, "https://");
     const parsed = new URL(trimmed);
     // Remove tracking parameters
-    const trackingParams = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "ref", "fbclid", "gclid", "mc_cid", "mc_eid"];
+    const trackingParams = [
+      "utm_source", "utm_medium", "utm_campaign", "utm_content",
+      "utm_term", "ref", "fbclid", "gclid", "mc_cid", "mc_eid",
+    ];
     for (const param of trackingParams) {
       parsed.searchParams.delete(param);
     }
@@ -120,19 +125,24 @@ export const normalizeUrl = (url: string): string => {
     // If URL is invalid, return lowercased trimmed original
     return url.trim().toLowerCase();
   }
-}; /*end normalizeUrl*/
+}; /* end normalizeUrl */
 
 /**
  * Builds a normalized Set from an array of raw URLs (e.g., from webSearch results).
  * This Set is the "ground truth" whitelist for URL validation.
+ * @param {string[]} rawUrls - List of raw URLs discovered during search.
+ * @return {Set<string>} Set of normalized unique URLs.
  */
 export const buildGroundTruthSet = (rawUrls: string[]): Set<string> => {
   return new Set(rawUrls.map(normalizeUrl));
-}; /*end buildGroundTruthSet*/
+}; /* end buildGroundTruthSet */
 
 /**
  * Determines whether a given URL is present in the ground-truth Set.
  * Uses prefix matching to handle sub-page variations of a verified domain.
+ * @param {string} url - Target URL to verify.
+ * @param {Set<string>} groundTruthUrls - Ground-truth Set of certified URLs.
+ * @return {boolean} True if the URL matches a ground-truth entry.
  */
 const isUrlGroundTruth = (url: string, groundTruthUrls: Set<string>): boolean => {
   const normalized = normalizeUrl(url);
@@ -145,29 +155,33 @@ const isUrlGroundTruth = (url: string, groundTruthUrls: Set<string>): boolean =>
     }
   }
   return false;
-}; /*end isUrlGroundTruth*/
+}; /* end isUrlGroundTruth */
 
 /**
  * Detects if a cell value is a synthetic/fake email address.
+ * @param {string} value - Cell string to test.
+ * @return {boolean} True if the value matches a synthetic email pattern.
  */
 const isSyntheticEmail = (value: string): boolean => {
   // Must contain @ to be an email
   if (!value.includes("@")) return false;
   return SYNTHETIC_EMAIL_REGEX.test(value);
-}; /*end isSyntheticEmail*/
+}; /* end isSyntheticEmail */
 
 /**
  * Detects if a cell value is a synthetic/dummy phone number.
+ * @param {string} value - Cell string to test.
+ * @return {boolean} True if the value matches dummy phone patterns.
  */
 const isDummyPhone = (value: string): boolean => {
   // Heuristic: must look like a phone (digits with optional +, spaces, hyphens)
   if (!/^[+\d\s\-().]{7,20}$/.test(value.trim())) return false;
   return DUMMY_PHONE_PATTERNS.some((pattern) => pattern.test(value));
-}; /*end isDummyPhone*/
+}; /* end isDummyPhone */
 
 /**
  * Calculates the GDPR Art. 14 notification deadline: now() + 30 days.
- * Returns formatted date string in Italian locale (dd/mm/yyyy).
+ * @return {string} Formatted date string in Italian locale (dd/mm/yyyy).
  */
 const computeGdprDeadline = (): string => {
   const deadline = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
@@ -176,15 +190,17 @@ const computeGdprDeadline = (): string => {
     month: "2-digit",
     year: "numeric",
   });
-}; /*end computeGdprDeadline*/
+}; /* end computeGdprDeadline */
 
 /**
  * Determines if a column header indicates a GDPR date column.
+ * @param {string} header - Column header name to inspect.
+ * @return {boolean} True if header contains GDPR-related keywords.
  */
 const isGdprDateColumn = (header: string): boolean => {
   const normalized = header.toLowerCase().trim();
   return GDPR_COLUMN_KEYWORDS.some((kw) => normalized.includes(kw));
-}; /*end isGdprDateColumn*/
+}; /* end isGdprDateColumn */
 
 // ── Main Sanitization Function ────────────────────────────────────────────────
 
@@ -196,10 +212,10 @@ const isGdprDateColumn = (header: string): boolean => {
  * 2. Synthetic email/phone blocker — replaces fake contacts with InMail fallback.
  * 3. GDPR date forcing — overwrites GDPR columns with deterministic +30d deadline.
  *
- * @param values - Raw 2D string array from LLM (first row is treated as headers if hasHeaders=true).
- * @param groundTruthUrls - Set of normalized URLs from webSearch.ts results (ground truth).
- * @param hasHeaders - Whether the first row contains column headers. Defaults to true.
- * @returns SanitizationResult with sanitized data and correction metrics.
+ * @param {Array<Array<string>>} values - Raw 2D string array from LLM.
+ * @param {Set<string>} groundTruthUrls - Set of normalized URLs from search.
+ * @param {boolean} hasHeaders - Whether the first row contains headers.
+ * @return {SanitizationResult} Result with sanitized data and metrics.
  */
 export const validateAndSanitizeRows = (
   values: string[][],
@@ -266,7 +282,7 @@ export const validateAndSanitizeRows = (
 
       return cell; // Cell passed all checks
     });
-  }); /*end dataRows.map*/
+  }); /* end dataRows.map */
 
   // Reassemble with headers if present
   const sanitizedValues = hasHeaders ? [headers, ...sanitizedDataRows] : sanitizedDataRows;
@@ -274,11 +290,13 @@ export const validateAndSanitizeRows = (
     flags.unverifiedUrlsRemoved + flags.syntheticEmailsBlocked + flags.gdprDatesNormalized;
 
   return { sanitizedValues, correctionsCount, flags };
-}; /*end validateAndSanitizeRows*/
+}; /* end validateAndSanitizeRows */
 
 /**
  * Generates a human-readable summary of applied guardrail corrections.
  * Used for the chat guardrail notification message (Fase 4.3).
+ * @param {SanitizationResult} result - Sanitization pipeline output.
+ * @return {string|null} Summary message string or null if zero corrections.
  */
 export const buildGuardrailSummary = (result: SanitizationResult): string | null => {
   if (result.correctionsCount === 0) return null;
@@ -293,4 +311,5 @@ export const buildGuardrailSummary = (result: SanitizationResult): string | null
     parts.push(`${result.flags.gdprDatesNormalized} date GDPR forzate a +30gg (Art. 14)`);
   }
   return `🛡️ OpsFlow Guardrail: ${parts.join(", ")}.`;
-}; /*end buildGuardrailSummary*/
+}; /* end buildGuardrailSummary */
+

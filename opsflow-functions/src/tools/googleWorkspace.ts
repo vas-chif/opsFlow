@@ -53,17 +53,22 @@ export const activeWorkspaceContext: GoogleWorkspaceContext = {};
  */
 export const groundTruthUrlBuffer: Set<string> = new Set();
 
-/** Resets the ground-truth URL buffer for a new agent turn. */
+/**
+ * Resets the ground-truth URL buffer for a new agent turn.
+ */
 export function resetGroundTruthBuffer(): void {
   groundTruthUrlBuffer.clear();
-} /*end resetGroundTruthBuffer*/
+} /* end resetGroundTruthBuffer */
 
-/** Adds verified URLs from a search result to the ground-truth buffer. */
+/**
+ * Adds verified URLs from a search result to the ground-truth buffer.
+ * @param {string[]} urls - List of verified ground-truth URLs to accumulate.
+ */
 export function addGroundTruthUrls(urls: string[]): void {
   for (const url of urls) {
     if (url) groundTruthUrlBuffer.add(url);
   }
-} /*end addGroundTruthUrls*/
+} /* end addGroundTruthUrls */
 
 /**
  * Sets the active workspace context for the current tool execution.
@@ -265,13 +270,14 @@ export const manageGoogleSheetTool = ai.defineTool(
     const previewRows = normalizedValues.slice(0, 5);
 
     // Build guardrail metadata for transparency in ApprovalCard
-    const guardrailMeta = guardrailResult.correctionsCount > 0
-      ? {
-          correctionsCount: guardrailResult.correctionsCount,
-          flags: guardrailResult.flags,
-          summary: guardrailSummary,
-        }
-      : undefined;
+    let guardrailMeta = undefined;
+    if (guardrailResult.correctionsCount > 0) {
+      guardrailMeta = {
+        correctionsCount: guardrailResult.correctionsCount,
+        flags: guardrailResult.flags,
+        summary: guardrailSummary,
+      };
+    }
 
     // Firestore does not permit direct nested arrays (e.g. string[][]).
     // We store previewRows as an array of objects { cells: [...] } and full data as rowsJson.
