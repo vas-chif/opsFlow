@@ -29,7 +29,7 @@ import { computed, ref, watch } from "vue";
 import { useQuasar, copyToClipboard } from "quasar";
 
 // ── Firebase ─────────────────────────────────────────────────────────────────
-import { getFirestore, doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { getFirestore, doc, updateDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 import type {
@@ -44,6 +44,7 @@ import type {
 
 // ── Stores ───────────────────────────────────────────────────────────────────
 import { useAuthStore } from "../stores/authStore";
+import { useSubtaskUiStore } from "../stores/subtaskUiStore";
 
 // ── Composables ──────────────────────────────────────────────────────────────
 import { useSecureLogger } from "../composables/useSecureLogger";
@@ -62,6 +63,7 @@ const emit = defineEmits<{
 
 const q = useQuasar();
 const authStore = useAuthStore();
+const subtaskUiStore = useSubtaskUiStore();
 const logger = useSecureLogger();
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -70,55 +72,17 @@ const isOpen = computed({
   set: (val: boolean) => emit("update:modelValue", val),
 });
 
-const activeTab = ref<"splitView" | "attributes" | "notes" | "timeline" | "miniTasks">("splitView");
+// UI expansion state persisted via Pinia subtaskUiStore (Img 4 + Img 5 alignment)
+const isMiniTasksExpanded = computed(() => subtaskUiStore.isMiniTasksExpanded);
+const isTimelineExpanded = computed(() => subtaskUiStore.isTimelineExpanded);
 
-// Panel Collapsible State with LocalStorage Persistence (Point 3)
-const STORAGE_PANELS_KEY = "opsflow_subtask_panels_state";
+const toggleMiniTasks = (): void => {
+  subtaskUiStore.toggleMiniTasks();
+}; /*end toggleMiniTasks*/
 
-interface SubtaskPanelsState {
-  isTimelineOpen: boolean;
-  isMiniTasksOpen: boolean;
-}
-
-const loadPanelsState = (): SubtaskPanelsState => {
-  try {
-    const raw = localStorage.getItem(STORAGE_PANELS_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return {
-        isTimelineOpen: typeof parsed.isTimelineOpen === "boolean" ? parsed.isTimelineOpen : true,
-        isMiniTasksOpen:
-          typeof parsed.isMiniTasksOpen === "boolean" ? parsed.isMiniTasksOpen : false, // Default closed
-      };
-    }
-  } catch {
-    // Ignore parse error
-  }
-  return {
-    isTimelineOpen: true,
-    isMiniTasksOpen: false, // Default closed as requested by user
-  };
-};
-
-const panelsState = ref<SubtaskPanelsState>(loadPanelsState());
-
-const toggleTimelinePanel = (): void => {
-  panelsState.value.isTimelineOpen = !panelsState.value.isTimelineOpen;
-  savePanelsState();
-}; /*end toggleTimelinePanel*/
-
-const toggleMiniTasksPanel = (): void => {
-  panelsState.value.isMiniTasksOpen = !panelsState.value.isMiniTasksOpen;
-  savePanelsState();
-}; /*end toggleMiniTasksPanel*/
-
-const savePanelsState = (): void => {
-  try {
-    localStorage.setItem(STORAGE_PANELS_KEY, JSON.stringify(panelsState.value));
-  } catch {
-    // Ignore quota error
-  }
-}; /*end savePanelsState*/
+const toggleTimeline = (): void => {
+  subtaskUiStore.toggleTimeline();
+}; /*end toggleTimeline*/
 
 // Local draft state
 const localStatus = ref<EntitySubTaskStatus>("new");
@@ -312,6 +276,56 @@ const updateSubtaskField = async (
     });
   }
 }; /*end updateSubtaskField*/
+
+const isDeletingSubtask = ref<boolean>(false);
+
+const handleDeleteSubtask = (): void => {
+  if (!props.subtask) return;
+  const targetId = props.subtask.id;
+  const targetTitle = props.subtask.title;
+
+  q.dialog({
+    title: "Elimina Sub-Task",
+    message: `Sei sicuro di voler eliminare definitivamente la risorsa "${targetTitle}"? L'elemento verrà rimosso sia da Firebase che dall'elenco locale.`,
+    cancel: {
+      flat: true,
+      color: "grey-7",
+      label: "Annulla",
+    },
+    ok: {
+      unelevated: true,
+      color: "negative",
+      label: "Elimina Definitivamente",
+      icon: "delete_forever",
+    },
+    persistent: true,
+  }).onOk(async () => {
+    const docRef = getSubtaskDocRef();
+    if (!docRef) return;
+
+    isDeletingSubtask.value = true;
+    try {
+      await deleteDoc(docRef);
+      logger.info("SubTaskEntityModal", `Subtask ${targetId} permanently deleted from Firestore`);
+      q.notify({
+        type: "positive",
+        message: `Sub-task "${targetTitle}" eliminato con successo.`,
+        position: "top",
+      });
+      emit("deleted", targetId);
+      isOpen.value = false;
+    } catch (err: unknown) {
+      logger.error("SubTaskEntityModal", "Failed to delete subtask from Firestore", err);
+      q.notify({
+        type: "negative",
+        message: "Errore durante l'eliminazione del sub-task da Firebase.",
+        position: "top",
+      });
+    } finally {
+      isDeletingSubtask.value = false;
+    }
+  });
+}; /*end handleDeleteSubtask*/
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
 const handleStatusChange = async (newStatus: EntitySubTaskStatus): Promise<void> => {
@@ -559,7 +573,7 @@ const formatEventDate = (isoStr: string): string => {
       v-if="subtask"
       class="subtask-entity-card column no-wrap"
       style="
-        width: 1080px;
+        width: 1060px;
         max-width: 96vw;
         height: 88vh;
         max-height: 88vh;
@@ -651,6 +665,19 @@ const formatEventDate = (isoStr: string): string => {
             </q-list>
           </q-btn-dropdown>
 
+          <!-- Delete Subtask Icon -->
+          <q-btn
+            round
+            dense
+            flat
+            color="red-3"
+            icon="delete_forever"
+            :loading="isDeletingSubtask"
+            @click="handleDeleteSubtask"
+          >
+            <q-tooltip>Elimina definitivamente la risorsa da Firebase</q-tooltip>
+          </q-btn>
+
           <!-- Close Icon -->
           <q-btn round dense flat color="grey-4" icon="close" @click="isOpen = false">
             <q-tooltip>Chiudi Scheda Risorsa</q-tooltip>
@@ -658,645 +685,128 @@ const formatEventDate = (isoStr: string): string => {
         </div>
       </div>
 
-      <!-- ── Subheader Navigation Tabs ────────────────────────────────────────── -->
-      <div class="bg-white border-bottom-light">
-        <q-tabs
-          v-model="activeTab"
-          dense
-          active-color="amber-9"
-          indicator-color="amber-9"
-          align="left"
-          class="text-grey-8"
+      <!-- ── Two-Column Split-View Body (Img 5 Coherent Layout) ────────────────── -->
+      <div class="col row no-wrap overflow-hidden subtask-split-container">
+        <!-- ── LEFT COLUMN: Dati Ereditati, Attributi & Note Operative ───────── -->
+        <div
+          class="col-12 col-md-6 column no-wrap scroll q-pa-md border-right-light left-pane bg-grey-1"
+          style="overflow-y: auto"
         >
-          <q-tab
-            name="splitView"
-            icon="space_dashboard"
-            label="Vista Affiancata (Split-View)"
-            class="q-px-md text-weight-bold"
-          />
-          <q-tab name="attributes" icon="info" label="Dati Ereditati" class="q-px-md" />
-          <q-tab name="notes" icon="edit_note" label="Note Operative" class="q-px-md">
-            <q-badge v-if="hasUnsavedNotes" color="deep-orange" floating rounded />
-          </q-tab>
-          <q-tab name="timeline" icon="history" label="Timeline Privata" class="q-px-md">
-            <q-badge
-              v-if="subtask.timeline && subtask.timeline.length > 0"
-              color="primary"
-              floating
-              rounded
-              :label="subtask.timeline.length"
-            />
-          </q-tab>
-          <q-tab name="miniTasks" icon="checklist" label="Mini-Task Checklist" class="q-px-md">
-            <q-badge
-              v-if="subtask.nestedTasks && subtask.nestedTasks.length > 0"
-              color="teal-7"
-              floating
-              rounded
-              :label="`${subtask.nestedTasks.filter((t) => t.completed).length}/${subtask.nestedTasks.length}`"
-            />
-          </q-tab>
-        </q-tabs>
-      </div>
-
-      <!-- ── Tab Panels Content ────────────────────────────────────────────────── -->
-      <q-tab-panels v-model="activeTab" animated class="col scroll bg-transparent">
-        <!-- ── PANEL 0: Vista Affiancata (Split-View - Point 3) ──────────────────── -->
-        <q-tab-panel name="splitView" class="q-pa-md">
-          <div class="row q-col-gutter-md">
-            <!-- Left Column: Dati Ereditati & Note Operative -->
-            <div class="col-12 col-md-6 column q-gutter-y-md">
-              <!-- Dati Ereditati Card -->
-              <q-card flat bordered class="rounded-borders bg-white q-pa-md shadow-1">
-                <div class="row items-center justify-between q-mb-sm">
-                  <div
-                    class="text-caption text-weight-bold text-primary text-uppercase letter-spacing"
-                  >
-                    Dettagli Estratti dalla Tabella
-                  </div>
-                  <q-btn
-                    v-if="profileUrl"
-                    outline
-                    dense
-                    size="xs"
-                    color="primary"
-                    icon="open_in_new"
-                    label="Apri Profilo Fonte"
-                    :href="profileUrl"
-                    target="_blank"
-                    class="q-px-sm"
-                  />
-                </div>
-
-                <div v-if="extractedRowCells.length > 0" class="q-mt-sm">
-                  <q-list dense separator class="rounded-borders bg-grey-1">
-                    <q-item v-for="(cell, cIdx) in extractedRowCells" :key="cIdx" class="q-py-xs">
-                      <q-item-section avatar style="min-width: 32px">
-                        <q-badge color="grey-4" text-color="dark" :label="`Col ${cIdx + 1}`" />
-                      </q-item-section>
-                      <q-item-section class="text-caption" style="word-break: break-all">
-                        <template v-if="/^https?:\/\//i.test(cell)">
-                          <a :href="cell" target="_blank" class="text-primary text-weight-bold">
-                            {{ cell }} 🔗
-                          </a>
-                        </template>
-                        <template v-else>
-                          {{ cell }}
-                        </template>
-                      </q-item-section>
-                      <q-item-section side>
-                        <q-btn
-                          flat
-                          dense
-                          round
-                          size="xs"
-                          icon="content_copy"
-                          color="grey-6"
-                          @click="handleCopyText(cell, `Valore Colonna ${cIdx + 1}`)"
-                        >
-                          <q-tooltip>Copia Valore</q-tooltip>
-                        </q-btn>
-                      </q-item-section>
-                    </q-item>
-                  </q-list>
-                </div>
-
-                <div v-else class="text-caption text-grey-6 q-pa-sm text-center">
-                  Nessun valore tabellare ereditato presente.
-                </div>
-
-                <!-- Unidirectional Sync Boundary Banner -->
-                <div
-                  class="q-mt-md q-pa-xs bg-blue-1 text-primary text-caption rounded-borders row items-center no-wrap"
-                  style="font-size: 0.72rem"
-                >
-                  <q-icon name="sync_disabled" size="16px" class="q-mr-xs text-primary" />
-                  <span>
-                    <strong>Isolamento Garantito:</strong> Dati registrati in OpsFlow senza
-                    sovrascrivere il foglio originale.
-                  </span>
-                </div>
-              </q-card>
-
-              <!-- Note Operative Card -->
-              <q-card flat bordered class="rounded-borders bg-white q-pa-md shadow-1">
-                <div class="row items-center justify-between q-mb-sm">
-                  <div class="row items-center">
-                    <q-icon name="sticky_note_2" color="amber-9" size="20px" class="q-mr-xs" />
-                    <span class="text-caption text-weight-bold text-primary text-uppercase">
-                      Note Operative & Appunti di Contatto
-                    </span>
-                  </div>
-                  <div class="row items-center q-gutter-x-sm">
-                    <q-badge
-                      v-if="hasUnsavedNotes"
-                      outline
-                      color="deep-orange"
-                      label="Non salvate"
-                      style="font-size: 0.68rem"
-                    />
-                    <q-btn
-                      unelevated
-                      size="xs"
-                      color="primary"
-                      icon="save"
-                      label="Salva Note"
-                      :loading="isSavingNotes"
-                      @click="handleSaveNotes"
-                    />
-                  </div>
-                </div>
-
-                <div
-                  v-if="subtask.domain === 'healthcare'"
-                  class="q-mb-sm q-pa-xs bg-amber-1 text-amber-10 text-caption rounded-borders row items-center"
-                  style="font-size: 0.7rem"
-                >
-                  <q-icon name="security" size="16px" class="q-mr-xs" />
-                  <span>Dati sanitari protetti client-side (GDPR Art. 9).</span>
-                </div>
-
-                <q-input
-                  v-model="localNotes"
-                  type="textarea"
-                  outlined
-                  autogrow
-                  rows="6"
-                  placeholder="Inserisci note sulla risorsa, riassunto colloqui, disponibilità, richieste o dettagli contrattuali..."
-                  class="subtask-notes-input"
-                  @update:model-value="hasUnsavedNotes = true"
-                />
-              </q-card>
+          <!-- Card 1: Dati Ereditati dalla Tabella / Chat -->
+          <q-card flat bordered class="rounded-borders bg-white q-pa-md shadow-1 q-mb-md">
+            <div class="row items-center justify-between q-mb-sm">
+              <div
+                class="text-caption text-weight-bold text-primary text-uppercase letter-spacing row items-center"
+              >
+                <q-icon name="info" size="18px" color="primary" class="q-mr-xs" />
+                Dati Ereditati & Profilo Fonte
+              </div>
+              <q-btn
+                v-if="profileUrl"
+                outline
+                dense
+                size="xs"
+                color="primary"
+                icon="open_in_new"
+                label="Apri Profilo Fonte"
+                :href="profileUrl"
+                target="_blank"
+                class="q-px-sm"
+              />
             </div>
 
-            <!-- Right Column: Timeline Privata & Mini-Tasks Affiancati -->
-            <div class="col-12 col-md-6 column q-gutter-y-md">
-              <!-- Timeline Privata Card (Stile Img 5) -->
-              <q-card flat bordered class="rounded-borders bg-white q-pa-sm shadow-1">
-                <div class="row items-center justify-between q-pb-xs border-bottom-subtle">
-                  <div class="row items-center q-gutter-xs">
-                    <q-icon name="timeline" color="primary" size="18px" />
-                    <span class="text-caption text-weight-bold text-primary">
-                      Timeline Privata ({{ subtask.timeline ? subtask.timeline.length : 0 }})
-                    </span>
-                  </div>
-
-                  <div class="row items-center q-gutter-2xs">
-                    <q-btn
-                      outline
-                      dense
-                      size="2xs"
-                      color="primary"
-                      icon="call"
-                      label="Chiamata"
-                      @click="openAddEvent('call')"
-                    />
-                    <q-btn
-                      outline
-                      dense
-                      size="2xs"
-                      color="teal-7"
-                      icon="mail"
-                      label="Email"
-                      @click="openAddEvent('email')"
-                    />
-                    <q-btn
-                      outline
-                      dense
-                      size="2xs"
-                      color="green-8"
-                      icon="chat"
-                      label="WhatsApp"
-                      @click="openAddEvent('whatsapp')"
-                    />
-                    <q-btn
-                      outline
-                      dense
-                      size="2xs"
-                      color="amber-9"
-                      icon="post_add"
-                      label="Nota"
-                      @click="openAddEvent('note')"
-                    />
+            <div v-if="extractedRowCells.length > 0" class="q-mt-sm">
+              <q-list dense separator class="rounded-borders bg-grey-1">
+                <q-item v-for="(cell, cIdx) in extractedRowCells" :key="cIdx" class="q-py-xs">
+                  <q-item-section avatar style="min-width: 32px">
+                    <q-badge color="grey-4" text-color="dark" :label="`Col ${cIdx + 1}`" />
+                  </q-item-section>
+                  <q-item-section class="text-caption" style="word-break: break-all">
+                    <template v-if="/^https?:\/\//i.test(cell)">
+                      <a :href="cell" target="_blank" class="text-primary text-weight-bold">
+                        {{ cell }} 🔗
+                      </a>
+                    </template>
+                    <template v-else>
+                      {{ cell }}
+                    </template>
+                  </q-item-section>
+                  <q-item-section side>
                     <q-btn
                       flat
+                      dense
                       round
-                      dense
                       size="xs"
-                      :icon="panelsState.isTimelineOpen ? 'expand_less' : 'expand_more'"
-                      color="grey-7"
-                      @click="toggleTimelinePanel"
+                      icon="content_copy"
+                      color="grey-6"
+                      @click="handleCopyText(cell, `Valore Colonna ${cIdx + 1}`)"
                     >
-                      <q-tooltip>{{
-                        panelsState.isTimelineOpen ? "Comprimi Timeline" : "Espandi Timeline"
-                      }}</q-tooltip>
+                      <q-tooltip>Copia Valore</q-tooltip>
                     </q-btn>
-                  </div>
-                </div>
-
-                <!-- Timeline Body -->
-                <q-slide-transition>
-                  <div v-show="panelsState.isTimelineOpen" class="q-pt-sm">
-                    <!-- Quick Add Event Form -->
-                    <div
-                      v-if="isAddingEvent"
-                      class="q-pa-xs bg-grey-1 rounded-borders q-mb-sm border-light"
-                    >
-                      <div class="row items-center justify-between q-mb-xs">
-                        <span
-                          class="text-caption text-weight-bold text-primary"
-                          style="font-size: 0.72rem"
-                        >
-                          Nuova Interazione ({{ newEventType.toUpperCase() }})
-                        </span>
-                        <q-btn
-                          flat
-                          round
-                          dense
-                          size="2xs"
-                          icon="close"
-                          @click="isAddingEvent = false"
-                        />
-                      </div>
-                      <div class="q-gutter-y-xs">
-                        <q-input
-                          v-model="newEventTitle"
-                          dense
-                          outlined
-                          placeholder="Titolo evento (es. Chiamata conoscitiva)"
-                          class="bg-white"
-                          style="font-size: 0.75rem"
-                        />
-                        <q-input
-                          v-model="newEventDesc"
-                          dense
-                          outlined
-                          type="textarea"
-                          rows="2"
-                          placeholder="Dettagli / note opzionali..."
-                          class="bg-white"
-                          style="font-size: 0.75rem"
-                        />
-                        <div class="row justify-end q-gutter-x-xs q-pt-xs">
-                          <q-btn flat size="xs" label="Annulla" @click="isAddingEvent = false" />
-                          <q-btn
-                            unelevated
-                            size="xs"
-                            color="primary"
-                            label="Salva Evento"
-                            :loading="isSavingEvent"
-                            @click="handleAddTimelineEvent"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <!-- Chronological Timeline List -->
-                    <div
-                      v-if="subtask.timeline && subtask.timeline.length > 0"
-                      class="q-px-xs scroll"
-                      style="max-height: 260px; overflow-y: auto"
-                    >
-                      <q-timeline color="amber-9" class="subtask-timeline q-px-xs">
-                        <q-timeline-entry
-                          v-for="evt in subtask.timeline"
-                          :key="evt.id"
-                          :title="evt.title"
-                          :subtitle="formatEventDate(evt.timestamp)"
-                          :icon="
-                            evt.eventType === 'call'
-                              ? 'call'
-                              : evt.eventType === 'email'
-                                ? 'mail'
-                                : evt.eventType === 'whatsapp'
-                                  ? 'chat'
-                                  : evt.eventType === 'status_change'
-                                    ? 'sync_alt'
-                                    : 'edit_note'
-                          "
-                        >
-                          <div
-                            v-if="evt.description"
-                            class="text-caption text-grey-8 q-mt-2xs"
-                            style="font-size: 0.72rem"
-                          >
-                            {{ evt.description }}
-                          </div>
-                          <div class="text-caption text-grey-5 q-mt-2xs" style="font-size: 0.68rem">
-                            Registrato da: {{ evt.authorName }}
-                          </div>
-                        </q-timeline-entry>
-                      </q-timeline>
-                    </div>
-
-                    <div
-                      v-else
-                      class="text-caption text-grey-6 text-center q-pa-sm"
-                      style="font-size: 0.72rem"
-                    >
-                      Nessun evento registrato. Usa i tasti in alto per registrare una chiamata o
-                      email.
-                    </div>
-                  </div>
-                </q-slide-transition>
-              </q-card>
-
-              <!-- Mini-Task Checklist Card (Default Chiuso, Gestito Locale) -->
-              <q-card flat bordered class="rounded-borders bg-white q-pa-sm shadow-1">
-                <div class="row items-center justify-between q-pb-xs border-bottom-subtle">
-                  <div class="row items-center q-gutter-xs">
-                    <q-icon name="checklist" color="teal-7" size="18px" />
-                    <span class="text-caption text-weight-bold text-primary">
-                      Mini-Task Checklist ({{
-                        subtask.nestedTasks
-                          ? subtask.nestedTasks.filter((t) => t.completed).length
-                          : 0
-                      }}/{{ subtask.nestedTasks ? subtask.nestedTasks.length : 0 }})
-                    </span>
-                    <q-badge
-                      v-if="subtask.nestedTasks && subtask.nestedTasks.length > 0"
-                      color="teal-7"
-                      rounded
-                      dense
-                      class="text-caption q-px-xs"
-                      style="font-size: 0.65rem"
-                    >
-                      {{
-                        Math.round(
-                          (subtask.nestedTasks.filter((t) => t.completed).length /
-                            subtask.nestedTasks.length) *
-                            100,
-                        )
-                      }}%
-                    </q-badge>
-                  </div>
-
-                  <q-btn
-                    flat
-                    round
-                    dense
-                    size="xs"
-                    :icon="panelsState.isMiniTasksOpen ? 'expand_less' : 'expand_more'"
-                    color="grey-7"
-                    @click="toggleMiniTasksPanel"
-                  >
-                    <q-tooltip>{{
-                      panelsState.isMiniTasksOpen ? "Comprimi Checklist" : "Espandi Checklist"
-                    }}</q-tooltip>
-                  </q-btn>
-                </div>
-
-                <!-- Mini-Tasks Body -->
-                <q-slide-transition>
-                  <div v-show="panelsState.isMiniTasksOpen" class="q-pt-sm">
-                    <!-- Add Mini Task Input -->
-                    <div class="row q-gutter-x-xs items-center q-mb-sm">
-                      <q-input
-                        v-model="newMiniTaskTitle"
-                        dense
-                        outlined
-                        placeholder="Nuova sotto-azione..."
-                        class="col bg-grey-1"
-                        style="font-size: 0.75rem"
-                        @keyup.enter="handleAddMiniTask"
-                      />
-                      <q-btn
-                        unelevated
-                        dense
-                        size="sm"
-                        color="primary"
-                        icon="add"
-                        label="Aggiungi"
-                        :loading="isSavingMiniTask"
-                        @click="handleAddMiniTask"
-                      />
-                    </div>
-
-                    <!-- Mini Tasks List -->
-                    <div
-                      v-if="subtask.nestedTasks && subtask.nestedTasks.length > 0"
-                      class="scroll"
-                      style="max-height: 220px; overflow-y: auto"
-                    >
-                      <q-list dense separator class="rounded-borders border-light">
-                        <q-item
-                          v-for="(mt, mtIdx) in subtask.nestedTasks"
-                          :key="mt.id || mtIdx"
-                          class="q-py-2xs q-px-xs"
-                        >
-                          <q-item-section avatar style="min-width: 26px">
-                            <q-checkbox
-                              :model-value="mt.completed"
-                              color="positive"
-                              dense
-                              size="xs"
-                              @update:model-value="handleToggleMiniTask(mtIdx)"
-                            />
-                          </q-item-section>
-                          <q-item-section>
-                            <q-item-label
-                              class="text-caption"
-                              :class="{
-                                'text-strike text-grey-5': mt.completed,
-                                'text-weight-medium text-dark': !mt.completed,
-                              }"
-                              style="font-size: 0.75rem"
-                            >
-                              {{ mt.title }}
-                            </q-item-label>
-                          </q-item-section>
-                          <q-item-section side>
-                            <q-btn
-                              flat
-                              dense
-                              round
-                              size="2xs"
-                              icon="delete_outline"
-                              color="negative"
-                              @click="handleDeleteMiniTask(mtIdx)"
-                            >
-                              <q-tooltip>Elimina mini-task</q-tooltip>
-                            </q-btn>
-                          </q-item-section>
-                        </q-item>
-                      </q-list>
-                    </div>
-
-                    <div
-                      v-else
-                      class="text-caption text-grey-6 text-center q-pa-sm"
-                      style="font-size: 0.72rem"
-                    >
-                      Nessun mini-task presente. Aggiungi sopra le azioni operative da sbloccare.
-                    </div>
-                  </div>
-                </q-slide-transition>
-              </q-card>
-            </div>
-          </div>
-        </q-tab-panel>
-
-        <!-- ── PANEL 1: Dati Ereditati & Attributi ─────────────────────────────── -->
-        <q-tab-panel name="attributes" class="q-pa-md">
-          <div class="row q-col-gutter-md">
-            <!-- Left Info Card -->
-            <div class="col-12 col-md-7">
-              <q-card flat bordered class="rounded-borders bg-white q-pa-md shadow-1">
-                <div class="row items-center justify-between q-mb-sm">
-                  <div
-                    class="text-caption text-weight-bold text-primary text-uppercase letter-spacing"
-                  >
-                    Dettagli Estratti dalla Tabella
-                  </div>
-                  <q-btn
-                    v-if="profileUrl"
-                    outline
-                    dense
-                    size="xs"
-                    color="primary"
-                    icon="open_in_new"
-                    label="Apri Profilo Fonte"
-                    :href="profileUrl"
-                    target="_blank"
-                    class="q-px-sm"
-                  />
-                </div>
-
-                <div v-if="extractedRowCells.length > 0" class="q-mt-sm">
-                  <q-list dense separator class="rounded-borders bg-grey-1">
-                    <q-item v-for="(cell, cIdx) in extractedRowCells" :key="cIdx" class="q-py-xs">
-                      <q-item-section avatar style="min-width: 32px">
-                        <q-badge color="grey-4" text-color="dark" :label="`Col ${cIdx + 1}`" />
-                      </q-item-section>
-                      <q-item-section class="text-caption" style="word-break: break-all">
-                        <template v-if="/^https?:\/\//i.test(cell)">
-                          <a :href="cell" target="_blank" class="text-primary text-weight-bold">
-                            {{ cell }} 🔗
-                          </a>
-                        </template>
-                        <template v-else>
-                          {{ cell }}
-                        </template>
-                      </q-item-section>
-                      <q-item-section side>
-                        <q-btn
-                          flat
-                          dense
-                          round
-                          size="xs"
-                          icon="content_copy"
-                          color="grey-6"
-                          @click="handleCopyText(cell, `Valore Colonna ${cIdx + 1}`)"
-                        >
-                          <q-tooltip>Copia Valore</q-tooltip>
-                        </q-btn>
-                      </q-item-section>
-                    </q-item>
-                  </q-list>
-                </div>
-
-                <div v-else class="text-caption text-grey-6 q-pa-md text-center">
-                  Nessun valore tabellare ereditato presente.
-                </div>
-              </q-card>
+                  </q-item-section>
+                </q-item>
+              </q-list>
             </div>
 
-            <!-- Right Meta & Status Card -->
-            <div class="col-12 col-md-5">
-              <q-card flat bordered class="rounded-borders bg-white q-pa-md shadow-1">
-                <div
-                  class="text-caption text-weight-bold text-primary text-uppercase q-mb-sm letter-spacing"
-                >
-                  Stato & Tracciamento Risorsa
-                </div>
-
-                <div class="q-gutter-y-sm">
-                  <div
-                    class="row justify-between items-center text-caption q-py-xs border-bottom-dashed"
-                  >
-                    <span class="text-grey-7">Dominio Applicativo:</span>
-                    <span class="text-weight-bold text-dark">{{ domainConfig.domainLabel }}</span>
-                  </div>
-                  <div
-                    class="row justify-between items-center text-caption q-py-xs border-bottom-dashed"
-                  >
-                    <span class="text-grey-7">Stato Operativo:</span>
-                    <q-badge :color="currentStatusObj.color" :label="currentStatusObj.label" />
-                  </div>
-                  <div
-                    class="row justify-between items-center text-caption q-py-xs border-bottom-dashed"
-                  >
-                    <span class="text-grey-7">Esito Finale:</span>
-                    <span
-                      class="text-weight-bold"
-                      :class="{
-                        'text-positive': localOutcome === 'won',
-                        'text-negative': localOutcome === 'lost',
-                        'text-primary': localOutcome === 'in_progress',
-                      }"
-                    >
-                      {{
-                        localOutcome === "won"
-                          ? "Accettato (Won)"
-                          : localOutcome === "lost"
-                            ? "Archiviato (Lost)"
-                            : "In Corso"
-                      }}
-                    </span>
-                  </div>
-                  <div
-                    class="row justify-between items-center text-caption q-py-xs border-bottom-dashed"
-                  >
-                    <span class="text-grey-7">Data Creazione:</span>
-                    <span class="text-grey-8">{{ formatEventDate(subtask.createdAt) }}</span>
-                  </div>
-                  <div class="row justify-between items-center text-caption q-py-xs">
-                    <span class="text-grey-7">Ultimo Aggiornamento:</span>
-                    <span class="text-grey-8">{{ formatEventDate(subtask.updatedAt) }}</span>
-                  </div>
-                </div>
-
-                <!-- Unidirectional Sync Boundary Banner (Requisito 4.9) -->
-                <div
-                  class="q-mt-md q-pa-sm bg-blue-1 text-primary text-caption rounded-borders row items-center no-wrap"
-                >
-                  <q-icon name="sync_disabled" size="20px" class="q-mr-xs text-primary" />
-                  <span>
-                    <strong>Isolamento Garantito:</strong> Le modifiche allo stato e le note sono
-                    registrate esclusivamente in OpsFlow senza sovrascrivere le celle del Google
-                    Sheet originale.
-                  </span>
-                </div>
-              </q-card>
+            <div v-else class="text-caption text-grey-6 q-pa-sm text-center">
+              Nessun valore tabellare specifico ereditato.
             </div>
-          </div>
-        </q-tab-panel>
 
-        <!-- ── PANEL 2: Note Operative ─────────────────────────────────────────── -->
-        <q-tab-panel name="notes" class="q-pa-md">
-          <q-card flat bordered class="rounded-borders bg-white q-pa-md shadow-1">
-            <div class="row items-center justify-between q-mb-sm">
+            <!-- Meta attributes summary -->
+            <div class="q-mt-md q-pt-xs border-top-light">
+              <div
+                class="row justify-between items-center text-caption q-py-2xs border-bottom-dashed"
+              >
+                <span class="text-grey-7">Dominio Applicativo:</span>
+                <span class="text-weight-bold text-dark">{{ domainConfig.domainLabel }}</span>
+              </div>
+              <div
+                class="row justify-between items-center text-caption q-py-2xs border-bottom-dashed"
+              >
+                <span class="text-grey-7">Data Creazione:</span>
+                <span class="text-grey-8">{{ formatEventDate(subtask.createdAt) }}</span>
+              </div>
+              <div class="row justify-between items-center text-caption q-py-2xs">
+                <span class="text-grey-7">Ultimo Aggiornamento:</span>
+                <span class="text-grey-8">{{ formatEventDate(subtask.updatedAt) }}</span>
+              </div>
+            </div>
+
+            <!-- Unidirectional sync boundary note -->
+            <div
+              class="q-mt-sm q-pa-xs bg-blue-1 text-primary text-caption rounded-borders row items-center no-wrap"
+              style="font-size: 0.72rem"
+            >
+              <q-icon name="sync_disabled" size="16px" class="q-mr-xs text-primary shrink" />
+              <span>
+                <strong>Isolamento Garantito:</strong> Gli stati e le note sono memorizzati in
+                OpsFlow senza alterare le celle del Google Sheet originale.
+              </span>
+            </div>
+          </q-card>
+
+          <!-- Card 2: Note Operative & Appunti di Contatto -->
+          <q-card
+            flat
+            bordered
+            class="rounded-borders bg-white q-pa-md shadow-1 q-mb-xs col-grow column no-wrap"
+          >
+            <div class="row items-center justify-between q-mb-xs">
               <div class="row items-center">
-                <q-icon name="sticky_note_2" color="amber-9" size="22px" class="q-mr-xs" />
-                <span class="text-subtitle2 text-weight-bold text-primary">
-                  Note Operative & Appunti di Contatto
-                </span>
+                <q-icon name="sticky_note_2" color="amber-9" size="20px" class="q-mr-xs" />
+                <span class="text-subtitle2 text-weight-bold text-primary">Note Operative</span>
               </div>
 
-              <div class="row items-center q-gutter-x-sm">
-                <q-badge
-                  v-if="hasUnsavedNotes"
-                  outline
-                  color="deep-orange"
-                  label="Modifiche non salvate"
-                />
+              <div class="row items-center q-gutter-x-xs">
+                <q-badge v-if="hasUnsavedNotes" outline color="deep-orange" label="Non salvate" />
                 <q-btn
                   unelevated
-                  size="sm"
+                  size="xs"
                   color="primary"
                   icon="save"
                   label="Salva Note"
                   :loading="isSavingNotes"
+                  class="text-weight-bold q-px-sm"
                   @click="handleSaveNotes"
                 />
               </div>
@@ -1305,13 +815,11 @@ const formatEventDate = (isoStr: string): string => {
             <!-- Healthcare Alert (GDPR Art. 9) -->
             <div
               v-if="subtask.domain === 'healthcare'"
-              class="q-mb-md q-pa-sm bg-amber-1 text-amber-10 text-caption rounded-borders row items-center"
+              class="q-mb-xs q-pa-xs bg-amber-1 text-amber-10 text-caption rounded-borders row items-center"
+              style="font-size: 0.72rem"
             >
-              <q-icon name="security" size="18px" class="q-mr-xs" />
-              <span>
-                <strong>Healthcare Privacy (GDPR Art. 9):</strong> Inserire solo informazioni
-                pertinenti; tutti i dati clinici e PII sono protetti e isolati per tenant.
-              </span>
+              <q-icon name="security" size="16px" class="q-mr-xs" />
+              <span><strong>GDPR Art. 9:</strong> Informazioni sanitarie isolate per tenant.</span>
             </div>
 
             <q-input
@@ -1319,88 +827,225 @@ const formatEventDate = (isoStr: string): string => {
               type="textarea"
               outlined
               autogrow
-              rows="8"
-              placeholder="Inserisci note sulla risorsa, riassunto colloqui, disponibilità, richieste economiche o specifiche contrattuali..."
-              class="subtask-notes-input"
+              rows="6"
+              placeholder="Inserisci note sulla risorsa, riassunto colloqui, disponibilità, richieste economiche..."
+              class="subtask-notes-input full-width q-mt-xs"
               @update:model-value="hasUnsavedNotes = true"
             />
           </q-card>
-        </q-tab-panel>
+        </div>
 
-        <!-- ── PANEL 3: Timeline Privata dell'Entità ────────────────────────────── -->
-        <q-tab-panel name="timeline" class="q-pa-md">
-          <q-card flat bordered class="rounded-borders bg-white q-pa-md shadow-1">
-            <div class="row items-center justify-between q-mb-md">
-              <div>
-                <div class="text-subtitle2 text-weight-bold text-primary">
-                  Storico Cronologico delle Interazioni
+        <!-- ── RIGHT COLUMN: Timeline Privata & Mini-Task Checklist Affiancati ── -->
+        <div
+          class="col-12 col-md-6 column no-wrap scroll q-pa-md right-pane bg-white"
+          style="overflow-y: auto"
+        >
+          <!-- Sezione Mini-Task Checklist (Fisarmonica Espandibile con Persistenza Store Locale) -->
+          <q-card
+            flat
+            bordered
+            class="rounded-borders bg-grey-1 q-pa-sm shadow-1 q-mb-sm border-light"
+          >
+            <div class="row items-center justify-between cursor-pointer" @click="toggleMiniTasks">
+              <div class="row items-center q-gutter-x-xs">
+                <q-icon name="checklist" color="teal-7" size="20px" />
+                <span class="text-subtitle2 text-weight-bold text-primary"
+                  >Mini-Task Checklist</span
+                >
+                <q-badge
+                  v-if="subtask.nestedTasks && subtask.nestedTasks.length > 0"
+                  color="teal-7"
+                  rounded
+                  dense
+                  :label="`${subtask.nestedTasks.filter((t) => t.completed).length}/${subtask.nestedTasks.length}`"
+                />
+              </div>
+              <div class="row items-center q-gutter-x-2xs">
+                <span class="text-caption text-grey-6" style="font-size: 0.72rem">
+                  {{ isMiniTasksExpanded ? "Nascondi" : "Mostra" }}
+                </span>
+                <q-icon
+                  :name="isMiniTasksExpanded ? 'expand_less' : 'expand_more'"
+                  color="grey-7"
+                  size="18px"
+                />
+              </div>
+            </div>
+
+            <!-- Expandable Checklist Body -->
+            <q-slide-transition>
+              <div v-show="isMiniTasksExpanded" class="q-pt-sm">
+                <!-- Add Mini-Task -->
+                <div class="row q-gutter-x-xs items-center q-mb-sm">
+                  <q-input
+                    v-model="newMiniTaskTitle"
+                    dense
+                    outlined
+                    placeholder="Nuova azione (es. Inviare accordo entro giovedì)..."
+                    class="col bg-white"
+                    style="font-size: 0.8rem"
+                    @keyup.enter="handleAddMiniTask"
+                  />
+                  <q-btn
+                    dense
+                    unelevated
+                    size="sm"
+                    color="teal-7"
+                    icon="add"
+                    class="q-px-xs"
+                    :loading="isSavingMiniTask"
+                    @click="handleAddMiniTask"
+                  >
+                    <q-tooltip>Aggiungi Mini-Task</q-tooltip>
+                  </q-btn>
                 </div>
-                <div class="text-caption text-grey-6">
-                  Traccia ogni contatto, esito di colloquio o aggiornamento formale per questa
-                  specifica risorsa.
+
+                <!-- Mini Tasks List -->
+                <div
+                  v-if="subtask.nestedTasks && subtask.nestedTasks.length > 0"
+                  class="q-gutter-y-2xs"
+                  style="max-height: 170px; overflow-y: auto"
+                >
+                  <div
+                    v-for="(mt, mtIdx) in subtask.nestedTasks"
+                    :key="mt.id || mtIdx"
+                    class="row items-center justify-between q-py-2xs q-px-xs rounded-borders bg-white border-light"
+                  >
+                    <div class="row items-center q-gutter-x-xs col ellipsis">
+                      <q-checkbox
+                        :model-value="mt.completed"
+                        color="teal-7"
+                        dense
+                        size="xs"
+                        @update:model-value="handleToggleMiniTask(mtIdx)"
+                      />
+                      <span
+                        class="text-caption ellipsis"
+                        :class="{
+                          'text-strike text-grey-5': mt.completed,
+                          'text-dark text-weight-medium': !mt.completed,
+                        }"
+                        style="font-size: 0.78rem"
+                      >
+                        {{ mt.title }}
+                      </span>
+                    </div>
+                    <q-btn
+                      flat
+                      dense
+                      round
+                      size="2xs"
+                      icon="delete_outline"
+                      color="negative"
+                      @click="handleDeleteMiniTask(mtIdx)"
+                    >
+                      <q-tooltip>Elimina mini-task</q-tooltip>
+                    </q-btn>
+                  </div>
+                </div>
+                <div
+                  v-else
+                  class="text-caption text-grey-5 text-center q-pa-xs"
+                  style="font-size: 0.72rem"
+                >
+                  Nessuna sotto-azione inserita. Aggiungine una con il campo in alto.
+                </div>
+              </div>
+            </q-slide-transition>
+          </q-card>
+
+          <!-- Sezione Timeline Privata degli Eventi (Identica visivamente alla Timeline Principale di Img 5) -->
+          <q-card
+            flat
+            bordered
+            class="rounded-borders bg-white q-pa-md shadow-1 col-grow column no-wrap"
+          >
+            <div class="row items-center justify-between q-mb-sm border-bottom-light q-pb-xs">
+              <div>
+                <div class="row items-center q-gutter-x-xs">
+                  <q-icon name="history" color="primary" size="20px" />
+                  <span class="text-subtitle2 text-weight-bold text-primary">Timeline Privata</span>
+                  <q-badge
+                    v-if="subtask.timeline && subtask.timeline.length > 0"
+                    color="primary"
+                    rounded
+                    dense
+                    :label="subtask.timeline.length"
+                  />
+                </div>
+                <div class="text-caption text-grey-6" style="font-size: 0.72rem">
+                  Storico cronologico delle interazioni (chiamate, email, colloqui)
                 </div>
               </div>
 
-              <!-- Quick Log Action Bar -->
-              <div class="row items-center q-gutter-xs">
+              <!-- Quick Log Action Bar: [📞 Chiamata] [✉️ Email] [💬 WhatsApp] [📝 Nota] -->
+              <div class="row items-center q-gutter-2xs">
                 <q-btn
                   outline
                   dense
-                  size="sm"
+                  size="xs"
                   color="primary"
                   icon="call"
                   label="Chiamata"
+                  class="q-px-2xs"
                   @click="openAddEvent('call')"
                 />
                 <q-btn
                   outline
                   dense
-                  size="sm"
+                  size="xs"
                   color="teal-7"
                   icon="mail"
                   label="Email"
+                  class="q-px-2xs"
                   @click="openAddEvent('email')"
                 />
                 <q-btn
                   outline
                   dense
-                  size="sm"
+                  size="xs"
                   color="green-8"
                   icon="chat"
                   label="WhatsApp"
+                  class="q-px-2xs"
                   @click="openAddEvent('whatsapp')"
                 />
                 <q-btn
                   outline
                   dense
-                  size="sm"
+                  size="xs"
                   color="amber-9"
-                  icon="post_add"
-                  label="Nota Rapida"
+                  icon="edit_note"
+                  label="Nota"
+                  class="q-px-2xs"
                   @click="openAddEvent('note')"
                 />
               </div>
             </div>
 
-            <!-- Quick Add Event Form -->
+            <!-- Quick Add Event Form (Slide Transition) -->
             <q-slide-transition>
               <div
                 v-if="isAddingEvent"
-                class="q-pa-md bg-grey-1 rounded-borders q-mb-md border-light"
+                class="q-pa-sm bg-grey-1 rounded-borders q-mb-sm border-light"
               >
-                <div class="row items-center justify-between q-mb-sm">
-                  <div class="text-caption text-weight-bold text-primary">
+                <div class="row items-center justify-between q-mb-xs">
+                  <div
+                    class="text-caption text-weight-bold text-primary"
+                    style="font-size: 0.78rem"
+                  >
                     Registra Nuova Interazione ({{ newEventType.toUpperCase() }})
                   </div>
-                  <q-btn flat round dense size="xs" icon="close" @click="isAddingEvent = false" />
+                  <q-btn flat round dense size="2xs" icon="close" @click="isAddingEvent = false" />
                 </div>
-                <div class="q-gutter-y-sm">
+                <div class="q-gutter-y-xs">
                   <q-input
                     v-model="newEventTitle"
                     dense
                     outlined
                     placeholder="Titolo evento (es. Chiamata conoscitiva con esito positivo)"
                     class="bg-white"
+                    style="font-size: 0.8rem"
                   />
                   <q-input
                     v-model="newEventDesc"
@@ -1410,12 +1055,13 @@ const formatEventDate = (isoStr: string): string => {
                     rows="2"
                     placeholder="Dettagli / note opzionali..."
                     class="bg-white"
+                    style="font-size: 0.8rem"
                   />
-                  <div class="row justify-end q-gutter-x-sm">
-                    <q-btn flat size="sm" label="Annulla" @click="isAddingEvent = false" />
+                  <div class="row justify-end q-gutter-x-xs">
+                    <q-btn flat size="xs" label="Annulla" @click="isAddingEvent = false" />
                     <q-btn
                       unelevated
-                      size="sm"
+                      size="xs"
                       color="primary"
                       label="Salva Evento"
                       :loading="isSavingEvent"
@@ -1426,13 +1072,17 @@ const formatEventDate = (isoStr: string): string => {
               </div>
             </q-slide-transition>
 
-            <!-- Chronological Timeline List -->
-            <div v-if="subtask.timeline && subtask.timeline.length > 0" class="q-px-sm">
-              <q-timeline color="amber-9" class="subtask-timeline">
+            <!-- Vertical Timeline List (Visually identical to TaskChatWindow Timeline in Img 5) -->
+            <div class="col scroll q-pr-xs q-pt-xs" style="overflow-y: auto">
+              <q-timeline
+                v-if="subtask.timeline && subtask.timeline.length > 0"
+                color="secondary"
+                dense
+                class="subtask-timeline q-px-xs"
+              >
                 <q-timeline-entry
                   v-for="evt in subtask.timeline"
                   :key="evt.id"
-                  :title="evt.title"
                   :subtitle="formatEventDate(evt.timestamp)"
                   :icon="
                     evt.eventType === 'call'
@@ -1445,110 +1095,45 @@ const formatEventDate = (isoStr: string): string => {
                             ? 'sync_alt'
                             : 'edit_note'
                   "
+                  :color="
+                    evt.eventType === 'call'
+                      ? 'primary'
+                      : evt.eventType === 'email'
+                        ? 'teal-7'
+                        : evt.eventType === 'whatsapp'
+                          ? 'green-8'
+                          : evt.eventType === 'status_change'
+                            ? 'amber-9'
+                            : 'indigo-6'
+                  "
+                  class="task-timeline-entry"
                 >
-                  <div v-if="evt.description" class="text-caption text-grey-8 q-mt-xs">
+                  <template #title>
+                    <span class="text-weight-bold text-caption text-primary">
+                      {{ evt.title }}
+                    </span>
+                  </template>
+                  <div
+                    v-if="evt.description"
+                    class="text-caption text-grey-8 q-mt-xs"
+                    style="font-size: 0.74rem; line-height: 1.35"
+                  >
                     {{ evt.description }}
                   </div>
-                  <div class="text-caption text-grey-5 q-mt-xs" style="font-size: 0.72rem">
+                  <div class="text-caption text-grey-5 q-mt-xs" style="font-size: 0.68rem">
                     Registrato da: {{ evt.authorName }}
                   </div>
                 </q-timeline-entry>
               </q-timeline>
-            </div>
 
-            <div v-else class="text-caption text-grey-6 text-center q-pa-lg">
-              Nessun evento registrato nella timeline privata. Utilizza i pulsanti in alto per
-              registrare una chiamata o una nota.
-            </div>
-          </q-card>
-        </q-tab-panel>
-
-        <!-- ── PANEL 4: Mini-Task Checklist ────────────────────────────────────── -->
-        <q-tab-panel name="miniTasks" class="q-pa-md">
-          <q-card flat bordered class="rounded-borders bg-white q-pa-md shadow-1">
-            <div class="row items-center justify-between q-mb-md">
-              <div>
-                <div class="text-subtitle2 text-weight-bold text-primary">
-                  Mini-Task Operativi Nidificati
-                </div>
-                <div class="text-caption text-grey-6">
-                  Azioni concrete necessarie per finalizzare la risorsa (es. invio modulo, verifica
-                  referenze, ricezione contratto).
-                </div>
+              <div v-else class="text-caption text-grey-6 text-center q-pa-md">
+                Nessun evento registrato nella timeline privata. Utilizza i pulsanti rapidi in alto
+                per aggiungere una chiamata o una nota.
               </div>
             </div>
-
-            <!-- Add Mini Task Input -->
-            <div class="row q-gutter-x-sm items-center q-mb-md">
-              <q-input
-                v-model="newMiniTaskTitle"
-                dense
-                outlined
-                placeholder="Nuova sotto-azione (es. Inviare accordo di riservatezza entro giovedì)"
-                class="col bg-grey-1"
-                @keyup.enter="handleAddMiniTask"
-              />
-              <q-btn
-                unelevated
-                color="primary"
-                icon="add"
-                label="Aggiungi"
-                :loading="isSavingMiniTask"
-                @click="handleAddMiniTask"
-              />
-            </div>
-
-            <!-- Mini Tasks List -->
-            <div v-if="subtask.nestedTasks && subtask.nestedTasks.length > 0">
-              <q-list dense separator class="rounded-borders border-light">
-                <q-item
-                  v-for="(mt, mtIdx) in subtask.nestedTasks"
-                  :key="mt.id || mtIdx"
-                  class="q-py-xs"
-                >
-                  <q-item-section avatar style="min-width: 32px">
-                    <q-checkbox
-                      :model-value="mt.completed"
-                      color="positive"
-                      dense
-                      size="sm"
-                      @update:model-value="handleToggleMiniTask(mtIdx)"
-                    />
-                  </q-item-section>
-                  <q-item-section>
-                    <q-item-label
-                      class="text-caption"
-                      :class="{
-                        'text-strike text-grey-5': mt.completed,
-                        'text-weight-medium text-dark': !mt.completed,
-                      }"
-                    >
-                      {{ mt.title }}
-                    </q-item-label>
-                  </q-item-section>
-                  <q-item-section side>
-                    <q-btn
-                      flat
-                      dense
-                      round
-                      size="xs"
-                      icon="delete_outline"
-                      color="negative"
-                      @click="handleDeleteMiniTask(mtIdx)"
-                    >
-                      <q-tooltip>Elimina mini-task</q-tooltip>
-                    </q-btn>
-                  </q-item-section>
-                </q-item>
-              </q-list>
-            </div>
-
-            <div v-else class="text-caption text-grey-6 text-center q-pa-lg">
-              Nessun mini-task inserito per questa risorsa. Aggiungine uno con il box in alto.
-            </div>
           </q-card>
-        </q-tab-panel>
-      </q-tab-panels>
+        </div>
+      </div>
 
       <!-- ── Footer Actions Elite ──────────────────────────────────────────────── -->
       <div class="q-pa-md bg-white border-top-light row items-center justify-between no-wrap">
@@ -1565,6 +1150,19 @@ const formatEventDate = (isoStr: string): string => {
             class="q-px-sm"
             @click="handleReopenEntity"
           />
+          <q-btn
+            flat
+            dense
+            size="sm"
+            color="negative"
+            icon="delete_forever"
+            label="Elimina Sub-Task"
+            class="q-px-xs"
+            :loading="isDeletingSubtask"
+            @click="handleDeleteSubtask"
+          >
+            <q-tooltip>Elimina definitivamente la risorsa da Firebase e dallo store</q-tooltip>
+          </q-btn>
         </div>
 
         <!-- Final Outcome Decision Buttons -->

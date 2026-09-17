@@ -19,34 +19,9 @@ import type {
   TaskKeyPoint,
   TaskTimelineEvent,
 } from "../types/models";
+import type { ChatSession, FloatingWindow } from "../types/chat";
 
-export interface ChatSession {
-  taskId: string;
-  workspaceId: string;
-  task: Task | null;
-  messages: TaskChatMessage[];
-  timelineEvents: TaskTimelineEvent[];
-  approvals: ApprovalRecord[];
-  isLoading: boolean;
-  isAgentTyping: boolean;
-  inputDraft: string;
-  error: string | null;
-  oauthError: import("../types/models").OAuthError | null;
-  _unsubscribeMessages?: () => void;
-  _unsubscribeApprovals?: () => void;
-}
-
-export interface FloatingWindow {
-  id: string;
-  taskId: string;
-  workspaceId: string;
-  task: Task;
-  position: { x: number; y: number };
-  size: { width: number; height: number };
-  zIndex: number;
-  isMinimized: boolean;
-  isFullscreen?: boolean;
-}
+export type { ChatSession, FloatingWindow };
 
 export const useTaskChatStore = defineStore("taskChat", () => {
   // Map of active chat sessions keyed by taskId

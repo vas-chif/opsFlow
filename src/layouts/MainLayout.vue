@@ -33,6 +33,7 @@ import { useAuthStore } from "@/stores/authStore";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 import type { Workspace, Task } from "@/types/models";
+import type { ChatMsg } from "@/types/chat";
 
 // ── Components ───────────────────────────────────────────────────────────────
 import DeleteAccountDialog from "@/components/DeleteAccountDialog.vue";
@@ -229,14 +230,7 @@ const startRightResize = (e: MouseEvent): void => {
   window.addEventListener("mouseup", onMouseUp);
 }; /*end startRightResize*/
 
-interface ChatMsg {
-  id: string;
-  sender: "user" | "agent";
-  agentName?: string;
-  text: string;
-  timestamp: string;
-  toolsUsed?: string[];
-}
+// UI-only chat message loader using centralized ChatMsg type
 
 function loadWorkspaceChat(wsId: string): ChatMsg[] {
   try {

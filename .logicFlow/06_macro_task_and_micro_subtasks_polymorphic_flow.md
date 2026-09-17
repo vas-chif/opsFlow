@@ -121,62 +121,163 @@ sequenceDiagram
 
 ---
 
-## 🖥️ 4. Flusso UX/UI: Generazione e Gestione del Sub-Task
+## 🖥️ 4. Flusso UX/UI: Generazione e Gestione del Sub-Task (I 3 Miglioramenti Architetturali)
 
-### 4.1 Posizionamento Integrato nella Timeline "In Progress" & Action Bar Rapida
+### 4.1 Sub-Task Integrati nel Nodo "In Progress" della Timeline (Punto 1 — Ergonomia Senza Disordine)
 
-Per massimizzare la leggibilità del flusso di chat e prevenire l'ingombro visivo nel corpo della conversazione, il blocco **"Risorse & Sub-Task Operativi"** è integrato direttamente all'interno della milestone **"Stato aggiornato a In Progress"** nella Timeline Stati del Task (`TaskChatWindow.vue`):
+Nel modello iniziale, il banner _"Risorse & Sub-Task Operativi"_ era posizionato all'interno dell'area chat. Man mano che l'utente e l'agente IA dialogavano o venivano prodotte tabelle estese, la card veniva inesorabilmente spinta verso l'alto scomparendo dalla vista (_"out of sight, out of mind"_).
 
-1. **Visibilità Immediata:** L'utente visualizza sempre le risorse estratte o gestite contestualmente alla fase attiva del lavoro.
-2. **Action Bar Rapida Multi-Canale:**
-   - `[+ Nuova Risorsa]`: Apre il dialog di creazione intelligente con rilevamento automatico.
-   - `[📊 Sheets]`: Apre il foglio Google collegato o avvia la sincronizzazione delle righe estratte.
-   - `[✉️ Email]`: Precompila l'input di chat per istruire l'agente IA a redigere bozze email verso i candidati.
-   - `[🔄 Sync]`: Ricarica in tempo reale l'elenco dei sub-task dallo store Pinia / Firestore.
-3. **Elenco Risorse Verticale & Color-Coded:**
-   - Ogni risorsa compare incolonnata con avatar di dominio (`medical_services`, `person`), nome/titolo, chip di stato colorato (`Nuovo`, `Contattato`, `In Attesa`, `In Trattativa`, `Won`, `Lost`) e freccia di apertura rapida alla modale dedicata.
+**L'Architettura Adottata:**
+Il cruscotto operativo dei Sub-Task è stato rimosso dall'area chat e integrato in modo nativo direttamente all'interno dell'evento attivo corrente **"In Progress (Stato aggiornato a In Progress)"** nel pannello destro _"Timeline Stati"_ (`TaskChatWindow.vue`), replicato specularmente anche nella vista timeline a tutta pagina (`viewMode === 'timeline'`).
 
-### 4.2 Dialog Intelligente "Nuova Risorsa" con Rilevamento Candidati (1-Click Pre-fill)
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 🕒 TIMELINE STATI (Pannello Laterale / Vista Full Timeline)                 │
+│                                                                             │
+│  ○  Pending — Task creato dal sistema o dall'utente                        │
+│  ●  IN PROGRESS — STATO ATTIVO CORRENTE                                     │
+│  │                                                                          │
+│  │  ┌────────────────────────────────────────────────────────────────────┐  │
+│  │  │ 👥 SUB-TASK OPERATIVI                                [ 2/5 Conclusi ]│ │
+│  │  ├────────────────────────────────────────────────────────────────────┤  │
+│  │  │ [➕ Nuova Risorsa] [📊 Sheets] [✉️ Email]                 [🔄 Ricarica]│  │
+│  │  ├────────────────────────────────────────────────────────────────────┤  │
+│  │  │ 👤 Davide Benvenuti — Senior Oracle DBA         [In Trattativa] [>] │  │
+│  │  │ 👤 Giorgio Roncacci — Oracle Cloud Architect    [Contattato]    [>] │  │
+│  │  │ 👤 Marco Ferrari — Exadata Specialist           [Won ⭐]        [>] │  │
+│  │  └────────────────────────────────────────────────────────────────────┘  │
+│  ○  Completed — Obiettivo raggiunto (Teardown a cascata scheduler)         │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
-Il dialog di aggiunta risorsa (`showSmartSubtaskModal`) supera il semplice prompt di testo non strutturato offrendo:
+- **Contatore e Stato Dinamico:** Badge `(conclusi/totale)` con calcolo reattivo su esiti `won`, `lost` o `completed`.
+- **Action Bar Rapida Integrata:**
+  - `[+ Nuova Risorsa]`: Apre all'istante la modale intelligente di estrazione dati (`CreateSubtaskModal.vue`).
+  - `[📊 Sheets]`: Apre il Google Sheet collegato al task in una nuova scheda del browser oppure istruisce l'Agente AI a sincronizzare le righe.
+  - `[✉️ Email]`: Invia un prompt guidato all'Agente AI per generare una bozza di email formale di contatto per i profili monitorati.
+  - `[🔄 Ricarica]`: Sincronizzazione on-demand della sotto-collezione Firestore `subtasks`.
+- **Lista Compatta e Reattiva:** Ciascuna riga mostra l'avatar tematico del dominio (`medical_services`, `inventory_2`, `precision_manufacturing`, `person`), il nome dell'entità, il ruolo/categoria, i badge di stato/esito e l'icona chevron. Il click sull'intera riga apre istantaneamente la modale di dettaglio `SubTaskEntityModal.vue`.
+- **Vantaggio Operativo:** L'area Chat a sinistra rimane pulita al 100% per conversare con l'Agente IA, mentre il cruscotto di controllo operativo rimane visibile e fermo a schermo sulla destra.
 
-1. **Auto-Scansione delle Entità Rilevate (`detectedCandidates`):**
-   - Scansiona dinamicamente le righe delle anteprime di Google Sheets approvate, le bozze email Gmail e i messaggi dell'agente IA.
-   - Mostra dei chip cliccabili con i profili individuati (es. `Pino Villa - Senior SAP EWM`, `Mihai Ionescu`, ecc.).
-   - Un click sul chip precompila istantaneamente: Nome/Titolo, Ruolo, Email e Note di contesto.
-2. **Form Strutturato e Multi-Fonte:**
-   - Campi dedicati per Titolo, Ruolo/Mansione, Email di contatto, Dominio applicativo, Fonte (`Foglio Google`, `Chat / Ricerca AI`, `Email Gmail`, `Web`, `Manuale`) e Note operative iniziali.
-   - Creazione reattiva con persistenza immediata su Firestore e aggiornamento dello store Pinia `taskStore.ts`.
+---
 
-### 4.3 Architettura Split-View del Sub-Task & Persistenza Pannelli (`SubTaskEntityModal.vue`)
+### 4.2 Dialog "Nuova Risorsa" Intelligente con Pre-fill da Chat/Sheets/Email (Punto 2 — Zero-Effort Data Ingestion)
 
-La finestra dedicata al Sub-Task adotta una larghezza estesa (`1080px` / `96vw`) e replica fedelmente l'architettura a due colonne del Macro-Task principale (ispirata al layout ad alta densità informativa):
+Il vecchio prompt a riga singola vuota costringeva l'operatore a ricordare o copiare e incollare manualmente nomi, ruoli e contatti che l'IA o le tabelle avevano già individuato.
+
+**L'Architettura Adottata (`CreateSubtaskModal.vue`):**
+La modale propone un'interfaccia fluida a schermata unica con estrazione dinamica guidata dall'operatore:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ ➕ NUOVA RISORSA / SUB-TASK OPERATIVO                                     [✕]│
+│ Monitora contatti, esiti e timeline dedicati per questa entità              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 🔗 SORGENTE DATI                                                            │
+│ Origine: [ 📑 Foglio Google (A2:G10 — 5 righe) ▼ ] [ Riga 1: D. Benvenuti ▼]│
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ 💡 Colonne disponibili: [Nome: Davide] [Ruolo: DBA] [Email: d@ex.com]   │ │
+│ │ [LinkedIn: in/dbenv] [Tariffa: 600€] [⚡ Mappa Tutti i Campi]           │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│ Nome Risorsa: [ Davide Benvenuti                             ]              │
+│ Ruolo / Specializzazione: [ Senior Oracle DBA                ]              │
+│ Email: [ d.benvenuti@example.com ]  Telefono: [ +39 340 ...  ]              │
+│ LinkedIn / Profilo Web: [ https://linkedin.com/in/dbenvenuti ]              │
+│ Dominio: [ Recruiting & HR ] (ereditato dal Task principale)                │
+│ Note Operative: [ Specialista certificato OCP, tariffa 600€/giorno ]        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ [Annulla]                                      [➕ Crea Scheda Risorsa]     │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+1. **Schermata Unica Integrata & Flessibile (Zero Tab):**
+   - Eliminazione dei due tab separati per evitare frammentazioni e falsi profili rilevati alla cieca.
+   - L'operatore visualizza un'interfaccia unica in cui ha il controllo totale sulla sorgente di dati da cui attingere.
+
+2. **Selettore Intelligente di Sorgente Guidato dall'Utente:**
+   - **Tabelle Chat (Markdown):** Rileva le tabelle con colonne e righe generate dall'Agente nella conversazione.
+   - **Risposte / Valutazioni Agente (Analisi di Profilo):** Riconosce i report di valutazione strutturati (es. _Ruolo/Profilo, Location, Competenze, Gap, Compliance_) trattandoli come attributi/colonne di un unico profilo da importare, senza scambiare i titoli dei bullet per persone diverse.
+   - **Fogli Google (Sheets / Excel):** Ispeziona le card di approvazione `manageGoogleSheetTool` e permette di selezionare riga per riga i dati da importare.
+   - **Bozze Email:** Rileva le proposte di contatto create da `sendGmailDraftTool`.
+   - **Inserimento 100% Libero:** Per creare rapidamente una risorsa digitando direttamente i campi a mano.
+
+3. **Ispezione Visuale delle Colonne & 1-Click Auto-Mapping:**
+   - Le celle della riga o i campi della risposta compaiono come **chip interattive**.
+   - Con il pulsante `[⚡ Mappa Tutti i Campi]`, l'algoritmo semantico assegna automaticamente Nome, Ruolo, Email, LinkedIn e aggiunge i dettagli tecnici (Location, Competenze, Tariffa) alle note operative.
+   - Cliccando su una singola chip, compare un menu a tendina per assegnare quel valore a uno specifico campo form o aggiungerlo alle note.
+
+4. **Campi Operativi Dedicati & Note 100% Manuali:**
+   - Campo Nome a tutta larghezza (`col-12`).
+   - Campi dedicati per Email, LinkedIn e Telefono.
+   - Dominio ereditato automaticamente con badge discreto.
+   - Textarea per Note Operative sempre libera e modificabile a mano senza sovrascritture impreviste.
+
+5. **Persistenza Atomica su Firestore (`EntitySubTask`):**
+   - La risorsa viene salvata direttamente nella sotto-collezione `tenants/{t}/workspaces/{w}/tasks/{taskId}/subtasks/{subtaskId}`.
+   - Viene creato il primo evento nella timeline privata (`eventType: 'status_change'`, status iniziale `'new'`).
+   - Gli attributi memorizzano `email`, `profileUrl`, `contactInfo`, `extractedRow` e `headers`, garantendo la visualizzazione completa in `SubTaskEntityModal.vue`.
+
+---
+
+### 4.3 Layout Split-View & Persistenza Locale nello Store Pinia (Punto 3 — Vista Sinottica)
+
+L'impostazione precedente basata su 4 tab orizzontali mutui escludenti (_Dati_, _Note_, _Timeline_, _Mini-Task_) frammentava le informazioni costringendo l'operatore a continui click avanti e indietro.
+
+**L'Architettura Adottata (`SubTaskEntityModal.vue` & `subtaskUiStore.ts`):**
+La modale (larghezza 1060px) adotta il paradigma **Two-Column Split-View**, speculare all'ergonomia apprezzata nella finestra principale del task:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ 👤 PINO VILLA — Senior SAP EWM Consultant                              [🎯 In Trattativa ▼] [✕] │
-│ ID: CAN-EWM-001  |  Dominio: recruiting  |  Fonte: Google Sheets Sourcing                       │
-├────────────────────────────────────────────────┬────────────────────────────────────────────────┤
-│ 📋 COLONNA SINISTRA: DATI E NOTE               │ 🕒 COLONNA DESTRA: TIMELINE E MINI-TASK        │
-│                                                │                                                │
-│ 📌 Dati & Contesto Ereditato                   │ 🕒 Timeline Privata Risorsa                    │
-│ • Competenze: SAP EWM, S/4HANA                 │ ➕ [Chiamata] [Email] [WhatsApp] [Nota Rapida] │
-│ • Tariffa indicativa: 550€/giorno              │ ────────────────────────────────────────────── │
-│ • Profilo: linkedin.com/in/...                 │ 14 Set, 10:30 — Estratto da ricerca            │
-│                                                │ 14 Set, 11:15 — Primo contatto WhatsApp        │
-│ 📝 Note Operative Risorsa [💾 Salva (CTRL+S)]  │ 14 Set, 16:00 — Risposta: disponibile da Ott   │
-│ ┌────────────────────────────────────────────┐ │                                                │
-│ │ Richiede smart working 80%.                │ │ ⚡ Mini-Task Operativi Risorsa (1/2)           │
-│ │ Disponibile da Ottobre 2026.               │ │ [X] Verificare referenze passate             │
-│ └────────────────────────────────────────────┘ │ [ ] Inviare bozza NDA quadro                   │
-│ 🛡️ GDPR Art. 9: Cifratura client-side attiva   │ ➕ [+ Aggiungi Mini-Task]                      │
-├────────────────────────────────────────────────┴────────────────────────────────────────────────┤
-│ [❌ Rifiuta (Lost)]                             [🔄 Aggiorna]            [⭐ Accetta (Won)]     │
-└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+│ 👤 DAVIDE BENVENUTI — Senior Oracle DBA                                     [🎯 In Trattativa ▼]│
+│ ID: CAN-ORA-001  |  Dominio: Recruiting  |  Task Principale: Sourcing Oracle Specialist      [✕]│
+├──────────────────────────────────────────────┬──────────────────────────────────────────────────┤
+│ 📋 COLONNA SINISTRA: DATI & NOTE             │ 🕒 COLONNA DESTRA: MINI-TASK & TIMELINE          │
+│                                              │                                                  │
+│ 📌 Profilo & Dati Ereditati                  │ ⚡ Mini-Task Operativi (1/2)          [▲ Comprimi]│
+│ • Contatti: d.benvenuti@example.com          │ [x] Inviare questionario tecnico preliminare     │
+│ • LinkedIn: linkedin.com/in/dbenvenuti       │ [ ] Richiedere referenze progetti bancari        │
+│ • Snippet: Specialista OCP, 15 anni exp      │ [+ Aggiungi Mini-Task]                           │
+│                                              │ ──────────────────────────────────────────────── │
+│ 📝 Note Operative (Auto-Save con debounce)   │ 🕒 Timeline Privata Risorsa                      │
+│ ┌──────────────────────────────────────────┐ │ Registra: [📞 Call] [✉️ Mail] [💬 WA] [📝 Nota] │
+│ │ Tariffa richiesta: 600€/giorno.          │ │                                                  │
+│ │ Colloquio fissato per martedì ore 15:00. │ │ ● 14 Set, 11:30 — Inviata email con tariffa     │
+│ └──────────────────────────────────────────┘ │   da Vasile Chifeac (Email)                      │
+│                                              │ ● 14 Set, 10:15 — Primo contatto su WhatsApp     │
+│ [⭐ Segna come Won]    [❌ Segna come Lost] │ ● 14 Set, 09:30 — Risorsa estratta dalla ricerca │
+└──────────────────────────────────────────────┴──────────────────────────────────────────────────┘
 ```
 
-- **Persistenza Stato Pannelli (`localStorage`):**  
-  La sezione `Mini-Task Operativi` è collassata/chiusa di default per preservare la pulizia visiva, ma l'utente può espanderla a piacimento. Lo stato di apertura/chiusura dei pannelli viene salvato in `localStorage` con la chiave `opsflow_subtask_panels_state`, garantendo che la preferenza rimanga memorizzata per le successive consultazioni.
+1. **Colonna Sinistra (Dati Ereditati, Note & Azioni Definitive):**
+   - Informazioni anagrafiche e di contatto estratte, attributi custom e snippet contestuale.
+   - Textarea per Note Operative persistite con auto-salvataggio automatico debounced (500ms) e indicatore visivo di stato (_"Salvataggio..."_ / _"Salvato"_).
+   - Action Bar di esito definitivo con bottoni ad alto contrasto: `[⭐ Segna come Won]` (accordo raggiunto, chiude come vinto) e `[❌ Segna come Lost]` (rifiuto o non idoneità con motivazione tracciata).
+2. **Colonna Destra (Checklist Mini-Task & Timeline Privata):**
+   - **Mini-Task Checklist:** Checklist rapida con checkbox, inserimento a riga singola con invio rapido, contatore `(completati/totali)` e pulsante per collassare o espandere la sezione.
+   - **Timeline Privata Eventi:** Visualizzazione verticale fedele allo stile del Task Principale (Img 5), con pallini colorati per tipo di interazione (`call`, `email`, `whatsapp`, `status_change`, `note`, `mini_task`), orari relativi, badge dell'autore e corpo dell'evento.
+   - **Quick Action Logger:** Bottoni rapidi `[📞 Chiamata]`, `[✉️ Email]`, `[💬 WhatsApp]`, `[📝 Nota]` che aprono una card contestuale per registrare una telefonata o messaggio in 3 secondi.
+3. **Persistenza Locale dello Stato UI (`subtaskUiStore.ts` — §5 AGENTS.md):**
+   - Per non appesantire la visualizzazione su monitor compatti, la checklist dei mini-task è impostata di default come collassata (`isMiniTasksExpanded = false`).
+   - Nel momento in cui l'utente espande o chiude il pannello o regola il separatore (`splitterRatio`), lo store Pinia salva automaticamente lo stato in `localStorage` con la chiave `opsflow_subtask_ui_state`.
+   - **Zero Costi Cloud:** Nessuna interrogazione (`getDoc`/`setDoc`) a Firestore per salvare la preferenza UI. Alla riapertura di qualsiasi sub-task del workspace, la modale si apre esattamente con il layout preferito dall'utente.
+
+---
+
+### 4.4 Eliminazione Definitiva del Sub-Task (Firestore & Store Locale)
+
+In caso di apertura o creazione accidentale di un Sub-Task, l'operatore può eliminarlo definitivamente senza lasciare record orfani né nel database né nell'interfaccia.
+
+**Punti di Cancellazione:**
+
+1. **Dalla Lista nel Nodo Timeline (`TaskChatWindow.vue`):** Ciascuna riga del sub-task presenta un'icona cestino dedicata (`delete_outline`). Il click apre un dialog di conferma persistente.
+2. **Dalla Modale di Dettaglio (`SubTaskEntityModal.vue`):** L'utente può eliminare la risorsa sia tramite l'icona rapida nell'Header Elite (`delete_forever`), sia tramite il pulsante dedicato nel Footer (_"Elimina Sub-Task"_).
+
+**Sequenza di Esecuzione:**
+
+- **Dialog di Conferma:** Conferma esplicita con avviso che l'operazione rimuoverà la risorsa in modo permanente.
+- **Cancellazione Firestore:** Invocazione atomica di `deleteDoc(docRef)` sulla sotto-collezione `tenants/{t}/workspaces/{w}/tasks/{taskId}/subtasks/{subtaskId}`.
+- **Pulizia Reattiva Locale:** Rimozione immediata dall'array `subtasks.value` in memoria locale e chiusura della modale (`selectedSubtask.value = null`), garantendo aggiornamento istantaneo del contatore e della UI senza necessità di ricaricare la pagina.
 
 ---
 

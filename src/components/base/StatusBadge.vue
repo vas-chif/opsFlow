@@ -7,10 +7,11 @@ completed, in-progress * - Uses Elite color palette * - Pill shape with uppercas
 // ── Vue & Framework ──────────────────────────────────────────────────────────
 import { computed } from "vue";
 
-// ── Types ───────────────────────────────────────────────────────────────────
-type TaskStatus = "pending" | "completed" | "in-progress";
+// ── Types ────────────────────────────────────────────────────────────────────
+import type { TaskStatus } from "@/types/models";
 
 // ── Props Interface ──────────────────────────────────────────────────────────
+// UI-only — component props
 interface Props {
   status: TaskStatus;
   dense?: boolean;
@@ -36,8 +37,33 @@ const statusConfig = computed(() => {
       color: "#0a2342", // Royal Navy
       textColor: "#ffffff",
     },
+    cancelled: {
+      label: "Cancelled",
+      color: "#c10015", // Negative
+      textColor: "#ffffff",
+    },
+    contacted: {
+      label: "Contacted",
+      color: "#0288d1", // Info Blue
+      textColor: "#ffffff",
+    },
+    "positive-response": {
+      label: "Positive Response",
+      color: "#2e7d32", // Forest Green
+      textColor: "#ffffff",
+    },
+    "negative-response": {
+      label: "Negative Response",
+      color: "#c62828", // Red
+      textColor: "#ffffff",
+    },
+    "follow-up-30-days": {
+      label: "Follow-up (30d)",
+      color: "#e65100", // Deep Orange
+      textColor: "#ffffff",
+    },
   };
-  return configs[props.status];
+  return configs[props.status] || configs.pending;
 });
 
 const badgeStyle = computed(() => ({
