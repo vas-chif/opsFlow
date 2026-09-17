@@ -26,12 +26,12 @@ Non procedere mai ad applicare modifiche senza aver prima scritto questo blocco 
 
 ---
 
-## 📌 §1 — Git & Branch Management (Regola §1.9)
+## 📌 §1 — Git & Branch Management (Regola §1.9 — Workflow Unificato su dev)
 
-- **Branch Check**: All'inizio di ogni sessione, verificare il branch corrente (`git branch`).
-- **Workflow**: Sviluppo SEMPRE su branch dedicati (`feature/`, `fix/`, `chore/`).
-- **Branch Protetti**: MAI committare o pushare direttamente su `main` o `master` (richiesta PR per merge). MAI `git push --force` su branch condivisi.
-- **Commit Messages**: Usare la convenzione **Conventional Commits** (`feat: ...`, `fix: ...`, `chore: ...`, `security: ...`, `style: ...`).
+- **Branch Check**: All'inizio di ogni sessione, verificare il branch corrente (`git branch`). Assicurarsi di essere SEMPRE posizionati su `dev`.
+- **Workflow Unificato su `dev`**: Tutte le modifiche di sviluppo, implementazioni e collaudi operativi devono risiedere e confluire direttamente sul branch **`dev`**. È vietato disperdere il lavoro lasciando branch `feature/` orfani o sparsi nel repository.
+- **Rilascio Protetto su `main`**: Il branch `main` è rigorosamente protetto e riservato alla Produzione. Il merge da `dev` verso `main` è consentito **SOLO ED ESCLUSIVAMENTE dopo che l'intero sistema è stato testato e convalidato con successo** (`yarn typecheck` a 0 errori, `yarn lint:check` a 0 errori/warning e collaudo a schermo). MAI committare direttamente su `main`. MAI `git push --force` su branch condivisi.
+- **Commit Messages**: Usare la convenzione **Conventional Commits** (`feat: ...`, `fix: ...`, `chore: ...`, `security: ...`, `style: ...`) con intestazione massima di 100 caratteri.
 
 ---
 
