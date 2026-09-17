@@ -1,12 +1,13 @@
 <script setup lang="ts">
 /**
  * @file TaskSettingsModal.vue
- * @description Task-level operational settings modal (Assigned Google Sheet, internal tab, custom email signature).
+ * @description Task-level operational settings modal (Objective & AI Prompt, Assigned Google Sheet, email signature, Master DB sync).
  * @author Vasile Chifeac
  * @created 2026-09-08
- * @modified 2026-09-08
+ * @modified 2026-09-17
  *
  * @notes
+ * - Step 21: Adds tab 'Obiettivo & Prompt IA' to allow live editing of task title, category, and AI prompt.
  * - Allows binding a specific Google Sheet by friendly Name from Workspace resources or adding one on the fly.
  * - Any new Google Sheet added here is also automatically registered in the Workspace's linked resources.
  * - Allows specifying an internal tab name (auto-created via Google Sheets addSheet API if not existing).
@@ -42,7 +43,13 @@ const taskStore = useTaskStore();
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const isSaving = ref<boolean>(false);
-const activeTab = ref<string>("sheet");
+const activeTab = ref<string>("prompt");
+
+// Step 21 §1.2 — Editable task core fields (Obiettivo & Prompt IA tab)
+const editTitle = ref<string>("");
+const editCategory = ref<string>("general");
+const editPrompt = ref<string>("");
+const isReplanningSubtasks = ref<boolean>(false);
 
 // Task settings state
 const selectedSheetIds = ref<string[]>([]);
@@ -100,6 +107,11 @@ const extractIdFromUrl = (input: string): string => {
 const syncFromTask = (): void => {
   const s = props.task.settings;
 
+  // Step 21 §1.2 — Initialize editable task core fields
+  editTitle.value = props.task.title || "";
+  editCategory.value = (props.task as { category?: string }).category || "general";
+  editPrompt.value = props.task.description || "";
+
   // Initialize selected sheet IDs array (multi-select)
   if (s && Array.isArray(s.selectedSheetIds) && s.selectedSheetIds.length > 0) {
     selectedSheetIds.value = [...s.selectedSheetIds];
@@ -134,6 +146,15 @@ watch(
     if (val) syncFromTask();
   },
   { immediate: true },
+);
+
+// Step 21 §1.3 — Re-sync when the task prop changes (e.g. real-time Firestore update)
+watch(
+  () => props.task,
+  () => {
+    syncFromTask();
+  },
+  { deep: false },
 );
 
 // ── Multi-Select Actions ───────────────────────────────────────────────────────
@@ -266,6 +287,27 @@ const handleSave = async (): Promise<void> => {
   isSaving.value = true;
 
   try {
+    // Step 21 §1.4 — Persist task core fields (title, category, prompt/description)
+    const coreUpdates: Record<string, string> = {};
+    const trimmedTitle = editTitle.value.trim();
+    const trimmedPrompt = editPrompt.value.trim();
+    const trimmedCategory = editCategory.value.trim() || "general";
+
+    if (trimmedTitle && trimmedTitle !== props.task.title) {
+      coreUpdates["title"] = trimmedTitle;
+    }
+    if (trimmedPrompt !== props.task.description) {
+      coreUpdates["description"] = trimmedPrompt;
+    }
+    if (Object.keys(coreUpdates).length > 0) {
+      await taskStore.updateTask(props.workspace.id, props.task.id, {
+        ...coreUpdates,
+        ...(trimmedCategory !== ((props.task as { category?: string }).category ?? "general")
+          ? { category: trimmedCategory }
+          : {}),
+      } as Parameters<typeof taskStore.updateTask>[2]);
+    }
+
     const selectedSheetsList = availableWorkspaceSheets.value.filter((ws) =>
       selectedSheetIds.value.includes(ws.id),
     );
@@ -334,9 +376,11 @@ const handleSave = async (): Promise<void> => {
         align="left"
         class="task-settings-card__tabs text-grey-7 bg-grey-2"
       >
-        <q-tab name="sheet" icon="table_chart" label="1. Fogli Google & Schede" no-caps />
-        <q-tab name="email" icon="mail" label="2. Firma & Intestazione Email" no-caps />
-        <q-tab name="sync" icon="cloud_sync" label="3. Master DB & Cronologia" no-caps />
+        <!-- Step 21: Tab 1 — Obiettivo & Prompt IA (NEW, prioritario) -->
+        <q-tab name="prompt" icon="psychology" label="1. Obiettivo &amp; Prompt IA" no-caps />
+        <q-tab name="sheet" icon="table_chart" label="2. Fogli Google &amp; Schede" no-caps />
+        <q-tab name="email" icon="mail" label="3. Firma &amp; Intestazione Email" no-caps />
+        <q-tab name="sync" icon="cloud_sync" label="4. Master DB &amp; Cronologia" no-caps />
       </q-tabs>
 
       <q-separator />
@@ -344,6 +388,110 @@ const handleSave = async (): Promise<void> => {
       <!-- Tab Content -->
       <q-card-section class="q-pa-lg">
         <q-tab-panels v-model="activeTab" animated class="bg-transparent">
+          <!-- TAB 0: OBIETTIVO & PROMPT IA (Step 21) -->
+          <q-tab-panel name="prompt" class="q-pa-none">
+            <div class="text-subtitle2 text-weight-bold text-navy q-mb-xs">
+              🎯 Obiettivo &amp; Prompt IA per questo Task
+            </div>
+            <p class="text-caption text-grey-7 q-mb-md">
+              Modifica il titolo, la categoria operativa e il prompt/obiettivo dell'Agente IA per
+              questo task attivo. Le modifiche sono immediate e senza perdita di contesto.
+            </p>
+
+            <!-- Titolo Task -->
+            <div class="q-mb-md">
+              <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">📝 Titolo Task:</div>
+              <q-input
+                v-model="editTitle"
+                outlined
+                dense
+                placeholder="Es. Docente Oracle/RAC Milano | NobleProg"
+                :rules="[(v: string) => v.trim().length > 0 || 'Il titolo è obbligatorio']"
+              >
+                <template #prepend>
+                  <q-icon name="title" color="amber-9" />
+                </template>
+              </q-input>
+            </div>
+
+            <!-- Categoria Operativa -->
+            <div class="q-mb-md">
+              <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
+                🏷️ Categoria Operativa:
+              </div>
+              <q-select
+                v-model="editCategory"
+                outlined
+                dense
+                :options="[
+                  { label: '⚙️ Generale / Operativo', value: 'general' },
+                  { label: '🔍 Ricerca &amp; Screening', value: 'web_search' },
+                  { label: '📊 Sincronizzazione Sheets', value: 'sheet_sync' },
+                  { label: '✉️ Bozze Gmail', value: 'gmail_draft' },
+                  { label: '📄 Analisi PDF', value: 'pdf_analysis' },
+                ]"
+                emit-value
+                map-options
+                option-value="value"
+                option-label="label"
+              >
+                <template #prepend>
+                  <q-icon name="category" color="amber-9" />
+                </template>
+              </q-select>
+            </div>
+
+            <!-- Prompt / Obiettivo Agente IA -->
+            <div class="q-mb-md">
+              <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
+                🤖 Prompt / Obiettivo dell'Agente IA:
+              </div>
+              <q-input
+                v-model="editPrompt"
+                type="textarea"
+                rows="7"
+                outlined
+                dense
+                placeholder="Es. Trova candidati docenti Oracle/RAC su LinkedIn e Malt in Lombardia, genera bozze email personalizzate e compila il foglio di monitoraggio..."
+                hint="Questo è l'obiettivo che l'Agente IA utilizzerà ad ogni esecuzione del task."
+                class="q-mb-sm"
+              >
+                <template #prepend>
+                  <q-icon name="smart_toy" color="amber-9" />
+                </template>
+              </q-input>
+            </div>
+
+            <!-- Step 21 §1.5: Rigenera Sotto-Task con AgentePlanner -->
+            <div class="q-pa-sm bg-blue-1 rounded-borders border-primary-light q-mb-xs">
+              <div class="row items-center justify-between no-wrap">
+                <div class="col">
+                  <div class="text-caption text-weight-bold text-primary">
+                    ✨ Rigenera Sotto-Task
+                  </div>
+                  <div class="text-caption text-grey-7">
+                    Usa AgentePlanner per scomporre automaticamente il nuovo prompt in sotto-task
+                    operative.
+                  </div>
+                </div>
+                <q-btn
+                  outline
+                  dense
+                  no-caps
+                  size="sm"
+                  color="primary"
+                  icon="auto_awesome"
+                  label="Rigenera"
+                  :loading="isReplanningSubtasks"
+                  class="q-ml-md"
+                  @click="emit('openScheduleModal')"
+                >
+                  <q-tooltip>Ri-decompone il task aggiornato con AgentePlanner</q-tooltip>
+                </q-btn>
+              </div>
+            </div>
+          </q-tab-panel>
+
           <!-- TAB 1: GOOGLE SHEETS (MULTI-SELECT) -->
           <q-tab-panel name="sheet" class="q-pa-none">
             <div class="text-subtitle2 text-weight-bold text-navy q-mb-xs">
@@ -701,5 +849,9 @@ const handleSave = async (): Promise<void> => {
 
 .border-gold-light {
   border: 1px solid rgba(197, 160, 101, 0.35);
+}
+
+.border-primary-light {
+  border: 1px solid rgba(10, 35, 66, 0.2);
 }
 </style>

@@ -278,6 +278,94 @@ const handleScheduledJobDeleted = (): void => {
 // ── Step 20: Polymorphic Entity SubTasks State ─────────────────────────────
 const subtasks = ref<EntitySubTask[]>([]);
 const selectedSubtask = ref<EntitySubTask | null>(null);
+
+// ── Step 21 §2: Live Editing Card State ─────────────────────────────────────
+/** Dialog state for editing the Task Description directly from the right panel. */
+const showEditDescriptionDialog = ref<boolean>(false);
+const editDescriptionDraft = ref<string>("");
+
+/** Dialog state for editing AI Subtasks (from aiMetadata.subtasks) from the right panel. */
+const showEditSubtasksDialog = ref<boolean>(false);
+const editSubtasksDraft = ref<import("../types/models").SubTask[]>([]);
+
+const openEditDescriptionDialog = (): void => {
+  editDescriptionDraft.value = task.value?.description || "";
+  showEditDescriptionDialog.value = true;
+}; /*end openEditDescriptionDialog*/
+
+const saveEditedDescription = async (): Promise<void> => {
+  if (!task.value || !workspace.value) return;
+  try {
+    await taskStore.updateTask(workspace.value.id, task.value.id, {
+      description: editDescriptionDraft.value.trim(),
+    });
+    showEditDescriptionDialog.value = false;
+    q.notify({
+      type: "positive",
+      message: "Descrizione aggiornata!",
+      icon: "edit_note",
+      position: "top",
+      timeout: 1500,
+    });
+  } catch (err) {
+    q.notify({
+      type: "negative",
+      message: `Errore: ${err instanceof Error ? err.message : String(err)}`,
+      position: "top",
+    });
+  }
+}; /*end saveEditedDescription*/
+
+const openEditSubtasksDialog = (): void => {
+  editSubtasksDraft.value = JSON.parse(
+    JSON.stringify(task.value?.aiMetadata?.subtasks ?? []),
+  ) as import("../types/models").SubTask[];
+  showEditSubtasksDialog.value = true;
+}; /*end openEditSubtasksDialog*/
+
+const saveEditedSubtasks = async (): Promise<void> => {
+  if (!task.value || !workspace.value) return;
+  try {
+    await taskStore.updateTask(workspace.value.id, task.value.id, {
+      aiMetadata: {
+        ...task.value.aiMetadata,
+        subtasks: editSubtasksDraft.value,
+      },
+    });
+    showEditSubtasksDialog.value = false;
+    q.notify({
+      type: "positive",
+      message: "Sotto-Task aggiornate!",
+      icon: "checklist",
+      position: "top",
+      timeout: 1500,
+    });
+  } catch (err) {
+    q.notify({
+      type: "negative",
+      message: `Errore: ${err instanceof Error ? err.message : String(err)}`,
+      position: "top",
+    });
+  }
+}; /*end saveEditedSubtasks*/
+
+const addEditSubtaskItem = (): void => {
+  editSubtasksDraft.value.push({
+    id: `st-${Date.now()}`,
+    taskId: task.value?.id || "",
+    tenantId: "",
+    title: "",
+    description: "",
+    completed: false,
+    order: editSubtasksDraft.value.length + 1,
+    createdAt: new Date(),
+  });
+}; /*end addEditSubtaskItem*/
+
+const removeEditSubtaskItem = (idx: number): void => {
+  editSubtasksDraft.value.splice(idx, 1);
+}; /*end removeEditSubtaskItem*/
+
 const showSubtaskModal = ref<boolean>(false);
 const isLoadingSubtasks = ref<boolean>(false);
 
@@ -1245,6 +1333,19 @@ const handleApproveAction = async (
           : "Azione approvata ed eseguita con successo!",
         icon: "check_circle",
       });
+    } else if (res.status === 401 && result?.error === "oauth_error") {
+      // Step 21 §5.2 — Token scaduto: mostra banner di riconnessione, non errore generico
+      chatStore.setSessionOAuthError(taskId, {
+        code: (result.code as import("../types/models").OAuthErrorCode) ?? "TOKEN_EXPIRED",
+        message: result.message ?? "Il token Google è scaduto. Riconnetti il tuo account.",
+      });
+      q.notify({
+        type: "warning",
+        message: "🔑 Token Google scaduto. Riconnetti il tuo account Google per continuare.",
+        icon: "lock_reset",
+        timeout: 6000,
+        position: "top",
+      });
     } else {
       throw new Error(result?.error || "Errore durante l'esecuzione dell'azione.");
     }
@@ -2077,8 +2178,20 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
             style="min-width: 0"
           >
             <div class="scroll col q-pr-sm">
-              <div class="text-caption text-weight-bold text-primary q-mb-xs">
-                📌 Descrizione Task
+              <!-- Step 21 §2.1: Descrizione Task header with edit button -->
+              <div class="row items-center justify-between q-mb-xs no-wrap">
+                <div class="text-caption text-weight-bold text-primary">📌 Descrizione Task</div>
+                <q-btn
+                  flat
+                  round
+                  dense
+                  size="xs"
+                  icon="edit"
+                  color="primary"
+                  @click="openEditDescriptionDialog"
+                >
+                  <q-tooltip>Modifica Descrizione</q-tooltip>
+                </q-btn>
               </div>
               <div
                 class="text-caption text-grey-9 q-mb-sm bg-grey-2 q-pa-sm rounded-borders"
@@ -2143,6 +2256,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
               </div>
 
               <!-- AI Operational SubTasks Checklist (AgentePlanner / AI Task Architect) -->
+              <!-- Step 21 §2.1: Edit button on Sotto-Task Operative header -->
               <q-expansion-item
                 v-if="task.aiMetadata?.subtasks && task.aiMetadata.subtasks.length > 0"
                 dense
@@ -2152,6 +2266,28 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                 class="q-mb-sm task-subtasks-expansion rounded-borders"
                 style="border: 1px solid rgba(10, 35, 66, 0.15)"
               >
+                <template #header>
+                  <q-item-section>
+                    <span class="text-caption text-weight-bold text-primary">
+                      🔀 Sotto-Task Operative ({{
+                        task.aiMetadata.subtasks.filter((s) => s.completed).length
+                      }}/{{ task.aiMetadata.subtasks.length }})
+                    </span>
+                  </q-item-section>
+                  <q-item-section side>
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      size="xs"
+                      icon="edit"
+                      color="primary"
+                      @click.stop="openEditSubtasksDialog"
+                    >
+                      <q-tooltip>Modifica Sotto-Task</q-tooltip>
+                    </q-btn>
+                  </q-item-section>
+                </template>
                 <q-list dense separator class="q-pa-xs bg-white rounded-borders">
                   <q-item
                     v-for="(sub, idx) in task.aiMetadata.subtasks"
@@ -3077,6 +3213,122 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
       :existing-subtasks="subtasks"
       @created="handleSubtaskCreated"
     />
+    <!-- Step 21 §2.2: Dialog — Modifica Descrizione Task -->
+    <q-dialog v-model="showEditDescriptionDialog" persistent>
+      <q-card style="min-width: 460px; max-width: 90vw" class="bg-white rounded-xl">
+        <q-card-section
+          class="row items-center q-py-sm q-px-md"
+          style="background: #0a2342; border-bottom: 2px solid #c5a065"
+        >
+          <q-icon name="edit_note" color="amber-5" size="20px" class="q-mr-sm" />
+          <span class="text-subtitle2 text-weight-bold text-white">Modifica Descrizione Task</span>
+          <q-space />
+          <q-btn flat round dense icon="close" color="white" v-close-popup />
+        </q-card-section>
+        <q-card-section class="q-pa-md">
+          <q-input
+            v-model="editDescriptionDraft"
+            type="textarea"
+            rows="8"
+            outlined
+            dense
+            label="Descrizione / Obiettivo del Task"
+            hint="Modifica la descrizione del task. Sarà usata come contesto dall'Agente IA."
+          />
+        </q-card-section>
+        <q-card-actions align="right" class="q-px-md q-pb-md">
+          <q-btn flat label="Annulla" color="grey-7" no-caps v-close-popup />
+          <q-btn
+            unelevated
+            color="primary"
+            icon="save"
+            label="Salva Descrizione"
+            no-caps
+            class="text-weight-bold"
+            @click="saveEditedDescription"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Step 21 §2.2: Dialog — Modifica Sotto-Task AI Operative -->
+    <q-dialog v-model="showEditSubtasksDialog" persistent>
+      <q-card style="min-width: 500px; max-width: 92vw" class="bg-white rounded-xl">
+        <q-card-section
+          class="row items-center q-py-sm q-px-md"
+          style="background: #0a2342; border-bottom: 2px solid #c5a065"
+        >
+          <q-icon name="checklist" color="amber-5" size="20px" class="q-mr-sm" />
+          <span class="text-subtitle2 text-weight-bold text-white"
+            >Modifica Sotto-Task Operative</span
+          >
+          <q-space />
+          <q-btn flat round dense icon="close" color="white" v-close-popup />
+        </q-card-section>
+        <q-card-section class="q-pa-md" style="max-height: 55vh; overflow-y: auto">
+          <div
+            v-if="editSubtasksDraft.length === 0"
+            class="text-caption text-grey-6 italic q-mb-sm"
+          >
+            Nessuna sotto-task. Aggiungine una qui sotto.
+          </div>
+          <div
+            v-for="(st, idx) in editSubtasksDraft"
+            :key="st.id || idx"
+            class="row items-center q-col-gutter-xs q-mb-xs no-wrap"
+          >
+            <div class="col-auto">
+              <q-badge color="grey-5" text-color="dark" :label="idx + 1" />
+            </div>
+            <div class="col">
+              <q-input
+                v-model="st.title"
+                outlined
+                dense
+                size="sm"
+                placeholder="Titolo sotto-task..."
+              />
+            </div>
+            <div class="col-auto">
+              <q-btn
+                flat
+                round
+                dense
+                size="xs"
+                icon="delete"
+                color="negative"
+                @click="removeEditSubtaskItem(idx)"
+              >
+                <q-tooltip>Elimina</q-tooltip>
+              </q-btn>
+            </div>
+          </div>
+          <q-btn
+            flat
+            dense
+            no-caps
+            size="sm"
+            color="primary"
+            icon="add_circle"
+            label="Aggiungi Sotto-Task"
+            class="q-mt-sm"
+            @click="addEditSubtaskItem"
+          />
+        </q-card-section>
+        <q-card-actions align="right" class="q-px-md q-pb-md">
+          <q-btn flat label="Annulla" color="grey-7" no-caps v-close-popup />
+          <q-btn
+            unelevated
+            color="primary"
+            icon="save"
+            label="Salva Sotto-Task"
+            no-caps
+            class="text-weight-bold"
+            @click="saveEditedSubtasks"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </div>
 </template>
 

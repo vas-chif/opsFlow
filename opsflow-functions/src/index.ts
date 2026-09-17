@@ -835,6 +835,30 @@ export const resolveApproval = onRequest(
           message: err.message,
           requiredScopes: err.requiredScopes,
         });
+      } else if (
+        // Step 21: Catch googleapis/gaxios invalid_grant (token expired or revoked)
+        err &&
+        typeof err === "object" &&
+        (
+          ("message" in err && typeof (err as { message: unknown }).message === "string" &&
+            ((err as { message: string }).message.includes("invalid_grant") ||
+             (err as { message: string }).message.includes("Token has been expired or revoked"))) ||
+          ("response" in err &&
+            err.response &&
+            typeof err.response === "object" &&
+            "data" in err.response &&
+            err.response.data &&
+            typeof err.response.data === "object" &&
+            "error" in err.response.data &&
+            (err.response.data as { error: string }).error === "invalid_grant")
+        )
+      ) {
+        logger.warn("resolveApproval: Google OAuth token expired (invalid_grant)", { tenantId, userId });
+        res.status(401).json({
+          error: "oauth_error",
+          code: "TOKEN_EXPIRED",
+          message: "Il token di autorizzazione Google è scaduto o è stato revocato. Riconnetti l'account.",
+        });
       } else {
         let errorMsg = "Internal error during approval execution.";
         if (err && typeof err === "object" && "message" in err) {

@@ -3,7 +3,7 @@
  * @description Genkit Tools for Google Workspace Integration (Gmail Drafts & Sheets).
  * @author Vasile Chifeac
  * @created 2026-07-30
- * @modified 2026-08-14
+ * @modified 2026-09-17
  *
  * @notes
  * - Human-in-the-Loop: Tools do NOT execute external writes directly.
@@ -15,6 +15,7 @@
  * - firebase-admin/firestore
  * - googleapis
  * - genkit
+ * - antiHallucinationGuardrail (Step 21: deterministic sanitization middleware)
  *
  * @performance
  * - 1 Firestore write per tool call (approval record, not email send)
@@ -31,6 +32,7 @@ import { logger } from "firebase-functions";
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
 import { randomUUID } from "node:crypto";
+import { validateAndSanitizeRows, buildGuardrailSummary } from "./antiHallucinationGuardrail";
 
 // ── Context Management ───────────────────────────────────────────────────────
 
@@ -42,6 +44,26 @@ export interface GoogleWorkspaceContext {
 }
 
 export const activeWorkspaceContext: GoogleWorkspaceContext = {};
+
+/**
+ * Step 21 — Anti-Hallucination Ground-Truth URL Buffer.
+ * Accumulates all URLs returned by webSearch tools in a single agent turn.
+ * Set is reset at the start of each chatWithAgentFlow invocation.
+ * @see antiHallucinationGuardrail.ts
+ */
+export const groundTruthUrlBuffer: Set<string> = new Set();
+
+/** Resets the ground-truth URL buffer for a new agent turn. */
+export function resetGroundTruthBuffer(): void {
+  groundTruthUrlBuffer.clear();
+} /*end resetGroundTruthBuffer*/
+
+/** Adds verified URLs from a search result to the ground-truth buffer. */
+export function addGroundTruthUrls(urls: string[]): void {
+  for (const url of urls) {
+    if (url) groundTruthUrlBuffer.add(url);
+  }
+} /*end addGroundTruthUrls*/
 
 /**
  * Sets the active workspace context for the current tool execution.
@@ -223,15 +245,37 @@ export const manageGoogleSheetTool = ai.defineTool(
     );
 
     // Normalize rows to ensure safe 2D array of strings
-    const normalizedValues: string[][] = (values || []).map((row) =>
+    const rawNormalized: string[][] = (values || []).map((row) =>
       Array.isArray(row) ? row.map((cell) => String(cell ?? "")) : [String(row ?? "")],
     );
+
+    // Step 21 — Anti-Hallucination Guardrail: sanitize before Firestore write
+    const guardrailResult = validateAndSanitizeRows(rawNormalized, groundTruthUrlBuffer, true);
+    const normalizedValues = guardrailResult.sanitizedValues;
+    const guardrailSummary = buildGuardrailSummary(guardrailResult);
+
+    if (guardrailResult.correctionsCount > 0) {
+      logger.info("[manageGoogleSheetTool] Anti-hallucination guardrail applied", {
+        corrections: guardrailResult.correctionsCount,
+        flags: guardrailResult.flags,
+      });
+    }
 
     // Preview: show max 5 rows to keep Firestore document small
     const previewRows = normalizedValues.slice(0, 5);
 
+    // Build guardrail metadata for transparency in ApprovalCard
+    const guardrailMeta = guardrailResult.correctionsCount > 0
+      ? {
+          correctionsCount: guardrailResult.correctionsCount,
+          flags: guardrailResult.flags,
+          summary: guardrailSummary,
+        }
+      : undefined;
+
     // Firestore does not permit direct nested arrays (e.g. string[][]).
     // We store previewRows as an array of objects { cells: [...] } and full data as rowsJson.
+    const baseRowCount = rawNormalized.length > 0 ? rawNormalized.length - 1 : 0; // exclude header
     const approvalRecord = {
       id: approvalId,
       taskId: effectiveTaskId,
@@ -239,7 +283,8 @@ export const manageGoogleSheetTool = ai.defineTool(
       tenantId: effectiveTenantId,
       actionType: "sheet_append",
       status: "pending",
-      summary: `📊 Aggiunta ${normalizedValues.length} righe → Sheets ID: ${effectiveSpreadsheetId.slice(0, 15)}...`,
+      summary: `📊 Aggiunta ${baseRowCount} righe → Sheets ID: ${effectiveSpreadsheetId.slice(0, 15)}...`,
+      guardrail: guardrailMeta,
       previewData: {
         spreadsheetId: effectiveSpreadsheetId,
         range,
@@ -252,12 +297,13 @@ export const manageGoogleSheetTool = ai.defineTool(
 
     await approvalsRef.doc(approvalId).set(approvalRecord);
 
+    const guardrailNotice = guardrailSummary ? `\n${guardrailSummary}` : "";
     return {
       approvalId,
       status: "pending" as const,
       message:
-        `📊 ${normalizedValues.length} righe formattate per Google Sheets (${range}). ` +
-        "Rivedi l'anteprima e clicca [✅ Approva ed Esegui] per scrivere su Sheets.",
+        `📊 ${baseRowCount} righe formattate per Google Sheets (${range}). ` +
+        `Rivedi l'anteprima e clicca [✅ Approva ed Esegui] per scrivere su Sheets.${guardrailNotice}`,
       approvalRecord: {
         ...approvalRecord,
         previewData: {

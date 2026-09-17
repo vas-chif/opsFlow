@@ -5,9 +5,10 @@
  * @created 2026-07-30
  *
  * @notes
- * - Integrates Gemini 1.5 Flash with tool calling for Gmail Drafts, Sheets, Web Search, and Content Marketing.
+ * - Integrates Gemini 3.6 Flash with tool calling for Gmail Drafts, Sheets, Web Search, and Content Marketing.
  * - Uses 3-Level Prompt Stacking via buildStackedPrompt.
  * - Enforces PII Sanitization via piiSanitizer before sending prompt to LLM.
+ * - Step 21: Resets ground-truth URL buffer at start of each turn; accumulates URLs from webSearch results.
  */
 
 import { ai } from "./genkitConfig";
@@ -18,6 +19,8 @@ import {
   createGmailDraftTool,
   manageGoogleSheetTool,
   setGoogleWorkspaceContext,
+  resetGroundTruthBuffer,
+  addGroundTruthUrls,
 } from "../tools/googleWorkspace";
 import { searchWebAndPlatformsTool, leadSynthesisTool, jinaReaderTool } from "../tools/webSearch";
 import { contentMarketingTool } from "../tools/contentMarketing";
@@ -140,6 +143,9 @@ export const chatWithAgentFlow = ai.defineFlow(
       defaultSheetId: taskSettings?.selectedSheetId || linkedResources?.defaultSheetId,
     });
 
+    // Step 21 — Reset ground-truth URL buffer for this agent turn (multi-query accumulation)
+    resetGroundTruthBuffer();
+
     // 3. Format Sliding Window History (Last 5 messages max, 1000 chars per msg max)
     let historyContext = "";
     if (history && history.length > 0) {
@@ -197,12 +203,28 @@ export const chatWithAgentFlow = ai.defineFlow(
                 const out = part.toolResponse.output as {
                   approvalId?: string;
                   approvalRecord?: unknown;
+                  urls?: string[];
+                  results?: Array<{ url?: string }>;
                 };
                 if (out.approvalId) {
                   approvalId = out.approvalId;
                 }
                 if (out.approvalRecord) {
                   approvalRecord = out.approvalRecord;
+                }
+                // Step 21 — Accumulate ground-truth URLs from webSearch tool responses
+                if (part.toolResponse.name === "searchWebAndPlatformsTool") {
+                  const extractedUrls: string[] = [];
+                  if (Array.isArray(out.urls)) {
+                    extractedUrls.push(...out.urls);
+                  } else if (Array.isArray(out.results)) {
+                    for (const r of out.results) {
+                      if (r.url) extractedUrls.push(r.url);
+                    }
+                  }
+                  if (extractedUrls.length > 0) {
+                    addGroundTruthUrls(extractedUrls);
+                  }
                 }
               }
             }
