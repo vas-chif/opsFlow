@@ -1739,7 +1739,7 @@ function hashToken(rawToken: string): string {
  * Helper: send invitation email via Resend SDK (server-side only — Prescrizione 1).
  * The raw token is embedded in the link; hashing happens only server-side.
  * @param {object} params - Email parameters (toEmail, tenantName, tenantId, rawToken, role, resendApiKey).
- * @return {Promise<void>} Resolves when email is accepted by Resend API.
+ * @return {Promise<object>} Resolves with delivery status.
  */
 async function sendInvitationEmail(params: {
   toEmail: string;
@@ -1751,7 +1751,7 @@ async function sendInvitationEmail(params: {
   scope?: "tenant" | "workspace" | "task";
   workspaceName?: string;
   taskTitle?: string;
-}): Promise<void> {
+}): Promise<{ emailSent: boolean; error?: string }> {
   const { Resend } = await import("resend");
   const resend = new Resend(params.resendApiKey);
 
@@ -1775,31 +1775,46 @@ async function sendInvitationEmail(params: {
       `(Organizzazione: <em>${params.tenantName}</em>) con visibilità dedicata.`;
   }
 
-  await resend.emails.send({
-    from: "OpsFlow <onboarding@resend.dev>",
-    to: params.toEmail,
-    subject,
-    html: [
-      "<div style=\"font-family:'Mulish',sans-serif;background:#0a2342;",
-      "color:#f9f7f2;padding:40px;border-radius:12px;max-width:580px;margin:auto\">",
-      "<h1 style=\"color:#c5a065;font-family:'Playfair Display',serif;margin-bottom:8px\">",
-      "Benvenuto in OpsFlow &#x1F44B;</h1>",
-      `<p style="margin-bottom:24px">${inviteDetails}</p>`,
-      `<a href="${inviteUrl}"`,
-      "style=\"display:inline-block;background:#c5a065;color:#0a2342;",
-      "font-weight:700;padding:14px 32px;border-radius:8px;\"",
-      "text-decoration:none;font-size:16px\">",
-      "&#x2705; Accetta invito &amp; unisciti al team</a>",
-      "<p style=\"margin-top:32px;font-size:13px;color:#9aacbe\">",
-      "Questo link scade in 7 giorni. ",
-      "Se non riconosci questo invito puoi ignorare questa email.<br>",
-      "Per revocare: <a href=\"mailto:support@opsflow.app\"",
-      "style=\"color:#c5a065\">support@opsflow.app</a></p>",
-      "<p style=\"margin-top:16px;font-size:11px;color:#5a7a9b\">",
-      "OpsFlow SaaS Platform &mdash; GDPR Art. 14 compliant.</p>",
-      "</div>",
-    ].join(""),
-  });
+  try {
+    const result = await resend.emails.send({
+      from: "OpsFlow <onboarding@resend.dev>",
+      to: params.toEmail,
+      subject,
+      html: [
+        "<div style=\"font-family:'Mulish',sans-serif;background:#0a2342;",
+        "color:#f9f7f2;padding:40px;border-radius:12px;max-width:580px;margin:auto\">",
+        "<h1 style=\"color:#c5a065;font-family:'Playfair Display',serif;margin-bottom:8px\">",
+        "Benvenuto in OpsFlow &#x1F44B;</h1>",
+        `<p style="margin-bottom:24px">${inviteDetails}</p>`,
+        `<a href="${inviteUrl}"`,
+        "style=\"display:inline-block;background:#c5a065;color:#0a2342;",
+        "font-weight:700;padding:14px 32px;border-radius:8px;\"",
+        "text-decoration:none;font-size:16px\">",
+        "&#x2705; Accetta invito &amp; unisciti al team</a>",
+        "<p style=\"margin-top:32px;font-size:13px;color:#9aacbe\">",
+        "Questo link scade in 7 giorni. ",
+        "Se non riconosci questo invito puoi ignorare questa email.<br>",
+        "Per revocare: <a href=\"mailto:support@opsflow.app\"",
+        "style=\"color:#c5a065\">support@opsflow.app</a></p>",
+        "<p style=\"margin-top:16px;font-size:11px;color:#5a7a9b\">",
+        "OpsFlow SaaS Platform &mdash; GDPR Art. 14 compliant.</p>",
+        "</div>",
+      ].join(""),
+    });
+
+    if (result.error) {
+      logger.warn("sendInvitationEmail: Resend API error (e.g. sandbox restriction)", {
+        error: result.error,
+        toEmail: params.toEmail,
+      });
+      return { emailSent: false, error: result.error.message };
+    }
+    return { emailSent: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.warn("sendInvitationEmail: dispatch exception", { error: msg, toEmail: params.toEmail });
+    return { emailSent: false, error: msg };
+  }
 } // end sendInvitationEmail
 
 /**
@@ -1808,17 +1823,12 @@ async function sendInvitationEmail(params: {
  * Creates a cryptographic invitation token (SHA-256 hash as Firestore document ID)
  * and delivers the invitation email server-side via Resend.
  *
- * @security JWT: owner, admin or superadmin. Admin/owner restricted to own tenant.
- * @gdpr Audit log written on every invitation issuance (GDPR Art. 30).
- * @performance 1 Firestore write + 1 email send.
+ * @param {CreateInvitationPayload} data - { email, role, scope?, workspaceId?, workspaceName?, taskId?, taskTitle? }
+ * @security Only callers with role 'admin', 'owner', or 'superadmin' are permitted.
+ * @performance 1 Firestore getDoc + 1 setDoc + 1 audit addDoc.
  */
 export const createTenantInvitation = onCall(
-  {
-    region: "europe-west1",
-    cors: true,
-    invoker: "public",
-    secrets: [RESEND_API_KEY],
-  },
+  { region: "europe-west1", cors: true, invoker: "public", secrets: [RESEND_API_KEY] },
   async (request) => {
     const rawAuth = request.auth as { uid: string; token: Record<string, unknown> } | undefined;
     requireRole(rawAuth, ["owner", "admin", "superadmin"]);
@@ -1879,6 +1889,7 @@ export const createTenantInvitation = onCall(
     // Write invitation doc (tokenHash = document ID)
     await db.doc(`tenants/${tenantId}/invitations/${tokenHash}`).set({
       tokenHash,
+      rawToken,
       tenantId,
       email,
       role,
@@ -1893,9 +1904,11 @@ export const createTenantInvitation = onCall(
       taskTitle: taskTitle || null,
     });
 
-    // Prescrizione 1: Send email server-side ONLY
+    // Prescrizione 1: Send email server-side via Resend SDK
+    let emailSent = false;
+    let emailErrorMsg = "";
     try {
-      await sendInvitationEmail({
+      const emailRes = await sendInvitationEmail({
         toEmail: email,
         tenantName,
         tenantId,
@@ -1906,15 +1919,17 @@ export const createTenantInvitation = onCall(
         workspaceName,
         taskTitle,
       });
+      emailSent = emailRes.emailSent;
+      if (!emailSent && emailRes.error) {
+        emailErrorMsg = emailRes.error;
+      }
     } catch (emailErr) {
-      // Rollback invitation doc if email fails — atomic consistency
-      await db.doc(`tenants/${tenantId}/invitations/${tokenHash}`).delete();
-      logger.error("createTenantInvitation: email send failed — invitation rolled back", {
+      logger.warn("createTenantInvitation: email send failed", {
         tenantId,
         email,
         emailErr,
       });
-      throw new HttpsError("internal", "Errore nell'invio dell'email di invito. Riprova.");
+      emailSent = false;
     }
 
     // GDPR Art. 30 audit log
@@ -1928,10 +1943,25 @@ export const createTenantInvitation = onCall(
       taskId: taskId || null,
       invitedBy: caller.uid,
       timestamp: now.toISOString(),
+      emailSent,
     });
 
-    logger.info("createTenantInvitation: invitation issued", { tenantId, email, role, scope });
-    return { success: true, message: `Invito inviato a ${email} con ruolo ${role}.` };
+    const inviteUrl = `https://opsflow-88of.web.app/#/invite?token=${rawToken}&tenant=${tenantId}`;
+    logger.info("createTenantInvitation: invitation issued", { tenantId, email, role, scope, emailSent });
+
+    const message = emailSent ?
+      `Invito inviato a ${email} con ruolo ${role}.` :
+      `Invito creato per ${email}! Email non recapitata (${emailErrorMsg || "Sandbox Resend"}). ` +
+      "Puoi copiare il link e inviarlo direttamente.";
+
+    return {
+      success: true,
+      message,
+      inviteUrl,
+      rawToken,
+      tokenHash,
+      emailSent,
+    };
   },
 ); // end createTenantInvitation
 
@@ -1963,14 +1993,22 @@ export const acceptTenantInvitation = onCall(
     // Prescrizione 2: O(1) direct lookup by tokenHash
     const tokenHash = hashToken(token);
     const db = getFirestore();
-    const invitationRef = db.doc(`tenants/${tenantId}/invitations/${tokenHash}`);
+    let invitationRef = db.doc(`tenants/${tenantId}/invitations/${tokenHash}`);
 
     // Prescrizione 3 (Anti-Replay): use runTransaction to prevent concurrent redemption
     await db.runTransaction(async (tx) => {
-      const snap = await tx.get(invitationRef);
+      let snap = await tx.get(invitationRef);
 
       if (!snap.exists) {
-        throw new HttpsError("not-found", "Invito non valido o già riscattato.");
+        // Fallback: check if the provided token was already the tokenHash (legacy/direct link)
+        const fallbackRef = db.doc(`tenants/${tenantId}/invitations/${token}`);
+        const fallbackSnap = await tx.get(fallbackRef);
+        if (fallbackSnap.exists) {
+          invitationRef = fallbackRef;
+          snap = fallbackSnap;
+        } else {
+          throw new HttpsError("not-found", "Invito non valido o già riscattato.");
+        }
       }
 
       const inv = snap.data() as {

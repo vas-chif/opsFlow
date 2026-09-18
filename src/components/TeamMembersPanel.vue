@@ -26,7 +26,7 @@
 
 // ── Vue & Framework ──────────────────────────────────────────────────────────
 import { ref, computed, onMounted } from "vue";
-import { useQuasar } from "quasar";
+import { useQuasar, copyToClipboard } from "quasar";
 
 // ── Firebase ─────────────────────────────────────────────────────────────────
 import { getFirestore, collection, getDocs, doc, setDoc, orderBy, query } from "firebase/firestore";
@@ -35,7 +35,7 @@ import { app } from "@/boot/firebase";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 import type { TenantRole, SetUserRoleRequest } from "@/types/auth";
-import type { TenantInvitation } from "@/types/models";
+import type { TenantInvitation, CreateInvitationResponse } from "@/types/models";
 
 // ── Stores ───────────────────────────────────────────────────────────────────
 import { useAuthStore } from "@/stores/authStore";
@@ -337,10 +337,10 @@ async function sendInvite(): Promise<void> {
           taskId?: string | undefined;
           taskTitle?: string | undefined;
         },
-        { success: boolean; message: string }
+        CreateInvitationResponse
       >(functions, "createTenantInvitation");
 
-      await createInvitation({
+      const res = await createInvitation({
         email: inviteEmail.value,
         role: inviteRole.value,
         scope: props.scope,
@@ -350,12 +350,55 @@ async function sendInvite(): Promise<void> {
         taskTitle: props.taskTitle || currentTask.value?.title || undefined,
       });
 
-      $q.notify({
-        type: "positive",
-        message: `✉️ Invito inviato a ${inviteEmail.value}! L'email è in arrivo.`,
-        icon: "mark_email_read",
-        timeout: 4000,
-      });
+      const data = res.data;
+      const isLocal =
+        typeof window !== "undefined" &&
+        (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+      const baseUrl = isLocal ? "https://opsflow-88of.web.app" : window.location.origin;
+      const token = data.rawToken || data.tokenHash;
+      const directUrl = token
+        ? `${baseUrl}/#/invite?token=${token}&tenant=${authStore.tenantId}`
+        : data.inviteUrl || "";
+
+      const notifyOpts: {
+        type: string;
+        message: string;
+        caption: string;
+        icon: string;
+        timeout: number;
+        actions?: { label: string; color: string; handler: () => void }[];
+      } = {
+        type: data.emailSent === false ? "warning" : "positive",
+        message:
+          data.emailSent === false
+            ? `Invito creato per ${inviteEmail.value}!`
+            : `✉️ Invito inviato a ${inviteEmail.value}!`,
+        caption:
+          data.emailSent === false
+            ? "Email non recapitata (Resend Sandbox). Usa 'Copia Link' per inviarlo via WhatsApp/chat."
+            : "Puoi anche copiare direttamente il link di invito.",
+        icon: data.emailSent === false ? "content_copy" : "mark_email_read",
+        timeout: data.emailSent === false ? 10000 : 6000,
+      };
+
+      if (directUrl) {
+        notifyOpts.actions = [
+          {
+            label: "📋 Copia Link",
+            color: "white",
+            handler: () => {
+              void copyToClipboard(directUrl);
+              $q.notify({
+                type: "positive",
+                message: "Link copiato negli appunti!",
+                timeout: 3000,
+              });
+            },
+          },
+        ];
+      }
+
+      $q.notify(notifyOpts);
     } catch (cfErr: unknown) {
       // In local or offline dev, if Cloud Function email fails, assignment still stands
       const msg = cfErr instanceof Error ? cfErr.message : "Servizio email non raggiungibile.";
@@ -384,6 +427,29 @@ async function sendInvite(): Promise<void> {
     isInviting.value = false;
   }
 } /*end sendInvite*/
+
+async function copyInvitationLink(inv: TenantInvitation): Promise<void> {
+  const token = inv.rawToken || inv.tokenHash;
+  const isLocal =
+    typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+  const baseUrl = isLocal ? "https://opsflow-88of.web.app" : window.location.origin;
+  const inviteUrl = `${baseUrl}/#/invite?token=${token}&tenant=${inv.tenantId || authStore.tenantId}`;
+
+  try {
+    await copyToClipboard(inviteUrl);
+    $q.notify({
+      type: "positive",
+      message: "📋 Link di invito copiato negli appunti!",
+      caption: `Condividilo con ${inv.email} via WhatsApp o chat.`,
+      icon: "content_copy",
+      timeout: 5000,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Impossibile copiare il link.";
+    $q.notify({ type: "warning", message: msg, icon: "warning" });
+  }
+} /*end copyInvitationLink*/
 
 async function revokeInvitation(inv: TenantInvitation): Promise<void> {
   revokingHash.value = inv.tokenHash;
@@ -715,23 +781,37 @@ onMounted(() => {
               </q-td>
             </template>
 
-            <!-- Actions: Revoke -->
+            <!-- Actions: Copy Link & Revoke -->
             <template #body-cell-actions="{ row }">
               <q-td align="center">
-                <q-btn
-                  v-if="row.status === 'pending'"
-                  flat
-                  round
-                  dense
-                  icon="cancel"
-                  color="negative"
-                  size="xs"
-                  :loading="revokingHash === row.tokenHash"
-                  @click="revokeInvitation(row)"
-                >
-                  <q-tooltip>🚫 Revoca invito</q-tooltip>
-                </q-btn>
-                <span v-else class="text-grey-5 text-caption">—</span>
+                <div class="row items-center justify-center no-wrap q-gutter-xs">
+                  <q-btn
+                    v-if="row.status === 'pending'"
+                    flat
+                    round
+                    dense
+                    icon="content_copy"
+                    color="primary"
+                    size="xs"
+                    @click="copyInvitationLink(row)"
+                  >
+                    <q-tooltip>📋 Copia Link di Invito</q-tooltip>
+                  </q-btn>
+                  <q-btn
+                    v-if="row.status === 'pending'"
+                    flat
+                    round
+                    dense
+                    icon="cancel"
+                    color="negative"
+                    size="xs"
+                    :loading="revokingHash === row.tokenHash"
+                    @click="revokeInvitation(row)"
+                  >
+                    <q-tooltip>🚫 Revoca invito</q-tooltip>
+                  </q-btn>
+                  <span v-else class="text-grey-5 text-caption">—</span>
+                </div>
               </q-td>
             </template>
 

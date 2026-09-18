@@ -533,6 +533,8 @@ export type TenantInvitationStatus = "pending" | "accepted" | "expired" | "revok
 export interface TenantInvitation {
   /** SHA-256 hash of the raw token — also serves as Document ID. */
   tokenHash: string;
+  /** Raw invitation token (optional) stored server-side to allow direct manual link copying. */
+  rawToken?: string;
   tenantId: string;
   /** Email address of the invited user. */
   email: string;
@@ -569,6 +571,18 @@ export interface CreateInvitationPayload {
   taskId?: string;
   taskTitle?: string;
 } /*end CreateInvitationPayload*/
+
+/**
+ * Response payload from createTenantInvitation callable function.
+ */
+export interface CreateInvitationResponse {
+  success: boolean;
+  message: string;
+  inviteUrl?: string;
+  rawToken?: string;
+  tokenHash?: string;
+  emailSent?: boolean;
+} /*end CreateInvitationResponse*/
 
 /**
  * Usage metrics and limits for freemium users (Step 26).
