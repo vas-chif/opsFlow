@@ -381,9 +381,9 @@ const handleSave = async (): Promise<void> => {
 
 <template>
   <q-dialog v-model="isOpen" persistent transition-show="scale" transition-hide="scale">
-    <q-card class="task-settings-card" style="width: 720px; max-width: 95vw">
-      <!-- Header (Elite Navy & Gold) -->
-      <q-card-section class="task-settings-card__header row items-center q-py-md q-px-lg">
+    <q-card class="task-settings-card column no-wrap">
+      <!-- Header (Elite Navy & Gold) - Fixed -->
+      <q-card-section class="task-settings-card__header row items-center q-py-md q-px-lg shrink-0">
         <q-icon name="tune" size="22px" color="amber-5" class="q-mr-sm" />
         <div>
           <div class="text-subtitle1 text-weight-bold text-white">Impostazioni Operative Task</div>
@@ -395,14 +395,14 @@ const handleSave = async (): Promise<void> => {
         <q-btn flat round dense icon="close" color="white" v-close-popup />
       </q-card-section>
 
-      <!-- Navigation Tabs -->
+      <!-- Navigation Tabs - Fixed -->
       <q-tabs
         v-model="activeTab"
         dense
         active-color="amber-9"
         indicator-color="amber-9"
         align="left"
-        class="task-settings-card__tabs text-grey-7 bg-grey-2"
+        class="task-settings-card__tabs text-grey-7 bg-grey-2 shrink-0"
       >
         <!-- Step 21: Tab 1 — Obiettivo & Prompt IA (NEW, prioritario) -->
         <q-tab name="prompt" icon="psychology" label="1. Obiettivo &amp; Prompt IA" no-caps />
@@ -411,11 +411,15 @@ const handleSave = async (): Promise<void> => {
         <q-tab name="sync" icon="cloud_sync" label="4. Master DB &amp; Cronologia" no-caps />
       </q-tabs>
 
-      <q-separator />
+      <q-separator class="shrink-0" />
 
-      <!-- Tab Content -->
-      <q-card-section class="q-pa-lg">
-        <q-tab-panels v-model="activeTab" animated class="bg-transparent">
+      <!-- Tab Content - Scrollable Body -->
+      <q-card-section class="col task-settings-card__body q-pa-none">
+        <q-tab-panels
+          v-model="activeTab"
+          animated
+          class="full-height task-settings-scroll-area custom-scrollbar q-pa-lg bg-transparent"
+        >
           <!-- TAB 0: OBIETTIVO & PROMPT IA (Step 21) -->
           <q-tab-panel name="prompt" class="q-pa-none">
             <div class="text-subtitle2 text-weight-bold text-navy q-mb-xs">
@@ -837,10 +841,10 @@ const handleSave = async (): Promise<void> => {
         </q-tab-panels>
       </q-card-section>
 
-      <q-separator />
+      <q-separator class="shrink-0" />
 
-      <!-- Footer Actions -->
-      <q-card-actions align="right" class="q-pa-md bg-white">
+      <!-- Footer Actions - Fixed at Bottom -->
+      <q-card-actions align="right" class="task-settings-card__footer shrink-0 q-pa-md bg-white">
         <q-btn flat label="Annulla" color="grey-8" no-caps v-close-popup />
         <q-btn
           unelevated
@@ -860,9 +864,17 @@ const handleSave = async (): Promise<void> => {
 
 <style scoped lang="scss">
 .task-settings-card {
-  border-radius: 12px;
+  width: 760px;
+  max-width: 95vw;
+  height: 85vh;
+  max-height: 880px;
+  border-radius: 16px;
   overflow: hidden;
   background: #f9f7f2;
+  box-shadow: 0 20px 60px rgba(10, 35, 66, 0.22);
+  border: 1px solid rgba(197, 160, 101, 0.25);
+  display: flex;
+  flex-direction: column;
 }
 
 .task-settings-card__header {
@@ -872,6 +884,37 @@ const handleSave = async (): Promise<void> => {
 
 .task-settings-card__tabs {
   border-bottom: 1px solid rgba(197, 160, 101, 0.2);
+}
+
+.task-settings-card__body {
+  overflow: hidden;
+  min-height: 0; // Essential for nested flex child scrolling
+}
+
+.task-settings-scroll-area {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  height: 100%;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+    margin: 8px 0;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(197, 160, 101, 0.45);
+    border-radius: 6px;
+    &:hover {
+      background: rgba(197, 160, 101, 0.75);
+    }
+  }
+}
+
+.task-settings-card__footer {
+  background: #ffffff;
+  border-top: 1px solid rgba(10, 35, 66, 0.08);
 }
 
 .border-amber-3 {
