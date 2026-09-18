@@ -85,10 +85,18 @@ async function acceptInvitation(): Promise<void> {
     const functions = getFunctions(app, "europe-west1");
     const acceptFn = httpsCallable<
       { token: string; tenantId: string },
-      { success: boolean; tenantId: string; message: string }
+      {
+        success: boolean;
+        tenantId: string;
+        scope?: "tenant" | "workspace" | "task";
+        workspaceId?: string | null;
+        taskId?: string | null;
+        message: string;
+      }
     >(functions, "acceptTenantInvitation");
 
-    await acceptFn({ token: token.value, tenantId: tenantId.value });
+    const res = await acceptFn({ token: token.value, tenantId: tenantId.value });
+    const data = res.data;
 
     // ✅ PRESCRIZIONE 3 (MANDATORY): Force refresh JWT to load new Custom Claims
     // Without this, Vue Router will block navigation due to stale token without tenantId/role
@@ -104,9 +112,13 @@ async function acceptInvitation(): Promise<void> {
       timeout: 3000,
     });
 
-    // Navigate to workspaces after a brief celebratory delay
+    // Navigate to dashboard / after a brief celebratory delay
     setTimeout(() => {
-      void router.push("/workspaces");
+      if (data.workspaceId) {
+        void router.push(`/?workspace=${data.workspaceId}`);
+      } else {
+        void router.push("/");
+      }
     }, 1500);
   } catch (err: unknown) {
     const message =
@@ -121,6 +133,10 @@ async function acceptInvitation(): Promise<void> {
 function goToLogin(): void {
   void router.push(`/login?redirect=${encodeURIComponent(route.fullPath)}`);
 } /*end goToLogin*/
+
+function goToRegister(): void {
+  void router.push(`/register?redirect=${encodeURIComponent(route.fullPath)}`);
+} /*end goToRegister*/
 </script>
 
 <template>
@@ -218,15 +234,31 @@ function goToLogin(): void {
             <div class="text-body2" style="color: #9aacbe">
               Per accettare l'invito devi prima accedere o creare un account OpsFlow.
             </div>
-            <q-btn
-              unelevated
-              color="primary"
-              label="Accedi o Registrati"
-              icon="login"
-              size="lg"
-              class="full-width invite-cta-btn"
-              @click="goToLogin"
-            />
+            <div class="row q-col-gutter-md full-width">
+              <div class="col-12 col-sm-6">
+                <q-btn
+                  unelevated
+                  color="primary"
+                  label="Accedi"
+                  icon="login"
+                  size="md"
+                  class="full-width invite-cta-btn"
+                  @click="goToLogin"
+                />
+              </div>
+              <div class="col-12 col-sm-6">
+                <q-btn
+                  outline
+                  color="amber-8"
+                  label="Registrati"
+                  icon="person_add"
+                  size="md"
+                  class="full-width"
+                  style="border-radius: 8px"
+                  @click="goToRegister"
+                />
+              </div>
+            </div>
             <div class="text-caption" style="color: #5a7a9b">
               Il link di invito rimarrà valido per 7 giorni.
             </div>

@@ -60,10 +60,10 @@ service cloud.firestore {
     }
 
     match /tenants/{tenantId}/workspaces/{workspaceId} {
-      // Workspace metadata: admin can create/update/delete; users can read
+      // Workspace metadata: admin can create/update/delete; users can read and manage within quota
       allow read: if isActiveAndVerified() && belongsToTenant(tenantId);
-      allow create, update: if isActiveAndVerified() && isAdmin() && belongsToTenant(tenantId);
-      allow delete: if isActiveAndVerified() && isAdmin() && belongsToTenant(tenantId);
+      allow create, update: if isActiveAndVerified() && (isAdmin() || isUser()) && belongsToTenant(tenantId);
+      allow delete: if isActiveAndVerified() && (isAdmin() || isUser()) && belongsToTenant(tenantId);
     }
 
     // Step 19: Scheduled Sourcing Jobs — Principle of Least Privilege (§3 AGENTS.md)
@@ -87,14 +87,14 @@ service cloud.firestore {
     }
 
     match /tenants/{tenantId}/workspaces/{workspaceId}/tasks/{taskId} {
-      // Tasks: all members read/create; admin can delete; immutable fields protected
+      // Tasks: all members read/create; admin and users can delete within quota; immutable fields protected
       allow read: if isActiveAndVerified() && belongsToTenant(tenantId);
       allow create: if isActiveAndVerified() && belongsToTenant(tenantId)
         && (isAdmin() || isUser());
       allow update: if isActiveAndVerified() && belongsToTenant(tenantId)
         && !request.resource.data.diff(resource.data).affectedKeys()
             .hasAny(['createdAt', 'createdBy', 'tenantId']);
-      allow delete: if isActiveAndVerified() && isAdmin() && belongsToTenant(tenantId);
+      allow delete: if isActiveAndVerified() && (isAdmin() || isUser()) && belongsToTenant(tenantId);
     }
 
     match /tenants/{tenantId}/workspaces/{workspaceId}/tasks/{taskId}/{document=**} {
@@ -102,7 +102,7 @@ service cloud.firestore {
       allow read: if isActiveAndVerified() && belongsToTenant(tenantId);
       allow create, update: if isActiveAndVerified() && belongsToTenant(tenantId)
         && (isAdmin() || isUser());
-      allow delete: if isActiveAndVerified() && isAdmin() && belongsToTenant(tenantId);
+      allow delete: if isActiveAndVerified() && (isAdmin() || isUser()) && belongsToTenant(tenantId);
     }
 
     match /tenants/{tenantId}/tasks/{taskId} {

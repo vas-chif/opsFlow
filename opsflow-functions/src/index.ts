@@ -105,7 +105,7 @@ export const setUserRole = onCall(
     const rawAuth = request.auth as { uid: string; token: Record<string, unknown> } | undefined;
 
     // Fase 1.2: validate caller role via JWT middleware — throws if unauthenticated or missing role
-    requireRole(rawAuth, ["superadmin", "admin"]);
+    requireRole(rawAuth, ["superadmin", "admin", "owner"]);
 
     // After requireRole succeeds, rawAuth is guaranteed non-null. Use typed const to avoid !
     const caller = rawAuth as { uid: string; token: Record<string, unknown> };
@@ -126,18 +126,18 @@ export const setUserRole = onCall(
       throw new HttpsError("invalid-argument", "uid, tenantId e role sono obbligatori.");
     }
 
-    // Admin can only assign roles within their own tenant
+    // Admin or Owner can only assign roles within their own tenant
     const callerRole = caller.token.role as string;
-    if (callerRole === "admin" && caller.token.tenantId !== tenantId) {
+    if ((callerRole === "admin" || callerRole === "owner") && caller.token.tenantId !== tenantId) {
       throw new HttpsError(
         "permission-denied",
-        "Un admin può assegnare ruoli solo all'interno del proprio tenant.",
+        "Un admin o owner può assegnare ruoli solo all'interno del proprio tenant.",
       );
     }
 
-    // Admin cannot elevate to superadmin
-    if (callerRole === "admin" && role === "superadmin") {
-      throw new HttpsError("permission-denied", "Un admin non può assegnare il ruolo superadmin.");
+    // Admin or Owner cannot elevate to superadmin
+    if ((callerRole === "admin" || callerRole === "owner") && role === "superadmin") {
+      throw new HttpsError("permission-denied", "Un admin o owner non può assegnare il ruolo superadmin.");
     }
 
     await getAuth().setCustomUserClaims(uid, { tenantId, role, isActive });
@@ -1748,24 +1748,43 @@ async function sendInvitationEmail(params: {
   rawToken: string;
   role: string;
   resendApiKey: string;
+  scope?: "tenant" | "workspace" | "task";
+  workspaceName?: string;
+  taskTitle?: string;
 }): Promise<void> {
   const { Resend } = await import("resend");
   const resend = new Resend(params.resendApiKey);
 
   const inviteUrl = `https://opsflow-88of.web.app/#/invite?token=${params.rawToken}&tenant=${params.tenantId}`;
 
+  let subject = `Sei stato invitato a unirti a ${params.tenantName} su OpsFlow`;
+  let inviteDetails =
+    `Sei stato invitato a unirti all'organizzazione <strong>${params.tenantName}</strong> ` +
+    `con il ruolo <strong>${params.role}</strong>.`;
+
+  if (params.scope === "workspace" && params.workspaceName) {
+    subject = `Sei stato invitato a collaborare al Workspace ${params.workspaceName} su OpsFlow`;
+    inviteDetails =
+      `Sei stato invitato a collaborare al Workspace <strong>${params.workspaceName}</strong> ` +
+      `(Organizzazione: <em>${params.tenantName}</em>) con il ruolo <strong>${params.role}</strong>. ` +
+      "Avrai accesso a tutti i task contenuti in questo workspace.";
+  } else if (params.scope === "task" && params.taskTitle) {
+    subject = `Sei stato invitato a collaborare al Task: ${params.taskTitle} su OpsFlow`;
+    inviteDetails =
+      `Sei stato invitato a collaborare specificamente al Task operativo <strong>${params.taskTitle}</strong> ` +
+      `(Organizzazione: <em>${params.tenantName}</em>) con visibilità dedicata.`;
+  }
+
   await resend.emails.send({
     from: "OpsFlow <onboarding@resend.dev>",
     to: params.toEmail,
-    subject: `Sei stato invitato a unirti a ${params.tenantName} su OpsFlow`,
+    subject,
     html: [
       "<div style=\"font-family:'Mulish',sans-serif;background:#0a2342;",
       "color:#f9f7f2;padding:40px;border-radius:12px;max-width:580px;margin:auto\">",
       "<h1 style=\"color:#c5a065;font-family:'Playfair Display',serif;margin-bottom:8px\">",
       "Benvenuto in OpsFlow &#x1F44B;</h1>",
-      "<p style=\"margin-bottom:24px\">",
-      `Sei stato invitato a unirti all'organizzazione <strong>${params.tenantName}</strong>`,
-      `con il ruolo <strong>${params.role}</strong>.</p>`,
+      `<p style="margin-bottom:24px">${inviteDetails}</p>`,
       `<a href="${inviteUrl}"`,
       "style=\"display:inline-block;background:#c5a065;color:#0a2342;",
       "font-weight:700;padding:14px 32px;border-radius:8px;\"",
@@ -1789,7 +1808,7 @@ async function sendInvitationEmail(params: {
  * Creates a cryptographic invitation token (SHA-256 hash as Firestore document ID)
  * and delivers the invitation email server-side via Resend.
  *
- * @security JWT: admin or superadmin only. Admin restricted to own tenant.
+ * @security JWT: owner, admin or superadmin. Admin/owner restricted to own tenant.
  * @gdpr Audit log written on every invitation issuance (GDPR Art. 30).
  * @performance 1 Firestore write + 1 email send.
  */
@@ -1802,10 +1821,26 @@ export const createTenantInvitation = onCall(
   },
   async (request) => {
     const rawAuth = request.auth as { uid: string; token: Record<string, unknown> } | undefined;
-    requireRole(rawAuth, ["admin", "superadmin"]);
+    requireRole(rawAuth, ["owner", "admin", "superadmin"]);
     const caller = rawAuth as { uid: string; token: Record<string, unknown> };
 
-    const { email, role } = request.data as { email: string; role: "admin" | "user" };
+    const {
+      email,
+      role,
+      scope = "tenant",
+      workspaceId,
+      workspaceName,
+      taskId,
+      taskTitle,
+    } = request.data as {
+      email: string;
+      role: "admin" | "user";
+      scope?: "tenant" | "workspace" | "task";
+      workspaceId?: string;
+      workspaceName?: string;
+      taskId?: string;
+      taskTitle?: string;
+    };
 
     // Input validation
     if (!email || !role) {
@@ -1821,7 +1856,7 @@ export const createTenantInvitation = onCall(
     // Tenant boundary check
     const callerTenantId = caller.token.tenantId as string | undefined;
     const callerRole = caller.token.role as string;
-    if (callerRole === "admin" && !callerTenantId) {
+    if ((callerRole === "admin" || callerRole === "owner") && !callerTenantId) {
       throw new HttpsError("permission-denied", "Tenant non trovato nel token JWT.");
     }
     let tenantId = callerTenantId || "";
@@ -1851,6 +1886,11 @@ export const createTenantInvitation = onCall(
       invitedBy: caller.uid,
       createdAt: now.toISOString(),
       expiresAt: expiresAt.toISOString(),
+      scope,
+      workspaceId: workspaceId || null,
+      workspaceName: workspaceName || null,
+      taskId: taskId || null,
+      taskTitle: taskTitle || null,
     });
 
     // Prescrizione 1: Send email server-side ONLY
@@ -1862,6 +1902,9 @@ export const createTenantInvitation = onCall(
         rawToken,
         role,
         resendApiKey: RESEND_API_KEY.value(),
+        scope,
+        workspaceName,
+        taskTitle,
       });
     } catch (emailErr) {
       // Rollback invitation doc if email fails — atomic consistency
@@ -1880,11 +1923,14 @@ export const createTenantInvitation = onCall(
       tenantId,
       invitedEmail: email, // email allowed in audit — GDPR Art. 30 (traceability)
       role,
+      scope,
+      workspaceId: workspaceId || null,
+      taskId: taskId || null,
       invitedBy: caller.uid,
       timestamp: now.toISOString(),
     });
 
-    logger.info("createTenantInvitation: invitation issued", { tenantId, email, role });
+    logger.info("createTenantInvitation: invitation issued", { tenantId, email, role, scope });
     return { success: true, message: `Invito inviato a ${email} con ruolo ${role}.` };
   },
 ); // end createTenantInvitation
@@ -1933,6 +1979,11 @@ export const acceptTenantInvitation = onCall(
         email: string;
         role: string;
         tenantId: string;
+        scope?: "tenant" | "workspace" | "task";
+        workspaceId?: string;
+        workspaceName?: string;
+        taskId?: string;
+        taskTitle?: string;
       };
 
       // Status check
@@ -1972,6 +2023,34 @@ export const acceptTenantInvitation = onCall(
         isActive: true,
       });
 
+      // If invitation was scoped to a workspace, assign member to workspace
+      if (inv.scope === "workspace" && inv.workspaceId) {
+        const wsRef = db.doc(`tenants/${tenantId}/workspaces/${inv.workspaceId}`);
+        const wsSnap = await tx.get(wsRef);
+        if (wsSnap.exists) {
+          const wsData = wsSnap.data();
+          const currentMembers = (wsData?.assignedMembers as string[]) || [];
+          const identifier = (rawAuth.token.email as string) || inv.email;
+          if (!currentMembers.includes(identifier)) {
+            tx.update(wsRef, { assignedMembers: [...currentMembers, identifier] });
+          }
+        }
+      }
+
+      // If invitation was scoped to a specific task, assign member to task
+      if (inv.scope === "task" && inv.workspaceId && inv.taskId) {
+        const taskRef = db.doc(`tenants/${tenantId}/workspaces/${inv.workspaceId}/tasks/${inv.taskId}`);
+        const taskSnap = await tx.get(taskRef);
+        if (taskSnap.exists) {
+          const taskData = taskSnap.data();
+          const currentMembers = (taskData?.assignedMembers as string[]) || [];
+          const identifier = (rawAuth.token.email as string) || inv.email;
+          if (!currentMembers.includes(identifier)) {
+            tx.update(taskRef, { assignedMembers: [...currentMembers, identifier] });
+          }
+        }
+      }
+
       // Mark invitation as accepted
       tx.update(invitationRef, {
         status: "accepted",
@@ -2003,16 +2082,16 @@ export const acceptTenantInvitation = onCall(
 /**
  * Callable Function: revokeTenantInvitation (Fase 2.3)
  *
- * Allows an Admin to revoke a pending invitation before it is redeemed.
+ * Allows an Admin or Owner to revoke a pending invitation before it is redeemed.
  * Updates status to 'revoked' — invitation can no longer be accepted.
  *
- * @security Admin of the same tenant only.
+ * @security Admin or Owner of the same tenant only.
  */
 export const revokeTenantInvitation = onCall(
   { region: "europe-west1", cors: true, invoker: "public" },
   async (request) => {
     const rawAuth = request.auth as { uid: string; token: Record<string, unknown> } | undefined;
-    requireRole(rawAuth, ["admin", "superadmin"]);
+    requireRole(rawAuth, ["owner", "admin", "superadmin"]);
     const caller = rawAuth as { uid: string; token: Record<string, unknown> };
 
     const { tokenHash, tenantId } = request.data as { tokenHash: string; tenantId: string };
@@ -2023,10 +2102,10 @@ export const revokeTenantInvitation = onCall(
     // Tenant boundary check
     const callerRole = caller.token.role as string;
     const callerTenantId = caller.token.tenantId as string | undefined;
-    if (callerRole === "admin" && callerTenantId !== tenantId) {
+    if ((callerRole === "admin" || callerRole === "owner") && callerTenantId !== tenantId) {
       throw new HttpsError(
         "permission-denied",
-        "Un admin può revocare inviti solo per il proprio tenant.",
+        "Un admin o owner può revocare inviti solo per il proprio tenant.",
       );
     }
 
@@ -2202,7 +2281,7 @@ export const provisionInitialTenant = onCall(
         email: userEmail,
         displayName: (rawAuth.token.name as string) || cleanOrgName,
         tenantId,
-        role: "owner",
+        role: "user",
         isActive: true,
         createdAt: nowIso,
         lastLoginAt: nowIso,
@@ -2217,7 +2296,7 @@ export const provisionInitialTenant = onCall(
       {
         uid,
         email: userEmail,
-        role: "owner",
+        role: "user",
         joinedAt: nowIso,
       },
       { merge: true },
@@ -2237,11 +2316,11 @@ export const provisionInitialTenant = onCall(
 
     await authAdmin.setCustomUserClaims(uid, {
       tenantId,
-      role: "owner",
+      role: "user",
       isActive: true,
     });
 
-    logger.info("provisionInitialTenant: tenant provisioned successfully", {
+    logger.info("provisionInitialTenant: tenant provisioned successfully with user role", {
       uid,
       tenantId,
       cleanOrgName,
