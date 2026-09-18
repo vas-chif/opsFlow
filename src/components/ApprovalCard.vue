@@ -256,6 +256,56 @@ const removeRow = (index: number): void => {
   editableRows.value.splice(index, 1);
 }; /*end removeRow*/
 
+const addColumn = (defaultName?: string): void => {
+  if (editableRows.value.length === 0) {
+    editableRows.value = [["Nuova Colonna"], [""]];
+    return;
+  }
+  const colIndex = (editableRows.value[0]?.length || 0) + 1;
+  const headerName =
+    typeof defaultName === "string" && defaultName.trim()
+      ? defaultName.trim()
+      : `Nuova Colonna ${colIndex}`;
+
+  editableRows.value.forEach((row, idx) => {
+    if (idx === 0) {
+      row.push(headerName);
+    } else {
+      row.push("");
+    }
+  });
+
+  q.notify({
+    type: "positive",
+    message: `Colonna "${headerName}" aggiunta!`,
+    icon: "view_column",
+    timeout: 1000,
+  });
+}; /*end addColumn*/
+
+const removeColumn = (colIdx: number): void => {
+  if (!editableRows.value[0] || editableRows.value[0].length <= 1) {
+    q.notify({
+      type: "warning",
+      message: "Impossibile eliminare l'unica colonna presente.",
+      timeout: 1500,
+    });
+    return;
+  }
+  const colName = String(editableRows.value[0][colIdx] || `Colonna ${colIdx + 1}`);
+  editableRows.value.forEach((row) => {
+    if (row.length > colIdx) {
+      row.splice(colIdx, 1);
+    }
+  });
+  q.notify({
+    type: "info",
+    message: `Colonna "${colName}" eliminata.`,
+    icon: "delete",
+    timeout: 1000,
+  });
+}; /*end removeColumn*/
+
 const onCellInput = (rowIdx: number, cellIdx: number, val: string): void => {
   const row = editableRows.value[rowIdx];
   if (row) {
@@ -481,6 +531,19 @@ const onReject = (): void => {
                 label="Riga"
                 @click="addRow"
               />
+              <q-btn
+                v-if="isEditing"
+                outline
+                dense
+                no-caps
+                size="xs"
+                color="teal-9"
+                icon="add"
+                label="Colonna"
+                @click="addColumn()"
+              >
+                <q-tooltip>Aggiungi colonna</q-tooltip>
+              </q-btn>
             </div>
           </div>
           <div
@@ -509,8 +572,34 @@ const onReject = (): void => {
                 :class="rowIdx === 0 ? 'approval-card__table-header' : ''"
               >
                 <td v-for="(cell, cellIdx) in row" :key="cellIdx" class="approval-card__table-cell">
+                  <div
+                    v-if="isEditing && isPending && rowIdx === 0"
+                    class="row items-center no-wrap q-gutter-xs"
+                  >
+                    <input
+                      :value="cell"
+                      class="approval-card__cell-input col"
+                      :placeholder="`Colonna ${cellIdx + 1}`"
+                      @input="
+                        onCellInput(rowIdx, cellIdx, ($event.target as HTMLInputElement).value)
+                      "
+                    />
+                    <q-btn
+                      v-if="(editableRows[0]?.length || 0) > 1"
+                      flat
+                      round
+                      dense
+                      size="xs"
+                      icon="close"
+                      color="grey-6"
+                      class="hover-negative"
+                      @click.stop="removeColumn(cellIdx)"
+                    >
+                      <q-tooltip>Elimina questa colonna</q-tooltip>
+                    </q-btn>
+                  </div>
                   <input
-                    v-if="isEditing && isPending"
+                    v-else-if="isEditing && isPending"
                     :value="cell"
                     class="approval-card__cell-input"
                     :placeholder="rowIdx === 0 ? `Colonna ${cellIdx + 1}` : ''"
@@ -533,6 +622,11 @@ const onReject = (): void => {
                     @click="removeRow(rowIdx)"
                   />
                 </td>
+                <td
+                  v-else-if="isEditing && isPending && rowIdx === 0"
+                  class="approval-card__table-cell text-center"
+                  style="width: 32px"
+                />
               </tr>
             </tbody>
           </table>
@@ -868,6 +962,21 @@ const onReject = (): void => {
                       class="q-px-sm"
                       @click="addRow"
                     />
+
+                    <q-btn
+                      v-if="isEditing && isPending"
+                      outline
+                      dense
+                      no-caps
+                      size="sm"
+                      color="teal-9"
+                      icon="add"
+                      label="Aggiungi Colonna"
+                      class="q-px-sm"
+                      @click="addColumn()"
+                    >
+                      <q-tooltip>Aggiungi una nuova colonna alla tabella</q-tooltip>
+                    </q-btn>
                   </div>
                 </div>
               </div>
@@ -888,8 +997,38 @@ const onReject = (): void => {
                         :key="cellIdx"
                         class="approval-card__table-cell"
                       >
+                        <div
+                          v-if="isEditing && isPending && rowIdx === 0"
+                          class="row items-center no-wrap q-gutter-xs"
+                        >
+                          <input
+                            :value="cell"
+                            class="approval-card__cell-input col"
+                            :placeholder="`Colonna ${cellIdx + 1}`"
+                            @input="
+                              onCellInput(
+                                rowIdx,
+                                cellIdx,
+                                ($event.target as HTMLInputElement).value,
+                              )
+                            "
+                          />
+                          <q-btn
+                            v-if="(editableRows[0]?.length || 0) > 1"
+                            flat
+                            round
+                            dense
+                            size="xs"
+                            icon="close"
+                            color="grey-6"
+                            class="hover-negative"
+                            @click.stop="removeColumn(cellIdx)"
+                          >
+                            <q-tooltip>Elimina questa colonna</q-tooltip>
+                          </q-btn>
+                        </div>
                         <input
-                          v-if="isEditing && isPending"
+                          v-else-if="isEditing && isPending"
                           :value="cell"
                           class="approval-card__cell-input"
                           @input="
@@ -913,6 +1052,11 @@ const onReject = (): void => {
                           @click="removeRow(rowIdx)"
                         />
                       </td>
+                      <td
+                        v-else-if="isEditing && isPending && rowIdx === 0"
+                        class="approval-card__table-cell text-center"
+                        style="width: 40px"
+                      />
                     </tr>
                   </tbody>
                 </table>
@@ -1203,5 +1347,10 @@ const onReject = (): void => {
   border: 1px solid rgba(197, 160, 101, 0.25);
   border-left: 3px solid #c5a065;
   border-radius: 6px;
+}
+
+.hover-negative:hover {
+  color: var(--q-negative) !important;
+  background: rgba(193, 0, 21, 0.1);
 }
 </style>
