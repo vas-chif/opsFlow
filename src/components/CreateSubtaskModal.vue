@@ -160,13 +160,90 @@ const sourceOptions = computed(() => {
   });
 });
 
-const rowOptions = computed(() => {
+interface SourceOptionItem {
+  label: string;
+  value: string;
+  icon: string;
+  color: string;
+  rowsCount: number;
+}
+
+interface RowOptionItem {
+  label: string;
+  value: number;
+}
+
+const filteredSourceOptions = ref<SourceOptionItem[]>([]);
+
+watch(
+  sourceOptions,
+  (newOpts) => {
+    filteredSourceOptions.value = newOpts;
+  },
+  { immediate: true },
+);
+
+const filterSources = (val: string, update: (callback: () => void) => void): void => {
+  const needle = val.toLowerCase().trim();
+  update(() => {
+    if (!needle) {
+      filteredSourceOptions.value = sourceOptions.value;
+    } else {
+      filteredSourceOptions.value = sourceOptions.value.filter((s) =>
+        s.label.toLowerCase().includes(needle),
+      );
+    }
+  });
+}; /*end filterSources*/
+
+const rowOptions = computed<RowOptionItem[]>(() => {
   if (!activeSource.value) return [];
   return activeSource.value.rows.map((r) => ({
     label: r.label,
     value: r.index,
   }));
 });
+
+const filteredRowOptions = ref<RowOptionItem[]>([]);
+
+watch(
+  rowOptions,
+  (newOpts) => {
+    filteredRowOptions.value = newOpts;
+  },
+  { immediate: true },
+);
+
+const filterRows = (val: string, update: (callback: () => void) => void): void => {
+  if (!activeSource.value) {
+    update(() => {
+      filteredRowOptions.value = [];
+    });
+    return;
+  }
+
+  const needle = val.toLowerCase().trim();
+  update(() => {
+    if (!needle) {
+      filteredRowOptions.value = rowOptions.value;
+    } else {
+      filteredRowOptions.value = activeSource
+        .value!.rows.filter((r) => {
+          const matchLabel = r.label.toLowerCase().includes(needle);
+          const matchCells = r.cells.some((c) =>
+            String(c ?? "")
+              .toLowerCase()
+              .includes(needle),
+          );
+          return matchLabel || matchCells;
+        })
+        .map((r) => ({
+          label: r.label,
+          value: r.index,
+        }));
+    }
+  });
+}; /*end filterRows*/
 
 // ── Extraction Parser Logic ───────────────────────────────────────────────────
 const extractSourcesFromContext = (): void => {
@@ -466,7 +543,7 @@ const handleSelectSource = (sourceId: string): void => {
   }
 }; /*end handleSelectSource*/
 
-const handleSelectRow = (rowIndex: number): void => {
+const handleSelectRow = (rowIndex: number | null): void => {
   selectedRowIndex.value = rowIndex;
 }; /*end handleSelectRow*/
 
@@ -739,15 +816,23 @@ const handleSubmitManual = async (): Promise<void> => {
             >
               <q-select
                 v-model="selectedSourceId"
-                :options="sourceOptions"
+                :options="filteredSourceOptions"
                 emit-value
                 map-options
                 dense
                 outlined
+                use-input
+                input-debounce="0"
+                fill-input
+                hide-selected
                 bg-color="white"
                 label="Origine Dati / Tabella"
+                @filter="filterSources"
                 @update:model-value="handleSelectSource"
               >
+                <template #prepend>
+                  <q-icon name="search" size="18px" color="primary" />
+                </template>
                 <template #option="scope">
                   <q-item v-bind="scope.itemProps" dense>
                     <q-item-section avatar style="min-width: 28px">
@@ -760,22 +845,46 @@ const handleSubmitManual = async (): Promise<void> => {
                     </q-item-section>
                   </q-item>
                 </template>
+                <template #no-option>
+                  <q-item dense>
+                    <q-item-section class="text-grey-6 text-caption">
+                      Nessuna tabella o sorgente trovata
+                    </q-item-section>
+                  </q-item>
+                </template>
               </q-select>
             </div>
 
-            <!-- Row Selector (only if multiple rows exist) -->
+            <!-- Row Selector (only if multiple rows exist) with Live Search Bar -->
             <div v-if="activeSource && activeSource.rows.length > 1" class="col-12 col-sm-6">
               <q-select
                 v-model="selectedRowIndex"
-                :options="rowOptions"
+                :options="filteredRowOptions"
                 emit-value
                 map-options
                 dense
                 outlined
+                use-input
+                input-debounce="0"
+                clearable
+                fill-input
+                hide-selected
                 bg-color="white"
-                label="Seleziona Riga / Candidato"
+                label="Cerca e Seleziona Riga / Candidato"
+                @filter="filterRows"
                 @update:model-value="handleSelectRow"
-              />
+              >
+                <template #prepend>
+                  <q-icon name="search" size="18px" color="primary" />
+                </template>
+                <template #no-option>
+                  <q-item dense>
+                    <q-item-section class="text-grey-6 text-caption">
+                      Nessun candidato o riga trovata con questo testo
+                    </q-item-section>
+                  </q-item>
+                </template>
+              </q-select>
             </div>
           </div>
 
