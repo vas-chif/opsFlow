@@ -193,3 +193,24 @@ Accessibile mediante il pulsante `[ ⚙️ ]` integrato nell'header di `TaskChat
 - **Modalità Espansa a Schermo Intero:** Pulsante `[ ↗ Espandi ]` per visualizzare le bozze Gmail e le tabelle di preview Google Sheets in un dialog Quasar ad alta leggibilità, ottimizzato per audit complessi.
 - **Modifica Preventiva dei Dati:** L'operatore può modificare oggetto, destinatari e corpo per le email Gmail, oppure inserire/modificare singole celle e righe per i fogli Google prima di dare l'approvazione finale.
 - **Idempotenza & Risoluzione Conflitti:** La Cloud Function `resolveApproval` verifica lo stato del record: se l'azione è già stata approvata o rifiutata da un altro click, restituisce `{ success: true, alreadyResolved: true }` prevenendo errori 409 (Conflict) o crash della UI.
+
+---
+
+## 🔄 7. Dual-Mode AI Task Architect & In-Context Subtask Regeneration
+
+### 7.1 Architettura a Componente Unico Condiviso (`AITaskArchitectModal.vue`)
+
+Per rispettare il principio DRY (Don't Repeat Yourself) e le direttive [AGENTS.md](file:///home/chif-vas/projects/opsflow/AGENTS.md), il componente `AITaskArchitectModal.vue` supporta due distinte modalità operative tramite prop opzionale `existingTask`:
+
+1. **Modalità "Creazione Nuovo Task" (`existingTask == null`):**
+   - Invocato dalla Dashboard del Workspace (`src/pages/index.vue`).
+   - Trasforma un appunto grezzo o un'email in una nuova scheda task (`taskStore.createTask`).
+   - Titolo: _"✨ AI Task Architect | Intelligent Decomposition & Operational Sheet"_.
+   - Azione finale: crea un nuovo record su Firestore con `modelVersion: "gemini-3.6-flash"`.
+
+2. **Modalità "Rigenerazione Sotto-Task per Task Aperto" (`existingTask != null`):**
+   - Invocato da `TaskSettingsModal.vue` (click su _"✨ Rigenera"_) o dal pannello laterale di `TaskChatWindow.vue`.
+   - Pre-popola il prompt e le sotto-task attuali, permettendo all'operatore di raffinare l'obiettivo operativo.
+   - Titolo: _"✨ AI Task Architect — Rigenera Sotto-Task | Task: [Titolo]"_.
+   - Azione finale: invoca `taskStore.updateTask(workspaceId, existingTask.id, { aiMetadata: { ...subtasks } })` aggiornando **in-place** il task attivo senza creare record duplicati o causare perdite di contesto.
+   - Reattività immediata: `TaskChatWindow.vue` intercetta l'evento `taskUpdated` aggiornando istantaneamente l'interfaccia utente (sotto-task operative, indicatori di completamento e timeline).

@@ -45,6 +45,7 @@ const emit = defineEmits<{
   (e: "update:modelValue", val: boolean): void;
   (e: "saved"): void;
   (e: "openScheduleModal"): void;
+  (e: "openRegenerateModal", payload: { prompt: string; title: string; category: string }): void;
 }>();
 
 const q = useQuasar();
@@ -308,6 +309,18 @@ const loadWorkspaceSignature = (): void => {
   }
 }; /*end loadWorkspaceSignature*/
 
+const handleTriggerRegenerate = (): void => {
+  emit("openRegenerateModal", {
+    prompt: editPrompt.value.trim() || props.task.description || "",
+    title: editTitle.value.trim() || props.task.title,
+    category:
+      editCategory.value.trim() ||
+      props.task.aiMetadata?.suggestedCategory ||
+      (props.task as { category?: string }).category ||
+      "general",
+  });
+}; /*end handleTriggerRegenerate*/
+
 const handleSave = async (): Promise<void> => {
   if (!props.workspace || isSaving.value) return;
   isSaving.value = true;
@@ -516,7 +529,7 @@ const handleSave = async (): Promise<void> => {
                   label="Rigenera"
                   :loading="isReplanningSubtasks"
                   class="q-ml-md"
-                  @click="emit('openScheduleModal')"
+                  @click="handleTriggerRegenerate"
                 >
                   <q-tooltip>Ri-decompone il task aggiornato con AgentePlanner</q-tooltip>
                 </q-btn>

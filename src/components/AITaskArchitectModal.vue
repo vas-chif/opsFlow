@@ -15,7 +15,7 @@ import { ref, computed, watch } from "vue";
 import { useQuasar } from "quasar";
 
 // ── Types ────────────────────────────────────────────────────────────────────
-import type { RefinedTaskDraft } from "@/types/models";
+import type { RefinedTaskDraft, Task } from "@/types/models";
 
 // ── Stores ───────────────────────────────────────────────────────────────────
 import { useTaskStore } from "@/stores/taskStore";
@@ -24,13 +24,16 @@ import { useTaskStore } from "@/stores/taskStore";
 const props = defineProps<{
   modelValue: boolean;
   workspaceId: string;
-  /** Optional: pre-populate rawDraft (e.g. when opened from inline chip). */
+  /** Optional: pre-populate rawDraft (e.g. when opened from inline chip or task settings). */
   initialDraft?: string;
+  /** Optional: existing task to regenerate subtasks for (in-context update mode). */
+  existingTask?: Task | null;
 }>();
 
 const emit = defineEmits<{
   (e: "update:modelValue", value: boolean): void;
   (e: "taskCreated"): void;
+  (e: "taskUpdated", task: Task): void;
 }>();
 
 // ── Store & Quasar ───────────────────────────────────────────────────────────
@@ -42,12 +45,39 @@ const rawDraft = ref("");
 const refinedDraft = ref<RefinedTaskDraft | null>(null);
 const isSaving = ref(false);
 
-// Pre-populate rawDraft when modal opens with initialDraft prop (§4.2 chip inline)
+// Dual-Mode flag: true if regenerating an already open task
+const isRegenerateMode = computed<boolean>(() => !!props.existingTask);
+
+// Pre-populate rawDraft and fields when modal opens
 watch(
   () => props.modelValue,
   (open) => {
-    if (open && props.initialDraft) {
-      rawDraft.value = props.initialDraft;
+    if (open) {
+      if (props.initialDraft) {
+        rawDraft.value = props.initialDraft;
+      } else if (props.existingTask) {
+        rawDraft.value = props.existingTask.description || props.existingTask.title || "";
+      }
+
+      if (props.existingTask) {
+        editableTitle.value = props.existingTask.title || "";
+        editableDescription.value = props.existingTask.description || "";
+        if (props.existingTask.aiMetadata?.suggestedCategory) {
+          editableCategory.value = props.existingTask.aiMetadata
+            .suggestedCategory as typeof editableCategory.value;
+        }
+        if (
+          props.existingTask.aiMetadata?.subtasks &&
+          props.existingTask.aiMetadata.subtasks.length > 0
+        ) {
+          editableSubtasks.value = props.existingTask.aiMetadata.subtasks.map((st) => ({
+            order: st.order,
+            title: st.title,
+            description: st.description,
+            selected: true,
+          }));
+        }
+      }
     }
   },
 );
@@ -216,6 +246,63 @@ async function handleCreateTask(): Promise<void> {
   }
 } /*end handleCreateTask*/
 
+async function handleUpdateExistingTask(): Promise<void> {
+  if (!props.existingTask || !editableTitle.value.trim()) {
+    $q.notify({ type: "warning", message: "Task title is required." });
+    return;
+  }
+
+  isSaving.value = true;
+  try {
+    const selectedSubtasks = editableSubtasks.value
+      .filter((st) => st.selected)
+      .map(({ selected: _s, ...rest }) => ({
+        ...rest,
+        id: `st_${rest.order}`,
+        completed: false,
+        createdAt: new Date() as Date | null,
+      }));
+
+    const updatedAiMetadata = {
+      ...props.existingTask.aiMetadata,
+      suggestedCategory: editableCategory.value,
+      complexityScore: props.existingTask.aiMetadata?.complexityScore ?? 6,
+      confidence: 0.9,
+      modelVersion: "gemini-3.6-flash",
+      lastAnalyzed: new Date(),
+      subtasks: selectedSubtasks,
+    };
+
+    const updates: Partial<Task> = {
+      title: editableTitle.value.trim(),
+      description: editableDescription.value.trim(),
+      aiMetadata: updatedAiMetadata as Task["aiMetadata"],
+    };
+
+    await taskStore.updateTask(props.workspaceId, props.existingTask.id, updates);
+
+    $q.notify({
+      type: "positive",
+      message: `Sotto-task del task "${editableTitle.value}" rigenerate con successo!`,
+      icon: "auto_awesome",
+    });
+
+    const updatedTaskObject: Task = {
+      ...props.existingTask,
+      ...updates,
+      aiMetadata: updatedAiMetadata as Task["aiMetadata"],
+    };
+
+    emit("taskUpdated", updatedTaskObject);
+    emit("update:modelValue", false);
+    resetModal();
+  } catch {
+    $q.notify({ type: "negative", message: "Errore durante l'aggiornamento del task." });
+  } finally {
+    isSaving.value = false;
+  }
+} /*end handleUpdateExistingTask*/
+
 function handleClose(): void {
   emit("update:modelValue", false);
   resetModal();
@@ -237,9 +324,19 @@ function handleClose(): void {
         <div class="row items-center q-gutter-sm">
           <q-icon name="auto_awesome" color="gold" size="28px" />
           <div>
-            <div class="text-h6 text-weight-bold">✨ AI Task Architect</div>
+            <div class="text-h6 text-weight-bold">
+              {{
+                isRegenerateMode
+                  ? "✨ AI Task Architect — Rigenera Sotto-Task"
+                  : "✨ AI Task Architect"
+              }}
+            </div>
             <div class="text-caption text-gold-light">
-              Intelligent Decomposition &amp; Operational Sheet (Gemini 3.6 Flash)
+              {{
+                isRegenerateMode
+                  ? `Task: ${props.existingTask?.title || "Attivo"} | Intelligent Decomposition`
+                  : "Intelligent Decomposition & Operational Sheet"
+              }}
             </div>
           </div>
         </div>
@@ -249,20 +346,35 @@ function handleClose(): void {
       <!-- ── Card Body Light ─────────────────────────────────────────── -->
       <q-card-section class="q-pa-md">
         <div class="text-body2 text-grey-8 q-mb-sm">
-          Incolla l'email o la richiesta grezza ricevuta dal cliente o fornitore (il
-          <strong>COSA CERCARE / ESEGUIRE</strong>). Gemini estrarrà automaticamente il
-          <strong>Titolo</strong>, la <strong>Categoria</strong>, la <strong>Priorità</strong> e la
-          <strong>Checklist di Sotto-Task</strong> operative progressive.
+          <template v-if="isRegenerateMode">
+            Verifica o adatta il prompt/obiettivo per questo task già aperto. AgentePlanner
+            analizzerà la richiesta ed estrarrà la <strong>nuova Checklist di Sotto-Task</strong>
+            operative senza creare task duplicati.
+          </template>
+          <template v-else>
+            Incolla l'email o la richiesta grezza ricevuta dal cliente o fornitore (il
+            <strong>COSA CERCARE / ESEGUIRE</strong>). Gemini estrarrà automaticamente il
+            <strong>Titolo</strong>, la <strong>Categoria</strong>, la <strong>Priorità</strong> e
+            la <strong>Checklist di Sotto-Task</strong> operative progressive.
+          </template>
         </div>
 
         <div
           class="text-caption text-primary q-mb-md bg-blue-1 q-pa-sm rounded-borders row items-center justify-between"
         >
           <div class="row items-center q-gutter-xs">
-            <q-icon name="mail_outline" color="primary" size="20px" />
-            <span class="text-weight-bold"
-              >Elaborazione Intelligente da Email &amp; Testo Grezzo</span
-            >
+            <q-icon
+              :name="isRegenerateMode ? 'sync' : 'mail_outline'"
+              color="primary"
+              size="20px"
+            />
+            <span class="text-weight-bold">
+              {{
+                isRegenerateMode
+                  ? "Rigenerazione Contestuale del Task Aperto"
+                  : "Elaborazione Intelligente da Email & Testo Grezzo"
+              }}
+            </span>
           </div>
           <span class="text-caption text-grey-7"
             >Zero-Allucinazione: tariffe o disponibilità mancanti vengono catalogate come GAP da
@@ -270,8 +382,8 @@ function handleClose(): void {
           >
         </div>
 
-        <!-- Quick Templates -->
-        <div class="q-mb-md">
+        <!-- Quick Templates (solo per nuovi task) -->
+        <div v-if="!isRegenerateMode" class="q-mb-md">
           <div class="text-caption text-weight-bold text-grey-7 q-mb-xs">
             Oppure seleziona un esempio rapido:
           </div>
@@ -297,7 +409,11 @@ function handleClose(): void {
           rows="4"
           outlined
           dense
-          placeholder="Incolla qui l'email del cliente o l'appunto grezzo (es. 'Buongiorno, cerchiamo con urgenza un docente Camunda a Milano per fine mese. Non abbiamo budget concordato: potete mandarci disponibilità e profili?')..."
+          :placeholder="
+            isRegenerateMode
+              ? 'Rivedi o adatta il prompt del task per guidare AgentePlanner nella decomposizione delle sotto-task...'
+              : 'Incolla qui l\'email del cliente o l\'appunto grezzo (es. \'Buongiorno, cerchiamo con urgenza un docente Camunda a Milano per fine mese. Non abbiamo budget concordato: potete mandarci disponibilità e profili?\')...'
+          "
           class="q-mb-md"
         />
 
@@ -307,7 +423,9 @@ function handleClose(): void {
             unelevated
             rounded
             icon="auto_awesome"
-            label="GENERATE TASK STRUCTURE WITH AI"
+            :label="
+              isRegenerateMode ? 'RIGENERA SOTTO-TASK CON AI' : 'GENERATE TASK STRUCTURE WITH AI'
+            "
             :loading="taskStore.isRefiningTaskDraft"
             :disable="rawDraft.trim().length < 5"
             @click="handleRefine"
@@ -446,7 +564,18 @@ function handleClose(): void {
           @click="refinedDraft = null"
         />
         <q-btn
-          v-if="refinedDraft"
+          v-if="refinedDraft && isRegenerateMode"
+          color="primary"
+          unelevated
+          rounded
+          icon="auto_awesome"
+          label="Aggiorna Sotto-Task del Task Attivo"
+          :loading="isSaving"
+          :disable="!editableTitle.trim()"
+          @click="handleUpdateExistingTask"
+        />
+        <q-btn
+          v-else-if="refinedDraft"
           color="positive"
           unelevated
           rounded

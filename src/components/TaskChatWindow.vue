@@ -27,6 +27,7 @@ import {
 
 // ── Types ────────────────────────────────────────────────────────────────────
 import type {
+  Task,
   TaskStatus,
   TaskKeyPoint,
   KeyPointCategory,
@@ -56,6 +57,7 @@ import TaskSettingsModal from "./TaskSettingsModal.vue";
 import ScheduleTaskModal from "./ScheduleTaskModal.vue";
 import SubTaskEntityModal from "./SubTaskEntityModal.vue";
 import CreateSubtaskModal from "./CreateSubtaskModal.vue";
+import AITaskArchitectModal from "./AITaskArchitectModal.vue";
 
 const props = defineProps<{
   windowState: FloatingWindow;
@@ -176,6 +178,8 @@ const initialPos = ref({ x: 0, y: 0 });
 const isExpanded = ref(false);
 const showTaskSettingsModal = ref<boolean>(false);
 const showScheduleModal = ref<boolean>(false);
+const showRegenerateTaskModal = ref<boolean>(false);
+const regenerateDraft = ref<string>("");
 const isResizing = ref(false);
 const resizeStart = ref({ x: 0, y: 0, w: 0, h: 0 });
 
@@ -1569,6 +1573,23 @@ const handleDecomposeExistingTask = async (): Promise<void> => {
   }
 }; /*end handleDecomposeExistingTask*/
 
+const handleOpenRegenerateModal = (payload?: {
+  prompt?: string;
+  title?: string;
+  category?: string;
+}): void => {
+  regenerateDraft.value = payload?.prompt || task.value?.description || task.value?.title || "";
+  showTaskSettingsModal.value = false;
+  showRegenerateTaskModal.value = true;
+}; /*end handleOpenRegenerateModal*/
+
+const handleTaskRegenerated = (updatedTask: Task): void => {
+  if (props.windowState.task) {
+    Object.assign(props.windowState.task, updatedTask);
+  }
+  taskStore.fetchTasks();
+}; /*end handleTaskRegenerated*/
+
 const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
   const currentTask = task.value;
   if (!currentTask || !currentTask.aiMetadata?.subtasks) return;
@@ -2218,8 +2239,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                   icon="auto_awesome"
                   label="✨ Scomponi in Sotto-Task con AI Architect"
                   class="full-width rounded-borders text-caption text-weight-bold"
-                  :loading="isDecomposing"
-                  @click="handleDecomposeExistingTask"
+                  @click="handleOpenRegenerateModal()"
                 >
                   <q-tooltip
                     >Analizza e genera automaticamente le sotto-task operative con Gemini</q-tooltip
@@ -3180,6 +3200,17 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
       :workspace="workspace"
       @saved="taskStore.fetchTasks()"
       @open-schedule-modal="showScheduleModal = true"
+      @open-regenerate-modal="handleOpenRegenerateModal"
+    />
+
+    <!-- AI Task Architect Modal for in-context subtask regeneration -->
+    <AITaskArchitectModal
+      v-if="task && workspace"
+      v-model="showRegenerateTaskModal"
+      :workspace-id="workspace.id"
+      :existing-task="task"
+      :initial-draft="regenerateDraft"
+      @task-updated="handleTaskRegenerated"
     />
 
     <!-- Step 19: Schedule Sourcing Modal -->
