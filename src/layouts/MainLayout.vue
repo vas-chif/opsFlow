@@ -37,6 +37,7 @@ import type { ChatMsg } from "@/types/chat";
 
 // ── Components ───────────────────────────────────────────────────────────────
 import DeleteAccountDialog from "@/components/DeleteAccountDialog.vue";
+import TeamMembersPanel from "@/components/TeamMembersPanel.vue";
 
 // ── Composables ──────────────────────────────────────────────────────────────
 const route = useRoute();
@@ -385,6 +386,18 @@ const sendChatMessage = async (): Promise<void> => {
 }; /*end sendChatMessage*/
 
 const handleCreateWorkspace = (): void => {
+  const quotaCheck = taskStore.canCreateWorkspace(authStore.role);
+  if (!quotaCheck.allowed) {
+    q.dialog({
+      title: "⚠️ Limite Piano Free Raggiunto",
+      message:
+        quotaCheck.reason ||
+        "Gli utenti con piano Free possono creare al massimo 1 Workspace. Per creare più workspace, passa ad un piano Pro o richiedi l'accesso al tuo Admin.",
+      ok: { label: "Ho capito", color: "primary" },
+    });
+    return;
+  }
+
   q.dialog({
     title: "New Workspace",
     message: "Enter the name for the new workspace:",
@@ -494,16 +507,14 @@ const confirmGroupWorkspace = async (): Promise<void> => {
   }
 }; /*end confirmGroupWorkspace*/
 
-const shareWorkspace = (ws: Workspace): void => {
-  const url = `${window.location.origin}/#/workspace/${ws.id}`;
-  navigator.clipboard.writeText(url);
-  q.notify({
-    type: "positive",
-    message: "Workspace link copied to clipboard",
-    position: "top",
-    icon: "share",
-  });
-}; /*end shareWorkspace*/
+// Step 26: Team Member Invitation Modal
+const inviteModalOpen = ref(false);
+const inviteModalWorkspace = ref<Workspace | null>(null);
+
+const openInviteWorkspaceModal = (ws: Workspace): void => {
+  inviteModalWorkspace.value = ws;
+  inviteModalOpen.value = true;
+}; /*end openInviteWorkspaceModal*/
 
 const openDeleteDialog = (ws: Workspace): void => {
   workspaceTarget.value = ws;
@@ -779,11 +790,11 @@ const confirmDeleteWorkspace = async (): Promise<void> => {
                       <q-item-section>Group</q-item-section>
                     </q-item>
 
-                    <q-item clickable @click="shareWorkspace(ws)">
+                    <q-item clickable @click="openInviteWorkspaceModal(ws)">
                       <q-item-section avatar style="min-width: 28px">
-                        <q-icon name="share" size="xs" color="info" />
+                        <q-icon name="person_add" size="xs" color="primary" />
                       </q-item-section>
-                      <q-item-section>Share</q-item-section>
+                      <q-item-section>Aggiungi Persona</q-item-section>
                     </q-item>
 
                     <q-separator class="q-my-xs" />
@@ -1164,6 +1175,20 @@ const confirmDeleteWorkspace = async (): Promise<void> => {
         <div class="row justify-end q-mt-lg">
           <q-btn color="primary" label="Close" no-caps v-close-popup />
         </div>
+      </q-card>
+    </q-dialog>
+
+    <!-- Step 26: Team Member Invitation & Assignment Modal (Workspace Scoped) -->
+    <q-dialog v-model="inviteModalOpen" persistent>
+      <q-card style="min-width: 650px; max-width: 960px; width: 92vw" class="rounded-borders">
+        <TeamMembersPanel
+          v-if="inviteModalWorkspace"
+          scope="workspace"
+          :workspace-id="inviteModalWorkspace.id"
+          :workspace-name="inviteModalWorkspace.name"
+          is-dialog
+          @close="inviteModalOpen = false"
+        />
       </q-card>
     </q-dialog>
 

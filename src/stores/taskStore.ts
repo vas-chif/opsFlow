@@ -37,7 +37,11 @@ import type {
   CreateTaskPayload,
   CreateWorkspacePayload,
   RefinedTaskDraft,
+  UserUsageQuota,
 } from "@/types/models";
+
+// ── Stores ───────────────────────────────────────────────────────────────────
+import { useAuthStore } from "@/stores/authStore";
 
 // ── Composables ──────────────────────────────────────────────────────────────
 import { useFirestore } from "@/composables/useFirestore";
@@ -45,7 +49,7 @@ import { useFirestore } from "@/composables/useFirestore";
 // ── Utils ────────────────────────────────────────────────────────────────────
 // (none)
 
-// ── Stores ───────────────────────────────────────────────────────────────────
+// ── Components ───────────────────────────────────────────────────────────────
 // (none)
 
 /**
@@ -61,6 +65,33 @@ interface TaskState {
   isRefiningTaskDraft: boolean;
   error: string | null;
 } /*end TaskState*/
+
+const USER_QUOTA_PREFIX = "opsflow_user_quota_";
+
+function loadCachedUserQuota(uid?: string): UserUsageQuota {
+  if (!uid) return { createdTasksTotal: 0, deletedTasksCount: 0 };
+  try {
+    const raw = localStorage.getItem(`${USER_QUOTA_PREFIX}${uid}`);
+    if (!raw) return { createdTasksTotal: 0, deletedTasksCount: 0 };
+    const parsed = JSON.parse(raw) as UserUsageQuota;
+    return {
+      createdTasksTotal:
+        typeof parsed.createdTasksTotal === "number" ? parsed.createdTasksTotal : 0,
+      deletedTasksCount:
+        typeof parsed.deletedTasksCount === "number" ? parsed.deletedTasksCount : 0,
+    };
+  } catch {
+    return { createdTasksTotal: 0, deletedTasksCount: 0 };
+  }
+} /*end loadCachedUserQuota*/
+
+function saveCachedUserQuota(uid: string, quota: UserUsageQuota): void {
+  try {
+    localStorage.setItem(`${USER_QUOTA_PREFIX}${uid}`, JSON.stringify(quota));
+  } catch {
+    // Ignore storage quota errors
+  }
+} /*end saveCachedUserQuota*/
 
 /**
  * Default AI metadata for new tasks.
@@ -243,8 +274,18 @@ export const useTaskStore = defineStore("tasks", {
 
       try {
         const docs = await firestore.getTenantDocs<Workspace>(firestore.COLLECTIONS.WORKSPACES);
-        this.workspaces = docs;
-        saveCachedWorkspaces(docs);
+        const authStore = useAuthStore();
+        let visibleWorkspaces = docs;
+        if (authStore.role === "user" && authStore.user) {
+          const userEmail = authStore.user.email;
+          const userUid = authStore.user.uid;
+          visibleWorkspaces = docs.filter((ws) => {
+            if (!ws.assignedMembers || ws.assignedMembers.length === 0) return true;
+            return ws.assignedMembers.includes(userEmail) || ws.assignedMembers.includes(userUid);
+          });
+        }
+        this.workspaces = visibleWorkspaces;
+        saveCachedWorkspaces(visibleWorkspaces);
       } catch (err) {
         this.error = err instanceof Error ? err.message : "Failed to fetch workspaces";
         throw err;
@@ -282,8 +323,32 @@ export const useTaskStore = defineStore("tasks", {
           }
         }
 
+        // Step 26: Scoped visibility for 'user' role (Workspace vs Single Task access)
+        const authStore = useAuthStore();
+        let visibleTasks = allTasks;
+        if (authStore.role === "user" && authStore.user) {
+          const userEmail = authStore.user.email;
+          const userUid = authStore.user.uid;
+          const currentWs = this.workspaces.find((w) => w.id === workspaceId);
+          const isWorkspaceMember =
+            !currentWs?.assignedMembers ||
+            currentWs.assignedMembers.length === 0 ||
+            currentWs.assignedMembers.includes(userEmail) ||
+            currentWs.assignedMembers.includes(userUid);
+
+          if (!isWorkspaceMember) {
+            // Task-scoped collaborator: user only sees tasks where they are explicitly assigned
+            visibleTasks = allTasks.filter(
+              (t) =>
+                t.assignedTo === userUid ||
+                (t.assignedMembers &&
+                  (t.assignedMembers.includes(userEmail) || t.assignedMembers.includes(userUid))),
+            );
+          }
+        }
+
         // Update local state for this workspace
-        this.tasks = this.tasks.filter((t) => t.workspaceId !== workspaceId).concat(allTasks);
+        this.tasks = this.tasks.filter((t) => t.workspaceId !== workspaceId).concat(visibleTasks);
       } catch (err) {
         this.error = err instanceof Error ? err.message : "Failed to fetch workspace tasks";
         throw err;
@@ -347,6 +412,13 @@ export const useTaskStore = defineStore("tasks", {
      */
     async createTask(draft: CreateTaskPayload & { workspaceId: string }): Promise<string> {
       const firestore = useFirestore();
+      const authStore = useAuthStore();
+
+      // Step 26: Freemium Quota Check
+      const quotaCheck = this.canCreateTask(authStore.role, authStore.user?.uid);
+      if (!quotaCheck.allowed) {
+        throw new Error(quotaCheck.reason || "Quota limite per i task raggiunta.");
+      }
 
       this.isLoading = true;
       this.error = null;
@@ -365,6 +437,7 @@ export const useTaskStore = defineStore("tasks", {
           status,
           assignedTo,
           aiMetadata,
+          assignedMembers: draft.assignedMembers ?? [],
         });
 
         const newTask: Task = {
@@ -373,6 +446,7 @@ export const useTaskStore = defineStore("tasks", {
           workspaceId: draft.workspaceId,
           status,
           assignedTo,
+          assignedMembers: draft.assignedMembers ?? [],
           aiMetadata,
           id: taskId,
           tenantId: "",
@@ -381,6 +455,9 @@ export const useTaskStore = defineStore("tasks", {
         } as Task;
 
         this.tasks.push(newTask);
+        if (authStore.user?.uid) {
+          this.incrementCreatedTasks(authStore.user.uid);
+        }
         return taskId;
       } catch (err) {
         this.error = err instanceof Error ? err.message : "Failed to create task";
@@ -686,6 +763,7 @@ export const useTaskStore = defineStore("tasks", {
      */
     async deleteTask(workspaceId: string, taskId: string): Promise<void> {
       const firestore = useFirestore();
+      const authStore = useAuthStore();
 
       this.isLoading = true;
       this.error = null;
@@ -693,6 +771,9 @@ export const useTaskStore = defineStore("tasks", {
       try {
         await firestore.deleteWorkspaceTaskDoc(workspaceId, taskId);
         this.tasks = this.tasks.filter((t) => t.id !== taskId);
+        if (authStore.user?.uid) {
+          this.incrementDeletedTasks(authStore.user.uid);
+        }
       } catch (err) {
         this.error = err instanceof Error ? err.message : "Failed to delete task";
         throw err;
@@ -814,6 +895,13 @@ export const useTaskStore = defineStore("tasks", {
      */
     async createWorkspace(draft: CreateWorkspacePayload): Promise<string> {
       const firestore = useFirestore();
+      const authStore = useAuthStore();
+
+      // Step 26: Freemium Quota Check
+      const quotaCheck = this.canCreateWorkspace(authStore.role);
+      if (!quotaCheck.allowed) {
+        throw new Error(quotaCheck.reason || "Quota limite per i workspace raggiunta.");
+      }
 
       this.isLoading = true;
       this.error = null;
@@ -826,6 +914,9 @@ export const useTaskStore = defineStore("tasks", {
         };
         if (draft.icon !== undefined) {
           workspaceData.icon = draft.icon;
+        }
+        if (draft.assignedMembers !== undefined) {
+          workspaceData.assignedMembers = draft.assignedMembers;
         }
 
         const workspaceId = await firestore.addTenantDoc<
@@ -842,6 +933,9 @@ export const useTaskStore = defineStore("tasks", {
         };
         if (draft.icon !== undefined) {
           newWorkspace.icon = draft.icon;
+        }
+        if (draft.assignedMembers !== undefined) {
+          newWorkspace.assignedMembers = draft.assignedMembers;
         }
 
         this.workspaces.push(newWorkspace);
@@ -901,6 +995,138 @@ export const useTaskStore = defineStore("tasks", {
         this.isLoading = false;
       }
     } /*end deleteWorkspace*/,
+
+    // ── Step 26: User Quota & Freemium Governance ─────────────────────────────
+    getUserQuota(uid?: string): UserUsageQuota {
+      return loadCachedUserQuota(uid);
+    } /*end getUserQuota*/,
+
+    incrementCreatedTasks(uid?: string): void {
+      if (!uid) return;
+      const q = loadCachedUserQuota(uid);
+      q.createdTasksTotal += 1;
+      saveCachedUserQuota(uid, q);
+    } /*end incrementCreatedTasks*/,
+
+    incrementDeletedTasks(uid?: string): void {
+      if (!uid) return;
+      const q = loadCachedUserQuota(uid);
+      q.deletedTasksCount += 1;
+      saveCachedUserQuota(uid, q);
+    } /*end incrementDeletedTasks*/,
+
+    canCreateWorkspace(role: string): { allowed: boolean; reason?: string } {
+      if (role === "owner" || role === "superadmin") {
+        return { allowed: true };
+      }
+      if (role === "admin") {
+        return { allowed: true };
+      }
+      // Role 'user' (Free tier)
+      if (this.workspaces.length >= 1) {
+        return {
+          allowed: false,
+          reason:
+            "Gli utenti con piano Free possono gestire al massimo 1 Workspace. Per creare più workspace o collaborare senza limiti, effettua l'upgrade a un piano Pro/Business o richiedi l'invito al tuo Admin.",
+        };
+      }
+      return { allowed: true };
+    } /*end canCreateWorkspace*/,
+
+    canCreateTask(role: string, uid?: string): { allowed: boolean; reason?: string } {
+      if (role === "owner" || role === "superadmin") {
+        return { allowed: true };
+      }
+      if (role === "admin") {
+        return { allowed: true };
+      }
+      // Role 'user' (Free tier)
+      const quota = this.getUserQuota(uid);
+      const currentTotal = this.tasks.length; // active + archived in current workspace
+      if (currentTotal >= 3) {
+        return {
+          allowed: false,
+          reason:
+            "Hai raggiunto il limite massimo di 3 Task contemporanei (inclusi archiviati). Per creare un nuovo task, elimina un task esistente (fino a 3 cancellazioni concesse) o passa a un piano Pro.",
+        };
+      }
+      if (quota.createdTasksTotal >= 6) {
+        return {
+          allowed: false,
+          reason:
+            "Hai raggiunto il tetto massimo del piano Free di 6 Task totali nel ciclo di vita (3 iniziali + 3 per rimpiazzo cancellazioni). Effettua l'upgrade a Pro per sbloccare task illimitati.",
+        };
+      }
+      if (quota.deletedTasksCount >= 3 && quota.createdTasksTotal >= 3 + quota.deletedTasksCount) {
+        return {
+          allowed: false,
+          reason:
+            "Hai già usufruito di tutte le 3 cancellazioni consentite per il piano Free. Effettua l'upgrade a Pro per continuare a creare task.",
+        };
+      }
+      return { allowed: true };
+    } /*end canCreateTask*/,
+
+    // ── Step 26: Workspace & Task Member Assignment ───────────────────────────
+    async assignMemberToWorkspace(workspaceId: string, emailOrUid: string): Promise<void> {
+      const firestore = useFirestore();
+      const ws = this.workspaces.find((w) => w.id === workspaceId);
+      if (!ws) return;
+      const current = ws.assignedMembers ? [...ws.assignedMembers] : [];
+      if (!current.includes(emailOrUid)) {
+        current.push(emailOrUid);
+        await firestore.updateTenantDoc(firestore.COLLECTIONS.WORKSPACES, workspaceId, {
+          assignedMembers: current,
+        });
+        ws.assignedMembers = current;
+        saveCachedWorkspaces(this.workspaces);
+      }
+    } /*end assignMemberToWorkspace*/,
+
+    async removeMemberFromWorkspace(workspaceId: string, emailOrUid: string): Promise<void> {
+      const firestore = useFirestore();
+      const ws = this.workspaces.find((w) => w.id === workspaceId);
+      if (!ws || !ws.assignedMembers) return;
+      const updated = ws.assignedMembers.filter((m) => m !== emailOrUid);
+      await firestore.updateTenantDoc(firestore.COLLECTIONS.WORKSPACES, workspaceId, {
+        assignedMembers: updated,
+      });
+      ws.assignedMembers = updated;
+      saveCachedWorkspaces(this.workspaces);
+    } /*end removeMemberFromWorkspace*/,
+
+    async assignMemberToTask(
+      workspaceId: string,
+      taskId: string,
+      emailOrUid: string,
+    ): Promise<void> {
+      const firestore = useFirestore();
+      const task = this.tasks.find((t) => t.id === taskId);
+      if (!task) return;
+      const current = task.assignedMembers ? [...task.assignedMembers] : [];
+      if (!current.includes(emailOrUid)) {
+        current.push(emailOrUid);
+        await firestore.updateWorkspaceTaskDoc(workspaceId, taskId, {
+          assignedMembers: current,
+        });
+        task.assignedMembers = current;
+      }
+    } /*end assignMemberToTask*/,
+
+    async removeMemberFromTask(
+      workspaceId: string,
+      taskId: string,
+      emailOrUid: string,
+    ): Promise<void> {
+      const firestore = useFirestore();
+      const task = this.tasks.find((t) => t.id === taskId);
+      if (!task || !task.assignedMembers) return;
+      const updated = task.assignedMembers.filter((m) => m !== emailOrUid);
+      await firestore.updateWorkspaceTaskDoc(workspaceId, taskId, {
+        assignedMembers: updated,
+      });
+      task.assignedMembers = updated;
+    } /*end removeMemberFromTask*/,
 
     /**
      * Clear error state.

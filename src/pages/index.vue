@@ -39,6 +39,7 @@ import TaskChatWindow from "@/components/TaskChatWindow.vue";
 import WorkspaceAttitudeModal from "@/components/WorkspaceAttitudeModal.vue";
 import AIPromptArchitectModal from "@/components/AIPromptArchitectModal.vue";
 import AITaskArchitectModal from "@/components/AITaskArchitectModal.vue";
+import TeamMembersPanel from "@/components/TeamMembersPanel.vue";
 
 // ── State ────────────────────────────────────────────────────────────────────
 const q = useQuasar();
@@ -53,6 +54,23 @@ const selectedTask = inject<Ref<Task | null>>("selectedTask", ref(null));
 const showTaskChatModal = ref(false);
 const showAttitudeModal = ref(false);
 const showPromptArchitectModal = ref(false);
+
+// Step 26: Team Member Invitation Dialog (Workspace or Task scope)
+const showInviteModal = ref(false);
+const inviteScope = ref<"workspace" | "task">("workspace");
+const inviteTargetTask = ref<Task | null>(null);
+
+const openWorkspaceInvite = (): void => {
+  inviteScope.value = "workspace";
+  inviteTargetTask.value = null;
+  showInviteModal.value = true;
+}; /*end openWorkspaceInvite*/
+
+const openTaskInvite = (task: Task): void => {
+  inviteScope.value = "task";
+  inviteTargetTask.value = task;
+  showInviteModal.value = true;
+}; /*end openTaskInvite*/
 
 // Modal states for Prompt-Driven Task Creation
 const showCreateTaskModal = ref(false);
@@ -237,6 +255,17 @@ const openSubTaskInspector = (task: Task): void => {
 }; /*end openSubTaskInspector*/
 
 const openCreateTaskModal = (): void => {
+  const quotaCheck = taskStore.canCreateTask(authStore.role, authStore.user?.uid);
+  if (!quotaCheck.allowed) {
+    q.dialog({
+      title: "⚠️ Limite Piano Free Raggiunto",
+      message:
+        quotaCheck.reason ||
+        "Hai raggiunto il limite consentito di task per il piano Free. Elimina un task o effettua l'upgrade a Pro.",
+      ok: { label: "Ho capito", color: "primary" },
+    });
+    return;
+  }
   newTaskTitle.value = "";
   newTaskPrompt.value = "";
   newTaskCategory.value = "general";
@@ -253,6 +282,18 @@ const openTaskArchitectFromDialog = (): void => {
 }; /*end openTaskArchitectFromDialog*/
 
 const openNewWorkspaceModal = (): void => {
+  const quotaCheck = taskStore.canCreateWorkspace(authStore.role);
+  if (!quotaCheck.allowed) {
+    q.dialog({
+      title: "⚠️ Limite Piano Free Raggiunto",
+      message:
+        quotaCheck.reason ||
+        "Gli utenti con piano Free possono creare al massimo 1 Workspace. Passa ad un piano Pro o richiedi l'accesso al tuo Admin.",
+      ok: { label: "Ho capito", color: "primary" },
+    });
+    return;
+  }
+
   q.dialog({
     title: "New Workspace",
     message: "Enter the name for the new workspace:",
@@ -541,6 +582,19 @@ onMounted(async () => {
               @click="showAttitudeModal = true"
             >
               <q-tooltip>Modify the System Prompt and AI behavior for this Workspace</q-tooltip>
+            </q-btn>
+
+            <q-btn
+              outline
+              icon="person_add"
+              label="Aggiungi Persona"
+              no-caps
+              color="primary"
+              class="create-task-btn"
+              :disabled="!selectedWorkspace"
+              @click="openWorkspaceInvite"
+            >
+              <q-tooltip>Invita collaboratori ad accedere a questo Workspace</q-tooltip>
             </q-btn>
 
             <q-btn
@@ -896,6 +950,14 @@ onMounted(async () => {
                     </q-item>
 
                     <q-separator />
+
+                    <!-- Step 26: Invite Member to Single Task -->
+                    <q-item clickable @click="openTaskInvite(task)">
+                      <q-item-section avatar>
+                        <q-icon name="person_add" size="xs" color="primary" />
+                      </q-item-section>
+                      <q-item-section>Invita al Task</q-item-section>
+                    </q-item>
 
                     <!-- Archive Task -->
                     <q-item clickable @click="handleArchiveTask(task)">
@@ -1391,6 +1453,22 @@ onMounted(async () => {
           rawDraftFromInline = '';
         "
       />
+
+      <!-- Step 26: Team Member Invitation & Assignment Modal (Workspace or Task Scope) -->
+      <q-dialog v-model="showInviteModal" persistent>
+        <q-card style="min-width: 650px; max-width: 960px; width: 92vw" class="rounded-borders">
+          <TeamMembersPanel
+            v-if="selectedWorkspace"
+            :scope="inviteScope"
+            :workspace-id="selectedWorkspace.id"
+            :workspace-name="selectedWorkspace.name"
+            :task-id="inviteTargetTask?.id || ''"
+            :task-title="inviteTargetTask?.title || ''"
+            is-dialog
+            @close="showInviteModal = false"
+          />
+        </q-card>
+      </q-dialog>
     </q-page>
   </MainLayout>
 </template>

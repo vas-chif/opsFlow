@@ -219,3 +219,43 @@ Quando un operatore lavora all'interno di un task e incolla un nuovo link o ID d
 1. **Aggancio Locale al Task:** Il foglio viene selezionato come target per le operazioni dell'Agente su quel singolo task (`task.settings.selectedSheetId`).
 2. **Propagazione Automatica al Workspace:** Il sistema invoca immediatamente `taskStore.updateWorkspaceLinkedResources(workspaceId, ...)`, registrando il nuovo foglio nell'elenco `linkedSheets` del Workspace sia su Firestore sia nel Pinia store reattivo.
 3. **Disponibilità Cross-Task:** Il foglio compare immediatamente nell'elenco risorse di `WorkspaceAttitudeModal.vue` e diventa selezionabile in tutti gli altri task presenti e futuri del Workspace, evitando duplicazioni e frammentazione dei dati.
+
+---
+
+## 👥 7. Gestione Inviti Collaboratori & Modello di Scoping (Workspace-Scoped vs Task-Scoped)
+
+### 7.1 Architettura degli Accessi e Ruoli (RBAC Granulare)
+
+OpsFlow implementa una segregazione degli accessi granulare a due livelli gerarchici:
+
+1. **Accesso a Livello Workspace (`scope: 'workspace'`):**
+   - L'amministratore assegna l'utente (`role: 'user'`) all'array `workspace.assignedMembers`.
+   - **Visibilità:** L'utente invitato visualizza il Workspace nella sidebar e ha accesso a **TUTTI i task** operativi creati all'interno di quel Workspace.
+2. **Accesso Confinato a Singolo Task (`scope: 'task'`):**
+   - L'amministratore assegna l'utente all'array `task.assignedMembers` di un task specifico, senza aggiungerlo a `workspace.assignedMembers`.
+   - **Visibilità:** L'utente vede il workspace container, ma all'interno della griglia task visualizza **SOLO ed ESCLUSIVAMENTE quel singolo Task**. Tutti gli altri task del workspace rimangono oscurati e inaccessibili via filtro reattivo in `fetchWorkspaceTasks`.
+3. **Supervisione Tenant (`owner`, `admin`, `superadmin`):**
+   - Mantengono accesso e visibilità globale su tutti i workspace e task del tenant, con poteri di assegnazione, revoca inviti ed esportazione report.
+
+### 7.2 Flusso Operativo UI con `TeamMembersPanel.vue`
+
+Il componente unificato `TeamMembersPanel.vue` si adatta contestualmente in base alle props:
+
+- **Prop `scope`:** `'workspace'` | `'task'` | `'tenant'`.
+- **Intestazione Dinamica:**
+  - Workspace: _"Membri Workspace: [Nome Workspace]"_ — _"Gestisci l'accesso completo a questo workspace e a tutti i task contenuti"_.
+  - Task: _"Accesso Task: [Titolo Task]"_ — _"Invita collaboratori operativi con visibilità limitata esclusivamente a questo task"_.
+- **Tab Assegnati vs Tutti i Membri:**
+  - Tab _"Membri Assegnati"_: visualizza i collaboratori attivi con badge di ruolo e pulsante di rimozione immediata dall'array `assignedMembers`.
+  - Tab _"Tutti i Membri"_: elenca gli utenti del tenant con pulsante rapido `[ + Assegna ]`.
+  - Tab _"Invita Nuovo Membro"_: form con inserimento email e selezione ruolo (`user` / `admin`), che invia l'invito crittografico email tramite Cloud Function `createTenantInvitation` e aggiorna contestualmente `assignedMembers`.
+
+### 7.3 Guardie di Quota Freemium (Nuovi Utenti & Collaboratori)
+
+Per garantire la sostenibilità economica dei costi cloud (§5 AGENTS.md):
+
+- **Utente Base (`user`):**
+  - Massimo **1 solo Workspace**.
+  - Massimo **3 Task** contemporanei (attivi o archiviati).
+  - Meccanismo di tolleranza cancellazione: fino a **3 cancellazioni** (massimo **6 task totali nel ciclo vitale**).
+  - Al raggiungimento delle soglie: blocco preventivo con notifica esplicativa e invito a collaborare su workspace di tenant aziendali o richiedere upgrade al proprio Admin.

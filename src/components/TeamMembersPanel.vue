@@ -1,20 +1,21 @@
 <script setup lang="ts">
 /**
  * @file TeamMembersPanel.vue
- * @description Admin panel for inviting team members via secure email token (Step 14).
- *              Shows active members table + pending invitations tab with revoke controls.
+ * @description Admin panel for inviting and assigning team members via secure email token (Step 14 & Step 26).
+ *              Supports scoping to Tenant, Workspace, or individual Task.
  * @author Vasile Chifeac
  * @created 2026-08-17
- * @modified 2026-09-04
+ * @modified 2026-09-18
  *
  * @notes
- * - Invite flow: email + role ONLY — UID is never required (Step 14 goal)
+ * - Scopes: 'tenant' (full team), 'workspace' (workspace-level access), 'task' (single-task access)
+ * - Step 26: If invited to a Workspace, user sees all tasks in that workspace.
+ * - Step 26: If invited to a Task, user sees ONLY that task.
  * - createTenantInvitation Cloud Function handles token generation + email (server-side)
- * - revokeTenantInvitation Cloud Function marks invitation as revoked
- * - Acceptance: handled by src/pages/invite.vue (deep-link landing page)
  *
  * @dependencies
  * - authStore (canManageWorkspace, setUserRole, tenantId)
+ * - taskStore (workspaces, tasks, assignMemberToWorkspace, assignMemberToTask)
  * - Firebase Functions (httpsCallable)
  * - quasar (QTable, QTabs, QDialog, QSelect, QInput, QBtn, QBadge)
  *
@@ -38,6 +39,30 @@ import type { TenantInvitation } from "@/types/models";
 
 // ── Stores ───────────────────────────────────────────────────────────────────
 import { useAuthStore } from "@/stores/authStore";
+import { useTaskStore } from "@/stores/taskStore";
+
+// ── Props & Emits ────────────────────────────────────────────────────────────
+interface Props {
+  scope?: "tenant" | "workspace" | "task" | undefined;
+  workspaceId?: string | undefined;
+  workspaceName?: string | undefined;
+  taskId?: string | undefined;
+  taskTitle?: string | undefined;
+  isDialog?: boolean | undefined;
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  scope: "tenant",
+  workspaceId: "",
+  workspaceName: "",
+  taskId: "",
+  taskTitle: "",
+  isDialog: false,
+});
+
+const emit = defineEmits<{
+  (e: "close"): void;
+}>();
 
 // UI-only — not Firestore data
 interface MemberRow {
@@ -50,9 +75,12 @@ interface MemberRow {
 
 const $q = useQuasar();
 const authStore = useAuthStore();
+const taskStore = useTaskStore();
 
 // ── State ─────────────────────────────────────────────────────────────────────
-const activeTab = ref<"members" | "invitations">("members");
+const activeTab = ref<"assigned" | "members" | "invitations">(
+  props.scope === "tenant" ? "members" : "assigned",
+);
 const members = ref<MemberRow[]>([]);
 const invitations = ref<TenantInvitation[]>([]);
 const isLoading = ref(false);
@@ -68,7 +96,7 @@ const inviteRole = ref<"admin" | "user">("user");
 // ── Options ───────────────────────────────────────────────────────────────────
 const roleOptions: Array<{ label: string; value: "admin" | "user"; color: string }> = [
   { label: "🟡 Admin", value: "admin", color: "warning" },
-  { label: "🟢 User", value: "user", color: "positive" },
+  { label: "🟢 User (Collaboratore)", value: "user", color: "positive" },
 ];
 
 const allRoleOptions: Array<{ label: string; value: TenantRole; color: string }> = [
@@ -116,6 +144,46 @@ const pendingInvitations = computed(() =>
   invitations.value.filter((i) => i.status === "pending"),
 ); /*end pendingInvitations*/
 
+const currentWorkspace = computed(() => {
+  if (!props.workspaceId) return taskStore.activeWorkspace;
+  return taskStore.workspaces.find((w) => w.id === props.workspaceId) ?? null;
+}); /*end currentWorkspace*/
+
+const currentTask = computed(() => {
+  if (!props.taskId) return null;
+  return taskStore.tasks.find((t) => t.id === props.taskId) ?? null;
+}); /*end currentTask*/
+
+const assignedMembersList = computed(() => {
+  if (props.scope === "workspace") {
+    return currentWorkspace.value?.assignedMembers ?? [];
+  }
+  if (props.scope === "task") {
+    return currentTask.value?.assignedMembers ?? [];
+  }
+  return [];
+}); /*end assignedMembersList*/
+
+const panelTitle = computed(() => {
+  if (props.scope === "workspace") {
+    return `👥 Collaboratori Workspace: ${props.workspaceName || currentWorkspace.value?.name || "Workspace"}`;
+  }
+  if (props.scope === "task") {
+    return `👥 Collaboratori Task: ${props.taskTitle || currentTask.value?.title || "Task"}`;
+  }
+  return "👥 Gestione Membri & Team Aziendale";
+}); /*end panelTitle*/
+
+const panelSubtitle = computed(() => {
+  if (props.scope === "workspace") {
+    return "I membri assegnati possono visualizzare e operare su tutti i task di questo workspace.";
+  }
+  if (props.scope === "task") {
+    return "I membri assegnati possono visualizzare e completare SOLO questo singolo task.";
+  }
+  return `Tenant: ${authStore.tenantId} · Ruolo: ${authStore.role}`;
+}); /*end panelSubtitle*/
+
 // ── Data loaders ──────────────────────────────────────────────────────────────
 async function loadMembers(): Promise<void> {
   if (!authStore.canManageWorkspace) return;
@@ -152,7 +220,7 @@ async function loadInvitations(): Promise<void> {
   }
 } /*end loadInvitations*/
 
-function onTabChange(tab: "members" | "invitations"): void {
+function onTabChange(tab: "assigned" | "members" | "invitations"): void {
   if (tab === "invitations" && invitations.value.length === 0) {
     void loadInvitations();
   }
@@ -204,36 +272,110 @@ async function toggleActive(member: MemberRow): Promise<void> {
   }
 } /*end toggleActive*/
 
-// ── Step 14: Invitation actions ───────────────────────────────────────────────
+// ── Member Assignment (Step 26) ───────────────────────────────────────────────
+async function removeAssignedMember(email: string): Promise<void> {
+  try {
+    if (props.scope === "workspace" && props.workspaceId) {
+      await taskStore.removeMemberFromWorkspace(props.workspaceId, email);
+      $q.notify({ type: "info", message: `Accesso al workspace revocato per ${email}.` });
+    } else if (props.scope === "task" && props.workspaceId && props.taskId) {
+      await taskStore.removeMemberFromTask(props.workspaceId, props.taskId, email);
+      $q.notify({ type: "info", message: `Accesso al task revocato per ${email}.` });
+    }
+  } catch {
+    $q.notify({ type: "negative", message: "Impossibile revocare l'accesso." });
+  }
+} /*end removeAssignedMember*/
+
+async function quickAssignMember(email: string): Promise<void> {
+  try {
+    if (props.scope === "workspace" && props.workspaceId) {
+      await taskStore.assignMemberToWorkspace(props.workspaceId, email);
+      $q.notify({
+        type: "positive",
+        message: `✅ ${email} aggiunto al workspace!`,
+        icon: "check_circle",
+      });
+    } else if (props.scope === "task" && props.workspaceId && props.taskId) {
+      await taskStore.assignMemberToTask(props.workspaceId, props.taskId, email);
+      $q.notify({
+        type: "positive",
+        message: `✅ ${email} aggiunto al task!`,
+        icon: "check_circle",
+      });
+    }
+  } catch {
+    $q.notify({ type: "negative", message: "Impossibile assegnare il collaboratore." });
+  }
+} /*end quickAssignMember*/
+
+// ── Invitation actions ───────────────────────────────────────────────────────
 async function sendInvite(): Promise<void> {
   if (!inviteEmail.value) {
-    $q.notify({ type: "warning", message: "Inserisci l'email del membro da invitare." });
+    $q.notify({ type: "warning", message: "Inserisci l'email della persona da invitare." });
     return;
   }
   isInviting.value = true;
   try {
-    const functions = getFunctions(app, "europe-west1");
-    const createInvitation = httpsCallable<
-      { email: string; role: string },
-      { success: boolean; message: string }
-    >(functions, "createTenantInvitation");
+    // 1. Direct association on Workspace or Task
+    if (props.scope === "workspace" && props.workspaceId) {
+      await taskStore.assignMemberToWorkspace(props.workspaceId, inviteEmail.value);
+    } else if (props.scope === "task" && props.workspaceId && props.taskId) {
+      await taskStore.assignMemberToTask(props.workspaceId, props.taskId, inviteEmail.value);
+    }
 
-    await createInvitation({ email: inviteEmail.value, role: inviteRole.value });
+    // 2. Cloud Function call to issue invitation token and send email
+    try {
+      const functions = getFunctions(app, "europe-west1");
+      const createInvitation = httpsCallable<
+        {
+          email: string;
+          role: string;
+          scope?: string | undefined;
+          workspaceId?: string | undefined;
+          workspaceName?: string | undefined;
+          taskId?: string | undefined;
+          taskTitle?: string | undefined;
+        },
+        { success: boolean; message: string }
+      >(functions, "createTenantInvitation");
 
-    $q.notify({
-      type: "positive",
-      message: `✉️ Invito inviato a ${inviteEmail.value}! L'email è in arrivo.`,
-      icon: "mark_email_read",
-      timeout: 4000,
-    });
+      await createInvitation({
+        email: inviteEmail.value,
+        role: inviteRole.value,
+        scope: props.scope,
+        workspaceId: props.workspaceId,
+        workspaceName: props.workspaceName || currentWorkspace.value?.name || undefined,
+        taskId: props.taskId,
+        taskTitle: props.taskTitle || currentTask.value?.title || undefined,
+      });
+
+      $q.notify({
+        type: "positive",
+        message: `✉️ Invito inviato a ${inviteEmail.value}! L'email è in arrivo.`,
+        icon: "mark_email_read",
+        timeout: 4000,
+      });
+    } catch (cfErr: unknown) {
+      // In local or offline dev, if Cloud Function email fails, assignment still stands
+      const msg = cfErr instanceof Error ? cfErr.message : "Servizio email non raggiungibile.";
+      $q.notify({
+        type: "warning",
+        message: `Collaboratore associato con successo! (Nota email: ${msg})`,
+        icon: "person_add",
+        timeout: 4500,
+      });
+    }
+
     showInviteDialog.value = false;
     inviteEmail.value = "";
     inviteRole.value = "user";
-    // Refresh invitations tab if visible
+
+    // Refresh invitations if tab open
     if (activeTab.value === "invitations") {
       await loadInvitations();
     } else {
-      invitations.value = []; // force reload on next tab open
+      invitations.value = [];
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Errore nell'invio dell'invito.";
@@ -304,22 +446,34 @@ onMounted(() => {
       <!-- Header -->
       <div class="row items-center justify-between q-mb-md">
         <div>
-          <div class="text-h6 text-weight-bold">👥 Gestione Membri &amp; Team</div>
+          <div class="text-h6 text-weight-bold">{{ panelTitle }}</div>
           <div class="text-caption text-grey-6">
-            Tenant: {{ authStore.tenantId }} · Ruolo: {{ authStore.role }}
+            {{ panelSubtitle }}
           </div>
         </div>
-        <q-btn
-          icon="person_add"
-          label="Invita Membro"
-          color="primary"
-          unelevated
-          rounded
-          @click="showInviteDialog = true"
-        />
+        <div class="row items-center q-gutter-sm">
+          <q-btn
+            icon="person_add"
+            label="Aggiungi Persona"
+            color="primary"
+            unelevated
+            rounded
+            no-caps
+            @click="showInviteDialog = true"
+          />
+          <q-btn
+            v-if="isDialog"
+            flat
+            round
+            dense
+            icon="close"
+            color="grey-6"
+            @click="emit('close')"
+          />
+        </div>
       </div>
 
-      <!-- Tabs: Membri / Inviti -->
+      <!-- Tabs -->
       <q-tabs
         v-model="activeTab"
         dense
@@ -329,7 +483,24 @@ onMounted(() => {
         align="left"
         @update:model-value="onTabChange"
       >
-        <q-tab name="members" icon="group" label="Membri Attivi" />
+        <q-tab
+          v-if="scope !== 'tenant'"
+          name="assigned"
+          icon="how_to_reg"
+          label="Collaboratori Assegnati"
+        >
+          <q-badge
+            v-if="assignedMembersList.length > 0"
+            color="primary"
+            :label="assignedMembersList.length"
+            floating
+          />
+        </q-tab>
+        <q-tab
+          name="members"
+          icon="group"
+          :label="scope === 'tenant' ? 'Membri Attivi' : 'Tutti i Membri del Team'"
+        />
         <q-tab name="invitations" icon="mail" label="Inviti Pendenti">
           <q-badge
             v-if="pendingInvitations.length > 0"
@@ -340,8 +511,68 @@ onMounted(() => {
         </q-tab>
       </q-tabs>
 
-      <!-- Tab: Membri Attivi -->
-      <q-tab-panels v-model="activeTab" animated>
+      <!-- Panels -->
+      <q-tab-panels v-model="activeTab" animated style="min-height: 300px">
+        <!-- Tab: Collaboratori Assegnati (scope !== 'tenant') -->
+        <q-tab-panel v-if="scope !== 'tenant'" name="assigned" class="q-pa-none">
+          <div v-if="assignedMembersList.length === 0" class="text-center q-pa-xl text-grey-6">
+            <q-icon name="person_outline" size="56px" class="q-mb-md text-grey-5" />
+            <div class="text-h6 text-weight-medium">Nessun collaboratore specifico assegnato</div>
+            <div class="text-caption q-mt-xs text-grey-6">
+              {{
+                scope === "workspace"
+                  ? "Tutti gli amministratori hanno accesso. Aggiungi collaboratori per dare accesso mirato a questo workspace."
+                  : "Aggiungi persone per consentire loro di collaborare e visualizzare SOLO questo singolo task."
+              }}
+            </div>
+            <q-btn
+              color="primary"
+              icon="person_add"
+              label="Aggiungi Persona tramite Email"
+              class="q-mt-lg"
+              unelevated
+              rounded
+              no-caps
+              @click="showInviteDialog = true"
+            />
+          </div>
+
+          <q-list v-else bordered separator class="rounded-borders q-mt-sm">
+            <q-item v-for="email in assignedMembersList" :key="email" class="q-py-md">
+              <q-item-section avatar>
+                <q-avatar color="primary" text-color="white" icon="person" />
+              </q-item-section>
+              <q-item-section>
+                <q-item-label class="text-weight-bold">{{ email }}</q-item-label>
+                <q-item-label caption>
+                  <q-badge
+                    :color="scope === 'workspace' ? 'secondary' : 'accent'"
+                    :label="
+                      scope === 'workspace'
+                        ? 'Accesso Completo Workspace'
+                        : 'Accesso Esclusivo Task'
+                    "
+                  />
+                </q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <q-btn
+                  flat
+                  round
+                  dense
+                  color="negative"
+                  icon="delete_outline"
+                  size="sm"
+                  @click="removeAssignedMember(email)"
+                >
+                  <q-tooltip>Revoca accesso</q-tooltip>
+                </q-btn>
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-tab-panel>
+
+        <!-- Tab: Membri Attivi -->
         <q-tab-panel name="members" class="q-pa-none">
           <q-table
             :rows="members"
@@ -412,6 +643,27 @@ onMounted(() => {
             <!-- Actions column -->
             <template #body-cell-actions="{ row }">
               <q-td align="center">
+                <!-- If inside workspace or task scope, show quick assign button -->
+                <template v-if="scope !== 'tenant'">
+                  <q-badge
+                    v-if="assignedMembersList.includes(row.email)"
+                    color="positive"
+                    label="Assegnato"
+                    class="q-mr-xs"
+                  />
+                  <q-btn
+                    v-else
+                    unelevated
+                    dense
+                    size="xs"
+                    color="primary"
+                    icon="add"
+                    label="Assegna"
+                    no-caps
+                    class="q-mr-xs"
+                    @click="quickAssignMember(row.email)"
+                  />
+                </template>
                 <q-btn flat round dense icon="refresh" size="xs" @click="loadMembers">
                   <q-tooltip>Ricarica</q-tooltip>
                 </q-btn>
@@ -420,14 +672,18 @@ onMounted(() => {
                 </q-btn>
               </q-td>
             </template>
+
+            <template #no-data>
+              <div class="full-width column flex-center q-pa-lg text-grey-6">
+                <q-icon name="people_outline" size="48px" class="q-mb-sm" />
+                <div>Nessun membro trovato nel tenant.</div>
+              </div>
+            </template>
           </q-table>
         </q-tab-panel>
 
         <!-- Tab: Inviti Pendenti -->
         <q-tab-panel name="invitations" class="q-pa-none">
-          <div class="row justify-end q-mb-sm">
-            <q-btn flat dense icon="refresh" label="Aggiorna" size="sm" @click="loadInvitations" />
-          </div>
           <q-table
             :rows="invitations"
             :columns="invitationColumns"
@@ -489,28 +745,38 @@ onMounted(() => {
         </q-tab-panel>
       </q-tab-panels>
 
-      <!-- Invite Member Dialog — Step 14: solo Email + Ruolo (NO UID) -->
+      <!-- Invite Member Dialog — Step 14 & Step 26 -->
       <q-dialog v-model="showInviteDialog" persistent>
-        <q-card style="min-width: 400px" class="q-pa-md glass-invite-card">
+        <q-card style="min-width: 420px" class="q-pa-md glass-invite-card">
           <q-card-section>
-            <div class="text-h6 text-weight-bold">✉️ Invita Membro via Email</div>
-            <div class="text-caption text-grey-6 q-mt-xs">
-              Il dipendente riceverà un link sicuro via email per unirsi all'organizzazione. Non è
-              necessario conoscerne l'UID.
+            <div class="text-h6 text-weight-bold">
+              ✉️ Invita Persona
+              {{ scope !== "tenant" ? (scope === "workspace" ? "al Workspace" : "al Task") : "" }}
+            </div>
+            <div class="text-caption text-grey-4 q-mt-xs">
+              {{
+                scope === "task"
+                  ? "La persona riceverà l'invito per collaborare SOLO a questo specifico task."
+                  : scope === "workspace"
+                    ? "La persona invitata avrà accesso a tutti i task operativi di questo workspace."
+                    : "Il membro riceverà un link sicuro via email per unirsi all'organizzazione aziendale."
+              }}
             </div>
           </q-card-section>
 
           <q-card-section class="q-gutter-md">
             <q-input
               v-model="inviteEmail"
-              label="Email del dipendente"
+              label="Email del collaboratore"
               type="email"
               outlined
               dense
+              dark
               autocomplete="off"
-              hint="Inserisci l'email di lavoro del dipendente."
+              hint="Inserisci l'indirizzo email aziendale."
             />
             <q-select
+              v-if="scope === 'tenant'"
               v-model="inviteRole"
               :options="roleOptions"
               option-value="value"
@@ -519,12 +785,13 @@ onMounted(() => {
               map-options
               outlined
               dense
+              dark
               label="Ruolo da assegnare"
             />
           </q-card-section>
 
           <q-card-actions align="right">
-            <q-btn flat label="Annulla" v-close-popup :disable="isInviting" />
+            <q-btn flat label="Annulla" color="grey-4" v-close-popup :disable="isInviting" />
             <q-btn
               unelevated
               color="primary"
@@ -557,10 +824,10 @@ onMounted(() => {
 }
 
 .glass-invite-card {
-  background: rgba(10, 35, 66, 0.92);
+  background: rgba(10, 35, 66, 0.94);
   backdrop-filter: blur(16px);
   border: 1px solid rgba(197, 160, 101, 0.25);
   border-radius: 16px;
-  color: var(--q-secondary);
+  color: #f9f7f2;
 }
 </style>

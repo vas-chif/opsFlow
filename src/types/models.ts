@@ -171,6 +171,8 @@ export interface Task {
   tenantId: string;
   workspaceId: string;
   assignedTo: string | null;
+  /** List of emails or UIDs explicitly assigned to this single task (Step 26). */
+  assignedMembers?: string[];
   aiMetadata: TaskAIMetadata;
   settings?: TaskSettings;
   archived?: boolean;
@@ -325,6 +327,7 @@ export interface CreateTaskPayload {
   description: string;
   status?: TaskStatus;
   assignedTo?: string | null;
+  assignedMembers?: string[];
   aiMetadata?: Partial<TaskAIMetadata>;
 } /*end CreateTaskPayload*/
 
@@ -447,6 +450,8 @@ export interface Workspace {
    * Does NOT contain tokens — those are in the encrypted workspace-scoped vault.
    */
   googleIntegration?: GoogleWorkspaceIntegration;
+  /** List of emails or UIDs explicitly assigned to this workspace (Step 26). */
+  assignedMembers?: string[];
 } /*end Workspace*/
 
 /**
@@ -462,6 +467,7 @@ export interface CreateWorkspacePayload {
   category?: string;
   linkedResources?: WorkspaceLinkedResources;
   attitude?: WorkspaceAttitude;
+  assignedMembers?: string[];
 } /*end CreateWorkspacePayload*/
 
 /**
@@ -542,6 +548,12 @@ export interface TenantInvitation {
   acceptedAt?: FirestoreTimestamp;
   /** UID of the user who redeemed the invitation. */
   acceptedByUid?: string;
+  /** Scope of the invitation: whole tenant, specific workspace, or specific task (Step 26). */
+  scope?: "tenant" | "workspace" | "task";
+  workspaceId?: string;
+  workspaceName?: string;
+  taskId?: string;
+  taskTitle?: string;
 } /*end TenantInvitation*/
 
 /**
@@ -551,7 +563,21 @@ export interface TenantInvitation {
 export interface CreateInvitationPayload {
   email: string;
   role: TenantRole;
+  scope?: "tenant" | "workspace" | "task";
+  workspaceId?: string;
+  workspaceName?: string;
+  taskId?: string;
+  taskTitle?: string;
 } /*end CreateInvitationPayload*/
+
+/**
+ * Usage metrics and limits for freemium users (Step 26).
+ * Persisted in localStorage and Firestore profile.
+ */
+export interface UserUsageQuota {
+  createdTasksTotal: number;
+  deletedTasksCount: number;
+} /*end UserUsageQuota*/
 
 /**
  * Payload for the acceptTenantInvitation callable function.

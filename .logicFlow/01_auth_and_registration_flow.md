@@ -154,3 +154,23 @@ router.beforeEach(async (to, from, next) => {
 | `tenantId` | `string`                         | ID del tenant di appartenenza dell'utente | Firestore Security Rules scoping: `request.auth.token.tenantId` |
 | `role`     | `'owner' \| 'admin' \| 'member'` | Ruolo RBAC dell'utente                    | Permessi UI (`v-if="hasRole('admin')"`) e Cloud Functions       |
 | `isActive` | `boolean`                        | Flag stato account attivo                 | Gatekeeper d'accesso principale per tutte le API                |
+
+---
+
+## ⚖️ 6. Modello Quote Freemium & Inviti a Scopo Differenziato (Step 26)
+
+### Regole di Quota Freemium (`role: 'user'`)
+
+1. **Workspace Max:** 1 solo workspace gestibile in autonomia.
+2. **Task Simultanei:** Massimo 3 task contemporanei (attivi o archiviati).
+3. **Cancellazioni Concesse:** Fino a 3 eliminazioni (tetto massimo di 6 task creati nel ciclo di vita).
+4. **Governo Admin & SuperAdmin:**
+   - `admin`: gestisce tenant, workspace e dipendenti aziendali. Per workspace e task illimitati è richiesta una sottoscrizione attiva.
+   - `superadmin`: controllo globale illimitato della piattaforma SaaS.
+
+### Scoping di Visibilità Collaboratori
+
+- **Invito Workspace-Scoped (`scope: 'workspace'`):**
+  - L'utente invitato ha accesso a tutti i task contenuti nel workspace a cui è assegnato (`ws.assignedMembers`).
+- **Invito Task-Scoped (`scope: 'task'`):**
+  - L'utente invitato ha visibilità e accesso **esclusivamente su quel singolo task** (`task.assignedMembers`), senza poter visualizzare o modificare gli altri task del workspace.
