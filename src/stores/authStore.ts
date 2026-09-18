@@ -119,7 +119,7 @@ function mapClaims(claims: Record<string, unknown>): AuthClaims | null {
   return {
     tenantId,
     role: role as TenantRole,
-    isActive: isActive === true,
+    isActive: isActive !== false,
   };
 } /*end mapClaims*/
 

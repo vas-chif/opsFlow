@@ -25,6 +25,10 @@ import { ref, computed } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { useQuasar } from "quasar";
 
+// ── Firebase ─────────────────────────────────────────────────────────────────
+import { getAuth, sendPasswordResetEmail } from "firebase/auth";
+import { app } from "@/boot/firebase";
+
 // ── Stores ───────────────────────────────────────────────────────────────────
 import { useAuthStore } from "@/stores/authStore";
 import { useUiStore } from "@/stores/uiStore";
@@ -180,10 +184,43 @@ const navigateToRegister = (): void => {
 }; /*end navigateToRegister*/
 
 const navigateToForgotPassword = (): void => {
-  q.notify({
-    type: "info",
-    message: "Password reset coming soon",
-    position: "top",
+  q.dialog({
+    title: "Ripristino Password",
+    message: "Inserisci l'indirizzo email associato al tuo account OpsFlow:",
+    prompt: {
+      model: email.value || "",
+      type: "email",
+      isValid: (val: string) => typeof val === "string" && val.includes("@"),
+    },
+    cancel: {
+      flat: true,
+      label: "Annulla",
+    },
+    ok: {
+      color: "primary",
+      label: "Invia Link",
+    },
+  }).onOk(async (resetEmail: string) => {
+    if (!resetEmail) return;
+    try {
+      const auth = getAuth(app);
+      await sendPasswordResetEmail(auth, resetEmail.trim());
+      q.notify({
+        type: "positive",
+        message: `✉️ Email di ripristino inviata a ${resetEmail}!`,
+        caption: "Controlla la posta in arrivo e la cartella SPAM.",
+        position: "top",
+        timeout: 6000,
+      });
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : "Errore durante l'invio dell'email di ripristino.";
+      q.notify({
+        type: "negative",
+        message: `Impossibile inviare l'email: ${msg}`,
+        position: "top",
+      });
+    }
   });
 }; /*end navigateToForgotPassword*/
 </script>
