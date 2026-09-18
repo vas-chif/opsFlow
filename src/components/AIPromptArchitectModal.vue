@@ -33,8 +33,14 @@ const taskStore = useTaskStore();
 
 const userPrompt = ref("");
 const generatedAttitude = ref<WorkspaceAttitude | null>(null);
+const strictGroundTruthMode = ref(true);
 
 const presetPromptExamples = [
+  {
+    label: "🏢 IT Consulting & Training",
+    prompt:
+      "Sourcing formatori e consulenti IT certificati, verifica competenze e seniority, validazione fonti aperte, standardizzazione contatti e forzatura GDPR Art. 14 (+30gg).",
+  },
   {
     label: "💇‍♀️ Hair Salon",
     prompt:
@@ -136,16 +142,36 @@ function handleClose(): void {
       </q-card-section>
 
       <q-card-section class="q-pa-md">
-        <div class="text-body2 text-grey-8 q-mb-md">
-          Describe in your own words what you do in your business. Gemini will automatically extract
-          the <strong>Industry</strong>, <strong>Tone</strong>, <strong>Skill Matrix</strong>, and
-          strict <strong>DO / DON'T</strong> anti-hallucination rules.
+        <div class="text-body2 text-grey-8 q-mb-sm">
+          Descrivi le attività generali del tuo business per generare il
+          <strong>metodo operativo e deontologico</strong> del Workspace (IL 'COME CI SI COMPORTA').
+        </div>
+        <div
+          class="text-caption text-primary q-mb-md bg-blue-1 q-pa-sm rounded-borders row items-center justify-between"
+        >
+          <div class="row items-center q-gutter-xs">
+            <q-icon name="verified_user" color="primary" size="20px" />
+            <span class="text-weight-bold"
+              >🛡️ Strict Ground-Truth &amp; Anti-Hallucination Mode:</span
+            >
+            <q-badge color="positive" text-color="white" label="ATTIVO" />
+          </div>
+          <span class="text-caption text-grey-7"
+            >Solo URL certificati dai motori, forzatura GDPR Art. 14 (+30gg) e zero contatti
+            fittizi.</span
+          >
+        </div>
+        <div class="text-caption text-grey-7 q-mb-md">
+          <em
+            >💡 Nota: non inserire compiti o clienti specifici contingenti (es. 'corso Oracle del 28
+            settembre per NobleProg'); verranno inseriti direttamente nei singoli Task.</em
+          >
         </div>
 
         <!-- Quick Examples -->
         <div class="q-mb-md">
           <div class="text-caption text-weight-bold text-grey-7 q-mb-xs">
-            Or select a quick example:
+            Oppure seleziona un esempio rapido:
           </div>
           <div class="row q-gutter-xs">
             <q-chip
@@ -169,7 +195,7 @@ function handleClose(): void {
           rows="3"
           outlined
           dense
-          placeholder="e.g. 'I run a fitness gym. I handle workout cards, membership renewals, reminders, and seasonal promotions...'"
+          placeholder="es. 'Studio di consulenza e formazione IT aziendale. Gestiamo screening profili specialistici, verifica competenze su fonti pubbliche, contatti professionali e tracciamento GDPR...'"
           class="q-mb-md"
         />
 

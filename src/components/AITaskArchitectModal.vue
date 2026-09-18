@@ -66,6 +66,14 @@ const editableSubtasks = ref<
 // ── Preset Templates ─────────────────────────────────────────────────────────
 const presetTemplates = [
   {
+    label: "📧 Docente da Email Cliente",
+    text: "Buongiorno, cerchiamo con urgenza un docente senior su Camunda 8 BPMN per una formazione aziendale a Milano (o ibrido). Corso previsto fine ottobre per 3 giornate. Non abbiamo ancora budget definito né tariffa concordata: potete inviarci profili idonei?",
+  },
+  {
+    label: "🔍 Sourcing Specialista IT",
+    text: "Ricerca specialisti Oracle RAC / GoldenGate su Milano o da remoto. Seniority almeno 5 anni, esperienza architetture enterprise. Verificare disponibilità immediata e referenze.",
+  },
+  {
     label: "🏥 Home Visit",
     text: "Patient home visit, vital signs assessment, wound dressing, and clinical diary update.",
   },
@@ -76,10 +84,6 @@ const presetTemplates = [
   {
     label: "🧾 Invoicing",
     text: "Issue invoice for home nursing service, log into accounting software, and send receipt to patient.",
-  },
-  {
-    label: "💊 Therapy Administration",
-    text: "Administer intravenous therapy, prepare medications, monitor for adverse reactions, and document.",
   },
 ];
 
@@ -244,17 +248,32 @@ function handleClose(): void {
 
       <!-- ── Card Body Light ─────────────────────────────────────────── -->
       <q-card-section class="q-pa-md">
-        <div class="text-body2 text-grey-8 q-mb-md">
-          Describe in your own words the task to perform (even a quick or informal draft). Gemini
-          will automatically extract the <strong>Title</strong>, <strong>Category</strong>,
-          <strong>Priority</strong>, and operational <strong>Subtask Checklist</strong> based on
-          your Workspace Constitution.
+        <div class="text-body2 text-grey-8 q-mb-sm">
+          Incolla l'email o la richiesta grezza ricevuta dal cliente o fornitore (il
+          <strong>COSA CERCARE / ESEGUIRE</strong>). Gemini estrarrà automaticamente il
+          <strong>Titolo</strong>, la <strong>Categoria</strong>, la <strong>Priorità</strong> e la
+          <strong>Checklist di Sotto-Task</strong> operative progressive.
+        </div>
+
+        <div
+          class="text-caption text-primary q-mb-md bg-blue-1 q-pa-sm rounded-borders row items-center justify-between"
+        >
+          <div class="row items-center q-gutter-xs">
+            <q-icon name="mail_outline" color="primary" size="20px" />
+            <span class="text-weight-bold"
+              >Elaborazione Intelligente da Email &amp; Testo Grezzo</span
+            >
+          </div>
+          <span class="text-caption text-grey-7"
+            >Zero-Allucinazione: tariffe o disponibilità mancanti vengono catalogate come GAP da
+            verificare.</span
+          >
         </div>
 
         <!-- Quick Templates -->
         <div class="q-mb-md">
           <div class="text-caption text-weight-bold text-grey-7 q-mb-xs">
-            Or select a quick template:
+            Oppure seleziona un esempio rapido:
           </div>
           <div class="row q-gutter-xs">
             <q-chip
@@ -275,10 +294,10 @@ function handleClose(): void {
         <q-input
           v-model="rawDraft"
           type="textarea"
-          rows="3"
+          rows="4"
           outlined
           dense
-          placeholder="e.g. 'Patient wound dressing on Tuesday morning, check sterile bandages and send invoice...'"
+          placeholder="Incolla qui l'email del cliente o l'appunto grezzo (es. 'Buongiorno, cerchiamo con urgenza un docente Camunda a Milano per fine mese. Non abbiamo budget concordato: potete mandarci disponibilità e profili?')..."
           class="q-mb-md"
         />
 

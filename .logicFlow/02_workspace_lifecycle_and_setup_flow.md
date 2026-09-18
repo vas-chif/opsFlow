@@ -127,6 +127,39 @@ classDiagram
 
 ---
 
+## 🏛️ 3.1 Disaccoppiamento Rigido: AI Attitude (Workspace) vs Task Operativo
+
+OpsFlow impone una rigida separazione ontologica tra la Costituzione del Workspace ed i singoli Task operativi:
+
+| Dimensione                      | AI Attitude del Workspace ("COME CI SI COMPORTA")                                                                                                                    | Task Operativo ("COSA CERCARE / ESEGUIRE")                                                                                                       |
+| :------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Livello**                     | Livello Workspace (Parent Constitution)                                                                                                                              | Livello Task-Scoped (Single Assignment)                                                                                                          |
+| **Scopo**                       | Codice deontologico, metodologia d'indagine (OSINT, X-Ray), tono, vincoli etici e legali.                                                                            | Obiettivo specifico, requisiti tecnici contingenti, logistica e date di consegna.                                                                |
+| **Cosa DEVE contenere**         | Regole DO/DON'T anti-allucinazione, forzatura GDPR Art. 14 (+30gg), marcatura dati mancanti come GAP, metodo di estrazione da fonti reali certificate.               | Tecnologie specifiche richieste dal cliente (es. Camunda, Oracle RAC), seniority, budget/tariffa, date evento, sotto-task operative progressive. |
+| **Cosa NON deve MAI contenere** | **Dettagli specifici di un singolo incarico** (vietato includere nomi clienti contingenti es. "NobleProg", singole tecnologie o date specifiche es. "28 settembre"). | Regole deontologiche generali o definizioni del tono di voce del team (ereditate automaticamente dal Workspace).                                 |
+| **Ciclo di Vita**               | Persistente, riutilizzabile per centinaia di task nello stesso settore/dominio.                                                                                      | Effimero/specifico, generato a partire da email grezze, note informali o bandi cliente.                                                          |
+
+---
+
+## 🛡️ 3.2 Guardrail Anti-Allucinazione Nativo in "Generate DBS Attitude"
+
+Quando l'utente clicca su **"GENERATE DBS ATTITUDE"** in `AIPromptArchitectModal.vue`:
+
+1. La Cloud Function `generateDbsAttitude` (guidata dal prompt `DBS_SYSTEM_PROMPT`) genera la Costituzione del Workspace imponendo deterministicamente:
+   - **Neutralità di Dominio:** Non accetta né genera vincoli legati a singole commesse, preservando l'universalità della Costituzione per il settore identificato.
+   - **Regole DO Tassative:**
+     - Obbligo di raccogliere solo URL reali restituiti dai motori di ricerca certificati.
+     - Forzatura automatica della data informativa GDPR Art. 14 a +30 giorni dalla data corrente.
+     - Marcatura esplicita di disponibilità, recapiti o tariffe non verificate come "GAP da verificare in chiamata/intervista".
+     - Formattazione standard dei contatti ("Contatto via InMail / Profilo Pubblico").
+   - **Divieti DON'T Tassativi:**
+     - Divieto assoluto di inventare URL 404 dedotti o sintetici.
+     - Divieto di generare email fittizie (domini `example.*`, `test.*`, `company.*`) o recapiti telefonici sequenziali/dummy (`1234567`, `0000000`).
+     - Divieto di inventare disponibilità, tariffe o competenze non esplicitamente documentate dalle fonti.
+2. In UI è attivo per impostazione predefinita il badge/toggle visivo **"🛡️ Strict Ground-Truth / Zero-Hallucination Mode"**.
+
+---
+
 ## 🔄 4. Switch e Navigazione tra Workspace Contexts
 
 ### Diagramma di Stato Navigazione Tra Workspace

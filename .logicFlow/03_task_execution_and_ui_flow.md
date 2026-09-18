@@ -73,6 +73,28 @@ sequenceDiagram
     end
 ```
 
+### 2.1 Generatore Task da Email / Input Grezzo ("New Task from Text/Email")
+
+Quando l'operatore riceve un'email o una richiesta non strutturata da un cliente o fornitore (es. bando di ricerca specialisti, richiesta di consulenza, commessa formativa):
+
+1. L'utente incolla il testo integrale grezzo nella textarea di `AITaskArchitectModal.vue`.
+2. `refineTaskDraft` elabora il testo incrociandolo con la Costituzione DBS del Workspace (`Level 2`) e produce:
+   - **Titolo Sintetico:** Focalizzato sull'azione e sui parametri chiave (es. _"Docente Camunda 8 BPMN | Milano/Remoto"_).
+   - **Descrizione Operativa:** Dettaglia contesto, requisiti reali, date e modalità logistica (remoto/presenza).
+   - **Sotto-Task Atomiche Progressive:** Scomposizione in 3-5 step operativi sequenziali (es. sourcing profili certificati, verifica requisiti chiave, registrazione foglio con tracciamento fonti, contatto di qualifica).
+
+### 2.2 Gestione Deterministica dei GAP Operativi (Nessuna Allucinazione sui Dati Mancanti)
+
+- Se l'email o l'appunto grezzo non specifica elementi essenziali (es. tariffa oraria/giornaliera, budget, contatti diretti o date esatte), il generatore **NON deve inventare questi dati**.
+- I dati mancanti vengono catalogati esplicitamente come **GAP Operativi da verificare** (es. _"Punto da verificare: concordare tariffa in prima chiamata con il cliente/candidato"_).
+
+### 2.3 Integrazione con i Guardrail Backend dello Step 21
+
+Il Task così strutturato fluisce poi nel runtime agentico protetto da:
+
+- `buildStackedPrompt` in `promptBuilder.ts` (Level 1 Base Rules + Level 2 Workspace Attitude + Level 3 Task Instruction).
+- `antiHallucinationGuardrail.ts` a valle su ogni operazione tabellare (normalizzazione URL, blocco email fittizie `@example.*`, data GDPR Art. 14 forzata a +30gg).
+
 ---
 
 ## 💬 3. Ciclo Conversazionale, Memoria di Lavoro & Scheda Punti Chiave

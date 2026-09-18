@@ -1156,23 +1156,39 @@ function buildPostMessageHtml(targetOrigin: string, payload: Record<string, unkn
 </html>`;
 } /* end buildPostMessageHtml */
 
-// ── AI PROMPT ARCHITECT: generateDbsAttitude (Step 10 Fase 2) ─────────────────
+// ── AI PROMPT ARCHITECT: generateDbsAttitude (Step 10 / Step 22) ──────────────
 
 const DBS_SYSTEM_PROMPT =
-  "Sei AgenteArchitect, il copilota no-code di OpsFlow esperto nel framework DBS.\n" +
-  "Analizza la descrizione dell'utente ed estrai l'atteggiamento operativo dell'Agente AI del Workspace.\n\n" +
+  "Sei AgenteArchitect, il copilota no-code di OpsFlow esperto nel framework DBS " +
+  "(Direction, Blueprints, Solutions).\n" +
+  "Analizza la descrizione dell'utente ed estrai l'atteggiamento operativo (Costituzione DBS) " +
+  "dell'Agente AI del Workspace.\n\n" +
+  "PRINCIPIO ARCHITETTURALE FONDAMENTALE (DISACCOPPIAMENTO WORKSPACE VS TASK):\n" +
+  "- L'Attitude rappresenta l'identità, il codice deontologico e la METODOLOGIA OPERATIVA permanente " +
+  "dell'intero Workspace (IL 'COME CI SI COMPORTA').\n" +
+  "- È TASSATIVAMENTE VIETATO inserire dettagli contingenti di un singolo incarico o corso (nessun nome cliente " +
+  "contingente come 'NobleProg', nessuna singola commessa, nessuna tecnologia specifica isolata come 'Oracle 19c' " +
+  "o 'Camunda', nessuna data specifica di eventi).\n" +
+  "- L'Attitude deve rimanere universale e riutilizzabile per centinaia di task diversi in questo settore.\n\n" +
   "REGOLE TASSATIVE:\n" +
-  "1. Sii agnostico rispetto al settore (es. Parrucchiere, Ingegneria Edile, Avvocato, Estetica, Software).\n" +
-  "2. Identifica con precisione il settore (industryScope) ed il tono di voce consigliato (tone).\n" +
-  "3. Estrai 3-6 competenze chiave (skills) ed inseriscile nella Skill Matrix.\n" +
-  "4. Genera 3-5 regole vincolanti DO (doList) e 3-5 divieti DON'T (dontList) per prevenire allucinazioni.\n" +
+  "1. Identifica con precisione il settore professionale generale (industryScope) ed il tono di voce (tone).\n" +
+  "2. Estrai 3-6 competenze e metodologie chiave (skills) ed inseriscile nella Skill Matrix.\n" +
+  "3. Genera 3-5 regole vincolanti DO (doList) che DEVONO includere obbligatoriamente i seguenti Guardrail:\n" +
+  "   - Raccogliere e inserire esclusivamente URL reali e certificati restituiti dai motori di ricerca.\n" +
+  "   - Forzare deterministicamente la data informativa GDPR Art. 14 a +30 giorni dalla data di raccolta.\n" +
+  "   - Marcare esplicitamente disponibilità, tariffe o recapiti non verificati come 'GAP da verificare'.\n" +
+  "   - Standardizzare i contatti non pubblici come 'Contatto via InMail / Profilo Pubblico'.\n" +
+  "4. Genera 3-5 divieti tassativi DON'T (dontList) che DEVONO includere obbligatoriamente i seguenti Guardrail:\n" +
+  "   - Divieto assoluto di inventare URL 404 dedotti o sintetici non restituiti dai motori.\n" +
+  "   - Divieto assoluto di generare email fittizie (domini example.*, test.*) o numeri di telefono dummy.\n" +
+  "   - Divieto assoluto di inventare disponibilità, tariffe orarie o competenze non documentate.\n" +
   "5. Rispondi ESCLUSIVAMENTE in formato JSON strutturato conforme allo schema richiesto.";
 
 /**
  * Callable Function: generateDbsAttitude
  *
  * Generates structured WorkspaceAttitude (industryScope, tone, skills, DO/DON'T rules)
- * from a natural language prompt using Genkit & Gemini 3.5 Flash.
+ * from a natural language prompt using Genkit & Gemini 3.6 Flash.
  *
  * @security Verified active JWT token required (isActive === true).
  */
@@ -1215,6 +1231,37 @@ export const generateDbsAttitude = onCall(
 
       const attitude = llmResponse.output;
 
+      // Step 22 — Deterministic Enforcement of Mandatory Zero-Hallucination & GDPR Guardrails
+      const mandatoryDoCheck =
+        "Raccogliere esclusivamente URL reali e certificati restituiti dai motori di ricerca";
+      const hasUrlGuard = attitude.rules.doList.some(
+        (r) => r.toLowerCase().includes("url reali") || r.toLowerCase().includes("motori"),
+      );
+      if (!hasUrlGuard) {
+        attitude.rules.doList.unshift(mandatoryDoCheck);
+      }
+
+      const mandatoryGdprCheck =
+        "Forzare la data informativa GDPR Art. 14 a +30 giorni dalla data corrente";
+      const hasGdprGuard = attitude.rules.doList.some(
+        (r) => r.toLowerCase().includes("gdpr") || r.toLowerCase().includes("30"),
+      );
+      if (!hasGdprGuard) {
+        attitude.rules.doList.push(mandatoryGdprCheck);
+      }
+
+      const mandatoryDontCheck =
+        "Divieto assoluto di inventare URL 404, email fittizie (es. example.*) o telefoni dummy";
+      const hasDontGuard = attitude.rules.dontList.some(
+        (r) =>
+          r.toLowerCase().includes("url 404") ||
+          r.toLowerCase().includes("fittizi") ||
+          r.toLowerCase().includes("example"),
+      );
+      if (!hasDontGuard) {
+        attitude.rules.dontList.unshift(mandatoryDontCheck);
+      }
+
       logger.info("generateDbsAttitude completed", {
         workspaceId,
         industryScope: attitude.industryScope,
@@ -1230,21 +1277,30 @@ export const generateDbsAttitude = onCall(
   },
 ); // end generateDbsAttitude
 
-// ── AI TASK ARCHITECT: refineTaskDraft (Step 17) ──────────────────────────────
+// ── AI TASK ARCHITECT: refineTaskDraft (Step 17 / Step 22) ───────────────────
 
 const TASK_ARCHITECT_SYSTEM_PROMPT =
-  "Sei AITaskArchitect, il copilota no-code di OpsFlow specializzato nella creazione di task operativi.\n" +
-  "Il tuo compito è trasformare un appunto grezzo o informale in una scheda task professionale e strutturata.\n\n" +
+  "Sei AITaskArchitect, il copilota no-code di OpsFlow specializzato nella creazione e scomposizione di task.\n" +
+  "Il tuo compito è trasformare un appunto informale o un'EMAIL GREZZA ricevuta da un cliente/fornitore " +
+  "in una scheda task professionale e strutturata.\n\n" +
+  "PRINCIPIO ARCHITETTURALE FONDAMENTALE (TASK OPERATIVO DALL'INPUT REALE):\n" +
+  "- Il Task rappresenta l'incarico contingente specifico (IL 'COSA CERCARE / ESEGUIRE').\n" +
+  "- Se l'input è un'email grezza, estrai fedelmente i requisiti reali indicati " +
+  "(tecnologie, seniority, sede/remoto, date indicate).\n" +
+  "- GESTIONE DETERMINISTICA DEI GAP (ZERO-ALLUCINAZIONE): se l'email o appunto NON specifica elementi essenziali " +
+  "(es. tariffa oraria/giornaliera, budget, contatti diretti, disponibilità esatta), NON DEVI MAI INVENTARLI. " +
+  "Inseriscili esplicitamente nella descrizione o nelle sotto-task come 'GAP DA VERIFICARE: concordare " +
+  "tariffa/disponibilità con il cliente o candidato'.\n\n" +
   "REGOLE TASSATIVE:\n" +
   "1. Rispetta RIGOROSAMENTE il settore, il tono e le regole DO/DON'T della Costituzione DBS del Workspace.\n" +
-  "2. Genera un titolo sintetico orientato all'azione (max 80 caratteri).\n" +
-  "3. Scrivi una descrizione operativa con contesto, istruzioni e obiettivo finale.\n" +
+  "2. Genera un titolo sintetico orientato all'azione (max 80 caratteri, es. 'Docente Camunda 8 | Milano/Remoto').\n" +
+  "3. Scrivi una descrizione operativa con contesto, requisiti certi ed evidenziazione dei GAP da verificare.\n" +
   "4. Scegli la categoria più pertinente tra: general, marketing, research, admin, dev, clinical.\n" +
   "5. Definisci la priorità operativa: low, medium o high.\n" +
   "6. Stima il tempo realistico in minuti (5-480).\n" +
-  "7. Crea 2-6 sotto-task in sequenza logica operativa.\n" +
+  "7. Crea 2-6 sotto-task progressive in sequenza logica operativa.\n" +
   "8. Rispondi ESCLUSIVAMENTE in formato JSON strutturato conforme allo schema richiesto.\n" +
-  "9. Non aggiungere dati personali identificabili (PII) nei campi di output.";
+  "9. Non aggiungere dati personali identificabili (PII) fittizi o non autorizzati nei campi di output.";
 
 /**
  * Callable Function: refineTaskDraft
@@ -1311,8 +1367,11 @@ export const refineTaskDraft = onCall(
 
     const fullPrompt =
       `${TASK_ARCHITECT_SYSTEM_PROMPT}${constitutionContext}\n\n` +
-      `--- APPUNTO GREZZO DELL'UTENTE ---\n"${sanitized.sanitizedText}"\n--- FINE APPUNTO ---\n\n` +
-      "Trasforma l'appunto in una scheda task strutturata conforme allo schema JSON richiesto.";
+      "--- TESTO GREZZO / EMAIL DELL'UTENTE ---\n" +
+      `"${sanitized.sanitizedText}"\n` +
+      "--- FINE TESTO GREZZO ---\n\n" +
+      "Trasforma l'email o richiesta grezza in una scheda task operativa strutturata " +
+      "conforme allo schema JSON richiesto, evidenziando chiaramente i requisiti certi e i GAP mancanti.";
 
     try {
       const { ai, RefinedTaskDraftSchema } = await import("./ai/genkitConfig.js");
