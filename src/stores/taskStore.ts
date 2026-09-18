@@ -127,6 +127,28 @@ function loadCachedWorkspaces(): Workspace[] {
   }
 } /*end loadCachedWorkspaces*/
 
+const ACTIVE_WORKSPACE_KEY = "opsflow_active_workspace_id";
+
+function loadCachedActiveWorkspaceId(): string | null {
+  try {
+    return localStorage.getItem(ACTIVE_WORKSPACE_KEY) || null;
+  } catch {
+    return null;
+  }
+} /*end loadCachedActiveWorkspaceId*/
+
+function saveCachedActiveWorkspaceId(id: string | null): void {
+  try {
+    if (id) {
+      localStorage.setItem(ACTIVE_WORKSPACE_KEY, id);
+    } else {
+      localStorage.removeItem(ACTIVE_WORKSPACE_KEY);
+    }
+  } catch {
+    // Ignore quota error
+  }
+} /*end saveCachedActiveWorkspaceId*/
+
 function saveCachedWorkspaces(workspaces: Workspace[]): void {
   try {
     localStorage.setItem(WORKSPACES_CACHE_KEY, JSON.stringify(workspaces));
@@ -139,7 +161,7 @@ export const useTaskStore = defineStore("tasks", {
   state: (): TaskState => ({
     tasks: [],
     workspaces: loadCachedWorkspaces(),
-    activeWorkspaceId: null,
+    activeWorkspaceId: loadCachedActiveWorkspaceId(),
     isLoading: false,
     isGeneratingAttitude: false,
     isRefiningTaskDraft: false,
@@ -201,10 +223,12 @@ export const useTaskStore = defineStore("tasks", {
     async setActiveWorkspace(target: Workspace | string | null): Promise<void> {
       if (!target) {
         this.activeWorkspaceId = null;
+        saveCachedActiveWorkspaceId(null);
         return;
       }
       const wsId = typeof target === "string" ? target : target.id;
       this.activeWorkspaceId = wsId;
+      saveCachedActiveWorkspaceId(wsId);
       await this.fetchWorkspaceTasks(wsId);
     } /*end setActiveWorkspace*/,
 
@@ -676,6 +700,113 @@ export const useTaskStore = defineStore("tasks", {
         this.isLoading = false;
       }
     } /*end deleteTask*/,
+
+    /**
+     * Archive a task in workspace (moves it to the archived section).
+     */
+    async archiveTask(workspaceId: string, taskId: string): Promise<void> {
+      const firestore = useFirestore();
+
+      this.isLoading = true;
+      this.error = null;
+
+      try {
+        const archivedAt = new Date().toISOString();
+        await firestore.updateWorkspaceTaskDoc(workspaceId, taskId, {
+          archived: true,
+          archivedAt,
+        });
+
+        const task = this.tasks.find((t) => t.id === taskId);
+        if (task) {
+          task.archived = true;
+          task.archivedAt = archivedAt;
+          task.updatedAt = new Date();
+        }
+      } catch (err) {
+        this.error = err instanceof Error ? err.message : "Failed to archive task";
+        throw err;
+      } finally {
+        this.isLoading = false;
+      }
+    } /*end archiveTask*/,
+
+    /**
+     * Restore an archived task back to active workspace tasks.
+     */
+    async restoreTask(workspaceId: string, taskId: string): Promise<void> {
+      const firestore = useFirestore();
+
+      this.isLoading = true;
+      this.error = null;
+
+      try {
+        await firestore.updateWorkspaceTaskDoc(workspaceId, taskId, {
+          archived: false,
+          archivedAt: null,
+        });
+
+        const task = this.tasks.find((t) => t.id === taskId);
+        if (task) {
+          task.archived = false;
+          task.archivedAt = null;
+          task.updatedAt = new Date();
+        }
+      } catch (err) {
+        this.error = err instanceof Error ? err.message : "Failed to restore task";
+        throw err;
+      } finally {
+        this.isLoading = false;
+      }
+    } /*end restoreTask*/,
+
+    /**
+     * Toggle the pinned status of a task in the workspace.
+     */
+    async togglePinTask(workspaceId: string, taskId: string): Promise<void> {
+      const firestore = useFirestore();
+      const task = this.tasks.find((t) => t.id === taskId);
+      if (!task) return;
+
+      const nextPinned = !task.pinned;
+
+      try {
+        await firestore.updateWorkspaceTaskDoc(workspaceId, taskId, {
+          pinned: nextPinned,
+        });
+
+        task.pinned = nextPinned;
+        task.updatedAt = new Date();
+      } catch (err) {
+        this.error = err instanceof Error ? err.message : "Failed to toggle pin task";
+        throw err;
+      }
+    } /*end togglePinTask*/,
+
+    /**
+     * Reorder tasks in the workspace by updating their `order` index.
+     */
+    async reorderTasks(workspaceId: string, orderedTaskIds: string[]): Promise<void> {
+      const firestore = useFirestore();
+
+      // Optimistic update in local Pinia state
+      orderedTaskIds.forEach((id, idx) => {
+        const t = this.tasks.find((task) => task.id === id);
+        if (t) {
+          t.order = idx;
+        }
+      });
+
+      // Persist in background to Firestore
+      try {
+        const updatePromises = orderedTaskIds.map((id, idx) =>
+          firestore.updateWorkspaceTaskDoc(workspaceId, id, { order: idx }).catch(() => {}),
+        );
+        await Promise.all(updatePromises);
+      } catch (err) {
+        console.warn("[taskStore:reorderTasks] Error updating task order in Firestore:", err);
+      }
+    } /*end reorderTasks*/,
 
     /**
      * Create a new workspace.

@@ -214,3 +214,23 @@ Per rispettare il principio DRY (Don't Repeat Yourself) e le direttive [AGENTS.m
    - Titolo: _"✨ AI Task Architect — Rigenera Sotto-Task | Task: [Titolo]"_.
    - Azione finale: invoca `taskStore.updateTask(workspaceId, existingTask.id, { aiMetadata: { ...subtasks } })` aggiornando **in-place** il task attivo senza creare record duplicati o causare perdite di contesto.
    - Reattività immediata: `TaskChatWindow.vue` intercetta l'evento `taskUpdated` aggiornando istantaneamente l'interfaccia utente (sotto-task operative, indicatori di completamento e timeline).
+
+---
+
+## 📦 8. Gestione Ciclo di Vita Task nel Workspace: Archivio, Drag & Drop e Persistenza Reload
+
+### 8.1 Persistenza Sessione Workspace su Refresh (Reload Bug Fix)
+
+- **Problema Risolto:** Al refresh del browser (`F5`), l'applicazione perdeva il puntamento al workspace corrente e ripristinava arbitrariamente il primo workspace in lista (`workspaces[0]`).
+- **Architettura di Caching:** `taskStore` sincronizza l'identificativo del workspace selezionato nella chiave `opsflow_active_workspace_id` di `localStorage`. All'inizializzazione (`onMounted`), se la chiave esiste e appartiene al tenant corrente, l'app ripristina esattamente il workspace attivo senza deviazioni di contesto.
+
+### 8.2 Ordinamento Reattivo Drag & Drop e Fissaggio Task (Pin 📌)
+
+- **Fissaggio Prioritario (Pin):** L'operatore può fissare uno o più task in primo piano tramite l'opzione _"Fissa in alto"_ nel menu della card. I task fissati sono contraddistinti da un badge dorato 📌 e compaiono sempre prima di tutti gli altri task.
+- **Drag & Drop Reattivo:** L'operatore può trascinare le card all'interno della griglia per riordinare liberamente i flussi operativi. Al rilascio (`drop`), il nuovo ordinamento viene applicato in-memory e persistito su Firestore (`order` field) tramite `taskStore.reorderTasks`.
+
+### 8.3 Archivio Task Richiudibile (`<q-expansion-item>`)
+
+- **Archiviazione Selettiva:** Dal menu contestuale a 3 puntini di ciascuna card, l'operatore può selezionare _"📦 Archivia Task"_. Il task scompare dalla griglia principale dei task attivi e viene trasferito nella sezione archivio (`archived: true`).
+- **Expander di Default Chiuso:** In calce alla pagina del workspace è presente un `<q-expansion-item>` con intestazione _"📦 Task Archiviati (N)"_. Rimane tassativamente chiuso all'avvio per non ingombrare la visuale di lavoro.
+- **Ripristino Istantaneo:** Aprendo l'archivio, ciascun task dispone dell'azione rapida _"♻️ Ripristina"_, che lo rimuove dall'archivio e lo riposiziona istantaneamente nella griglia dei task attivi del workspace.

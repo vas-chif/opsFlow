@@ -173,6 +173,10 @@ export interface Task {
   assignedTo: string | null;
   aiMetadata: TaskAIMetadata;
   settings?: TaskSettings;
+  archived?: boolean;
+  archivedAt?: FirestoreTimestamp | string | null;
+  pinned?: boolean;
+  order?: number;
   createdAt: FirestoreTimestamp;
   updatedAt: FirestoreTimestamp;
 } /*end Task*/

@@ -90,8 +90,137 @@ const confirmDeleteTitle = ref("");
 const currentWorkspaceTasks = computed(() => {
   const sw = selectedWorkspace.value;
   if (!sw) return [];
-  return taskStore.tasks.filter((t: Task) => t.workspaceId === sw.id);
+  const active = taskStore.tasks.filter((t: Task) => t.workspaceId === sw.id && !t.archived);
+  return active.sort((a, b) => {
+    // Pinned tasks first
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
+    // Then order ascending if defined
+    if (a.order !== undefined && b.order !== undefined) {
+      return a.order - b.order;
+    }
+    if (a.order !== undefined) return -1;
+    if (b.order !== undefined) return 1;
+    return 0;
+  });
 });
+
+const archivedWorkspaceTasks = computed(() => {
+  const sw = selectedWorkspace.value;
+  if (!sw) return [];
+  return taskStore.tasks.filter((t: Task) => t.workspaceId === sw.id && t.archived === true);
+});
+
+const archivedExpanderOpen = ref<boolean>(false);
+
+// ── Drag & Drop Reordering ──────────────────────────────────────────────────
+const draggedTaskIndex = ref<number | null>(null);
+const dragOverTaskIndex = ref<number | null>(null);
+
+const handleDragStart = (event: DragEvent, index: number): void => {
+  draggedTaskIndex.value = index;
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(index));
+  }
+}; /*end handleDragStart*/
+
+const handleDragOver = (event: DragEvent, index: number): void => {
+  event.preventDefault();
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = "move";
+  }
+  dragOverTaskIndex.value = index;
+}; /*end handleDragOver*/
+
+const handleDragLeave = (): void => {
+  dragOverTaskIndex.value = null;
+}; /*end handleDragLeave*/
+
+const handleDrop = async (event: DragEvent, targetIndex: number): Promise<void> => {
+  event.preventDefault();
+  const fromIndex = draggedTaskIndex.value;
+  dragOverTaskIndex.value = null;
+  draggedTaskIndex.value = null;
+
+  if (fromIndex === null || fromIndex === targetIndex || !selectedWorkspace.value) return;
+
+  const list = [...currentWorkspaceTasks.value];
+  const [movedTask] = list.splice(fromIndex, 1);
+  if (!movedTask) return;
+  list.splice(targetIndex, 0, movedTask);
+
+  const reorderedIds = list.map((t) => t.id);
+  await taskStore.reorderTasks(selectedWorkspace.value.id, reorderedIds);
+  q.notify({
+    type: "positive",
+    message: "Ordine task aggiornato.",
+    icon: "swap_vert",
+    timeout: 1500,
+  });
+}; /*end handleDrop*/
+
+const handleDragEnd = (): void => {
+  draggedTaskIndex.value = null;
+  dragOverTaskIndex.value = null;
+}; /*end handleDragEnd*/
+
+const handleTogglePin = async (task: Task): Promise<void> => {
+  if (!selectedWorkspace.value) return;
+  try {
+    await taskStore.togglePinTask(selectedWorkspace.value.id, task.id);
+    q.notify({
+      type: "info",
+      message: task.pinned ? "Task fissato in alto." : "Fissaggio rimosso dal task.",
+      icon: "push_pin",
+      timeout: 1500,
+    });
+  } catch {
+    q.notify({
+      type: "negative",
+      message: "Impossibile aggiornare il fissaggio del task.",
+      icon: "error",
+    });
+  }
+}; /*end handleTogglePin*/
+
+const handleArchiveTask = async (task: Task): Promise<void> => {
+  if (!selectedWorkspace.value) return;
+  try {
+    await taskStore.archiveTask(selectedWorkspace.value.id, task.id);
+    q.notify({
+      type: "info",
+      message: `Task "${task.title}" archiviato.`,
+      icon: "inventory_2",
+      timeout: 2000,
+    });
+  } catch {
+    q.notify({
+      type: "negative",
+      message: "Impossibile archiviare il task.",
+      icon: "error",
+    });
+  }
+}; /*end handleArchiveTask*/
+
+const handleRestoreTask = async (task: Task): Promise<void> => {
+  if (!selectedWorkspace.value) return;
+  try {
+    await taskStore.restoreTask(selectedWorkspace.value.id, task.id);
+    q.notify({
+      type: "positive",
+      message: `Task "${task.title}" ripristinato nei task attivi!`,
+      icon: "unarchive",
+      timeout: 2000,
+    });
+  } catch {
+    q.notify({
+      type: "negative",
+      message: "Impossibile ripristinare il task.",
+      icon: "error",
+    });
+  }
+}; /*end handleRestoreTask*/
 
 const chatStore = useTaskChatStore();
 
@@ -331,8 +460,14 @@ watch(
 onMounted(async () => {
   try {
     await taskStore.fetchWorkspaces();
-    if (!taskStore.activeWorkspaceId && taskStore.workspaces[0]) {
-      await taskStore.setActiveWorkspace(taskStore.workspaces[0]);
+    // Step 25: Restore last active workspace from cache if valid, otherwise fallback
+    const matchedWs = taskStore.activeWorkspaceId
+      ? taskStore.workspaces.find((w: Workspace) => w.id === taskStore.activeWorkspaceId)
+      : null;
+    const targetWs =
+      matchedWs || (taskStore.workspaces.length > 0 ? taskStore.workspaces[0] : null);
+    if (targetWs) {
+      await taskStore.setActiveWorkspace(targetWs);
     }
     if (selectedWorkspace.value) {
       await taskStore.fetchWorkspaceTasks(selectedWorkspace.value.id);
@@ -643,23 +778,49 @@ onMounted(async () => {
 
       <!-- Task cards grid -->
       <div v-else class="row q-col-gutter-lg">
-        <div v-for="task in currentWorkspaceTasks" :key="task.id" class="col-12 col-sm-6 col-md-4">
+        <div
+          v-for="(task, index) in currentWorkspaceTasks"
+          :key="task.id"
+          class="col-12 col-sm-6 col-md-4 task-card-col"
+          :class="{
+            'task-dragging': draggedTaskIndex === index,
+            'task-drag-over': dragOverTaskIndex === index,
+          }"
+          :draggable="true"
+          @dragstart="handleDragStart($event, index)"
+          @dragover.prevent="handleDragOver($event, index)"
+          @dragleave="handleDragLeave"
+          @drop="handleDrop($event, index)"
+          @dragend="handleDragEnd"
+        >
           <q-card
             flat
             class="q-pa-lg cursor-pointer task-card"
             :class="[
               selectedTask?.id === task.id ? 'selected-card' : '',
               uiStore.darkMode ? 'dark-task-card' : 'light-task-card',
+              task.pinned ? 'pinned-card-border' : '',
             ]"
             @click="selectTask(task)"
           >
-            <!-- Task Header with 3-Dots Menu -->
-            <div class="row items-center justify-between q-mb-sm">
-              <div
-                class="text-h6 text-weight-bold task-title-text"
-                :class="uiStore.darkMode ? 'text-white' : 'text-navy'"
-              >
-                {{ task.title }}
+            <!-- Task Header with Pin Icon and 3-Dots Menu -->
+            <div class="row items-center justify-between q-mb-sm no-wrap">
+              <div class="row items-center q-gutter-xs no-wrap ellipsis" style="max-width: 82%">
+                <q-icon
+                  v-if="task.pinned"
+                  name="push_pin"
+                  size="18px"
+                  color="amber-7"
+                  class="q-mr-xs flex-shrink-0"
+                >
+                  <q-tooltip>Task Fissato in Alto</q-tooltip>
+                </q-icon>
+                <div
+                  class="text-h6 text-weight-bold task-title-text ellipsis"
+                  :class="uiStore.darkMode ? 'text-white' : 'text-navy'"
+                >
+                  {{ task.title }}
+                </div>
               </div>
               <q-btn
                 flat
@@ -670,7 +831,7 @@ onMounted(async () => {
                 @click.stop
               >
                 <q-menu auto-close class="notebook-menu">
-                  <q-list style="min-width: 180px">
+                  <q-list style="min-width: 190px">
                     <!-- Inspect AI SubTasks -->
                     <q-item clickable @click="selectTask(task)">
                       <q-item-section avatar>
@@ -685,6 +846,20 @@ onMounted(async () => {
                         <q-icon name="edit" size="xs" color="primary" />
                       </q-item-section>
                       <q-item-section>Edit Task</q-item-section>
+                    </q-item>
+
+                    <!-- Pin / Unpin Task -->
+                    <q-item clickable @click="handleTogglePin(task)">
+                      <q-item-section avatar>
+                        <q-icon
+                          name="push_pin"
+                          size="xs"
+                          :color="task.pinned ? 'amber-8' : 'grey-7'"
+                        />
+                      </q-item-section>
+                      <q-item-section>{{
+                        task.pinned ? "Rimuovi Fissaggio" : "Fissa in Alto"
+                      }}</q-item-section>
                     </q-item>
 
                     <!-- Change Status -->
@@ -721,6 +896,14 @@ onMounted(async () => {
                     </q-item>
 
                     <q-separator />
+
+                    <!-- Archive Task -->
+                    <q-item clickable @click="handleArchiveTask(task)">
+                      <q-item-section avatar>
+                        <q-icon name="inventory_2" size="xs" color="amber-7" />
+                      </q-item-section>
+                      <q-item-section>Archivia Task</q-item-section>
+                    </q-item>
 
                     <!-- Delete Task -->
                     <q-item clickable class="text-negative" @click="openDeleteTaskModal(task)">
@@ -796,6 +979,87 @@ onMounted(async () => {
             </div>
           </q-card>
         </div>
+      </div>
+
+      <!-- Step 25: Archived Tasks Expander Section (Default Closed) -->
+      <div v-if="archivedWorkspaceTasks.length > 0" class="q-mt-xl">
+        <q-expansion-item
+          v-model="archivedExpanderOpen"
+          icon="inventory_2"
+          :label="`📦 Task Archiviati (${archivedWorkspaceTasks.length})`"
+          caption="Task archiviati o completati di questo workspace (clicca per espandere)"
+          header-class="archived-expansion-header"
+          class="archived-expansion-card"
+        >
+          <q-card flat class="q-pa-md archived-expansion-body">
+            <div class="row q-col-gutter-md">
+              <div
+                v-for="archivedTask in archivedWorkspaceTasks"
+                :key="archivedTask.id"
+                class="col-12 col-sm-6 col-md-4"
+              >
+                <q-card
+                  flat
+                  class="q-pa-md archived-task-item"
+                  :class="uiStore.darkMode ? 'dark-archived-item' : 'light-archived-item'"
+                >
+                  <div class="row items-center justify-between no-wrap q-mb-xs">
+                    <div class="text-subtitle1 text-weight-bold ellipsis" style="max-width: 70%">
+                      {{ archivedTask.title }}
+                    </div>
+                    <q-badge
+                      :color="archivedTask.status === 'completed' ? 'positive' : 'grey-7'"
+                      class="text-caption"
+                    >
+                      {{ archivedTask.status }}
+                    </q-badge>
+                  </div>
+                  <div
+                    class="text-caption text-grey-6 ellipsis-2-lines q-mb-sm"
+                    style="min-height: 32px"
+                  >
+                    {{ archivedTask.description || "Nessuna descrizione." }}
+                  </div>
+                  <div class="row items-center justify-between q-mt-sm pt-sm border-top-subtle">
+                    <q-btn
+                      flat
+                      dense
+                      size="sm"
+                      icon="analytics"
+                      label="Ispeziona"
+                      color="secondary"
+                      @click="selectTask(archivedTask)"
+                    />
+                    <div class="row items-center q-gutter-xs">
+                      <q-btn
+                        flat
+                        dense
+                        size="sm"
+                        icon="unarchive"
+                        label="Ripristina"
+                        color="primary"
+                        @click="handleRestoreTask(archivedTask)"
+                      >
+                        <q-tooltip>Ripristina nei task attivi del workspace</q-tooltip>
+                      </q-btn>
+                      <q-btn
+                        flat
+                        round
+                        dense
+                        size="xs"
+                        icon="delete"
+                        color="negative"
+                        @click="openDeleteTaskModal(archivedTask)"
+                      >
+                        <q-tooltip>Elimina definitivamente</q-tooltip>
+                      </q-btn>
+                    </div>
+                  </div>
+                </q-card>
+              </div>
+            </div>
+          </q-card>
+        </q-expansion-item>
       </div>
 
       <!-- Prompt-Driven Create Task Modal with integrated AI Task Architect -->
@@ -1294,5 +1558,63 @@ onMounted(async () => {
     background: #152238;
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
   }
+}
+
+// ── Step 25: Pin, Drag & Drop, and Archive Styles ───────────────────────────
+.pinned-card-border {
+  border: 1.5px solid rgba(197, 160, 101, 0.75) !important;
+  box-shadow: 0 6px 20px rgba(197, 160, 101, 0.18) !important;
+}
+
+.task-card-col {
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease;
+  cursor: grab;
+
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+.task-dragging {
+  opacity: 0.45;
+  transform: scale(0.97);
+}
+
+.task-drag-over {
+  border-radius: 20px;
+  outline: 2px dashed #c5a065;
+  outline-offset: 4px;
+}
+
+.archived-expansion-card {
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(197, 160, 101, 0.3);
+  background: rgba(10, 35, 66, 0.04);
+}
+
+.archived-expansion-header {
+  font-weight: 700;
+  border-radius: 16px;
+  padding: 14px 20px;
+}
+
+.archived-expansion-body {
+  background: transparent;
+}
+
+.dark-archived-item {
+  background: rgba(21, 34, 56, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+.light-archived-item {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(10, 35, 66, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 </style>
