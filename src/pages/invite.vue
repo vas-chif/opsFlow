@@ -150,12 +150,7 @@ function goToRegister(): void {
         <div class="invite-logo">
           <q-icon name="hub" size="48px" style="color: #c5a065" />
         </div>
-        <div
-          class="text-h4 text-weight-bold q-mt-sm"
-          style="color: #c5a065; font-family: &quot;Playfair Display&quot;, serif"
-        >
-          OpsFlow
-        </div>
+        <div class="text-h4 text-weight-bold q-mt-sm invite-title">OpsFlow</div>
         <div class="text-caption" style="color: #9aacbe; letter-spacing: 0.2em">
           WORKSPACE INTELLIGENCE PLATFORM
         </div>
@@ -201,12 +196,7 @@ function goToRegister(): void {
         <div v-else>
           <div class="text-center q-mb-lg">
             <q-icon name="mail" size="48px" style="color: #c5a065" class="q-mb-sm" />
-            <div
-              class="text-h5 text-weight-bold q-mb-xs"
-              style="color: #f9f7f2; font-family: &quot;Playfair Display&quot;, serif"
-            >
-              Sei stato invitato!
-            </div>
+            <div class="text-h5 text-weight-bold q-mb-xs invite-heading">Sei stato invitato!</div>
             <div class="text-body2" style="color: #9aacbe">
               Hai ricevuto un invito per unirti ad un'organizzazione su OpsFlow.
             </div>
@@ -336,6 +326,16 @@ function goToRegister(): void {
   width: 100%;
   max-width: 480px;
   padding: 24px 16px;
+}
+
+.invite-title {
+  color: #c5a065;
+  font-family: "Playfair Display", serif;
+}
+
+.invite-heading {
+  color: #f9f7f2;
+  font-family: "Playfair Display", serif;
 }
 
 .invite-logo {
