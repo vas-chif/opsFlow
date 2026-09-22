@@ -2041,6 +2041,38 @@ export const acceptTenantInvitation = onCall(
       // Anti-Privilege Escalation: role is read from DB — not from client payload
       const assignedRole = inv.role as "admin" | "user";
 
+      // ── READ PHASE: All reads must be executed before all writes in a transaction ──
+      let wsRef: ReturnType<typeof db.doc> | null = null;
+      let newWsMembers: string[] | null = null;
+      if (inv.scope === "workspace" && inv.workspaceId) {
+        wsRef = db.doc(`tenants/${tenantId}/workspaces/${inv.workspaceId}`);
+        const wsSnap = await tx.get(wsRef);
+        if (wsSnap.exists) {
+          const wsData = wsSnap.data();
+          const currentMembers = (wsData?.assignedMembers as string[]) || [];
+          const identifier = (rawAuth.token.email as string) || inv.email;
+          if (!currentMembers.includes(identifier)) {
+            newWsMembers = [...currentMembers, identifier];
+          }
+        }
+      }
+
+      let taskRef: ReturnType<typeof db.doc> | null = null;
+      let newTaskMembers: string[] | null = null;
+      if (inv.scope === "task" && inv.workspaceId && inv.taskId) {
+        taskRef = db.doc(`tenants/${tenantId}/workspaces/${inv.workspaceId}/tasks/${inv.taskId}`);
+        const taskSnap = await tx.get(taskRef);
+        if (taskSnap.exists) {
+          const taskData = taskSnap.data();
+          const currentMembers = (taskData?.assignedMembers as string[]) || [];
+          const identifier = (rawAuth.token.email as string) || inv.email;
+          if (!currentMembers.includes(identifier)) {
+            newTaskMembers = [...currentMembers, identifier];
+          }
+        }
+      }
+
+      // ── WRITE PHASE: All writes executed after all reads ──
       // Set JWT Custom Claims via Admin SDK (bypasses Firestore rules — server-side only)
       await getAuth().setCustomUserClaims(rawAuth.uid, {
         tenantId: inv.tenantId,
@@ -2061,32 +2093,14 @@ export const acceptTenantInvitation = onCall(
         isActive: true,
       });
 
-      // If invitation was scoped to a workspace, assign member to workspace
-      if (inv.scope === "workspace" && inv.workspaceId) {
-        const wsRef = db.doc(`tenants/${tenantId}/workspaces/${inv.workspaceId}`);
-        const wsSnap = await tx.get(wsRef);
-        if (wsSnap.exists) {
-          const wsData = wsSnap.data();
-          const currentMembers = (wsData?.assignedMembers as string[]) || [];
-          const identifier = (rawAuth.token.email as string) || inv.email;
-          if (!currentMembers.includes(identifier)) {
-            tx.update(wsRef, { assignedMembers: [...currentMembers, identifier] });
-          }
-        }
+      // Update workspace assigned members if scoped
+      if (wsRef && newWsMembers) {
+        tx.update(wsRef, { assignedMembers: newWsMembers });
       }
 
-      // If invitation was scoped to a specific task, assign member to task
-      if (inv.scope === "task" && inv.workspaceId && inv.taskId) {
-        const taskRef = db.doc(`tenants/${tenantId}/workspaces/${inv.workspaceId}/tasks/${inv.taskId}`);
-        const taskSnap = await tx.get(taskRef);
-        if (taskSnap.exists) {
-          const taskData = taskSnap.data();
-          const currentMembers = (taskData?.assignedMembers as string[]) || [];
-          const identifier = (rawAuth.token.email as string) || inv.email;
-          if (!currentMembers.includes(identifier)) {
-            tx.update(taskRef, { assignedMembers: [...currentMembers, identifier] });
-          }
-        }
+      // Update task assigned members if scoped
+      if (taskRef && newTaskMembers) {
+        tx.update(taskRef, { assignedMembers: newTaskMembers });
       }
 
       // Mark invitation as accepted
