@@ -2521,7 +2521,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                   <div
                     ref="chatScrollRef"
                     class="col scroll q-mb-xs q-px-xs q-pt-xs"
-                    style="overflow-y: auto"
+                    style="overflow-y: auto; overflow-x: hidden"
                   >
                     <div v-for="msg in activeSession.messages" :key="msg.id" class="q-mb-xs">
                       <q-chat-message
@@ -2685,12 +2685,15 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                     <q-input
                       ref="chatInputRef"
                       v-model="chatMessage"
+                      type="textarea"
+                      autogrow
                       outlined
                       dense
-                      placeholder="Scrivi un'istruzione o detta a voce..."
+                      rows="1"
+                      placeholder="Scrivi un'istruzione o detta a voce... (Shift+Invio per a capo)"
                       :disabled="isSending"
-                      style="font-size: 0.85rem"
-                      @keyup.enter="handleSendChatMessage"
+                      class="chat-prompt-textarea"
+                      @keydown.enter.exact.prevent="handleSendChatMessage"
                     >
                       <template #before>
                         <q-btn
@@ -3497,5 +3500,40 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
 
 .border-light {
   border: 1px solid rgba(10, 35, 66, 0.08);
+}
+
+.chat-prompt-textarea {
+  font-size: 0.875rem;
+
+  :deep(.q-field__control) {
+    border-radius: 12px;
+    padding: 2px 8px;
+    min-height: 42px;
+    background-color: #fafbfc;
+    transition: all 0.2s ease;
+
+    &:hover {
+      border-color: rgba(10, 35, 66, 0.3);
+    }
+    &.q-field__control--focused {
+      background-color: #ffffff;
+      box-shadow: 0 0 0 2px rgba(10, 35, 66, 0.1);
+    }
+  }
+
+  :deep(.q-field__native) {
+    padding: 6px 0;
+    max-height: 180px;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    line-height: 1.4;
+    resize: none;
+  }
+
+  :deep(.q-field__before),
+  :deep(.q-field__after) {
+    align-self: flex-end;
+    padding-bottom: 4px;
+  }
 }
 </style>
