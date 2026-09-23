@@ -889,58 +889,162 @@ onMounted(() => {
       </q-tab-panels>
 
       <!-- Invite Member Dialog — Step 14 & Step 26 -->
-      <q-dialog v-model="showInviteDialog" persistent>
-        <q-card style="min-width: 420px" class="q-pa-md glass-invite-card">
-          <q-card-section>
-            <div class="text-h6 text-weight-bold">
-              ✉️ Invita Persona
-              {{ scope !== "tenant" ? (scope === "workspace" ? "al Workspace" : "al Task") : "" }}
+      <q-dialog
+        v-model="showInviteDialog"
+        persistent
+        backdrop-filter="blur(14px)"
+        transition-show="scale"
+        transition-hide="scale"
+      >
+        <q-card class="elite-invite-dialog-card column no-wrap">
+          <!-- Header -->
+          <q-card-section class="q-px-lg q-pt-lg q-pb-none">
+            <div class="row items-center no-wrap">
+              <div class="invite-icon-badge q-mr-md shrink-0">
+                <q-icon name="person_add" size="24px" color="primary" />
+              </div>
+              <div class="col min-width-0">
+                <div class="text-h6 text-weight-bold text-navy text-truncate">
+                  Invita Collaboratore
+                </div>
+                <div class="text-caption text-grey-7 q-mt-xs">
+                  {{
+                    scope === "task"
+                      ? "Accesso riservato a questo specifico task operativo"
+                      : scope === "workspace"
+                        ? "Accesso ai task e alle schede di questo workspace"
+                        : "Invito all'organizzazione e al team aziendale"
+                  }}
+                </div>
+              </div>
+              <q-btn
+                flat
+                round
+                dense
+                icon="close"
+                color="grey-6"
+                v-close-popup
+                :disable="isInviting"
+                class="q-ml-sm shrink-0"
+              />
             </div>
-            <div class="text-caption text-grey-4 q-mt-xs">
-              {{
-                scope === "task"
-                  ? "La persona riceverà l'invito per collaborare SOLO a questo specifico task."
-                  : scope === "workspace"
-                    ? "La persona invitata avrà accesso a tutti i task operativi di questo workspace."
-                    : "Il membro riceverà un link sicuro via email per unirsi all'organizzazione aziendale."
-              }}
+
+            <!-- Context Banner -->
+            <div class="scope-pill-banner row items-center q-px-md q-py-sm q-mt-md">
+              <q-icon
+                :name="
+                  scope === 'workspace' ? 'domain' : scope === 'task' ? 'task_alt' : 'business'
+                "
+                size="18px"
+                class="text-gold q-mr-sm"
+              />
+              <div class="text-caption text-navy">
+                <span class="text-weight-medium">Destinazione: </span>
+                <strong class="text-navy">
+                  {{
+                    scope === "workspace"
+                      ? workspaceName || "Workspace Corrente"
+                      : scope === "task"
+                        ? taskTitle || "Task Corrente"
+                        : "Tutti i workspace del Tenant"
+                  }}
+                </strong>
+              </div>
             </div>
           </q-card-section>
 
-          <q-card-section class="q-gutter-md">
-            <q-input
-              v-model="inviteEmail"
-              label="Email del collaboratore"
-              type="email"
-              outlined
-              dense
-              dark
-              autocomplete="off"
-              hint="Inserisci l'indirizzo email aziendale."
-            />
-            <q-select
-              v-if="scope === 'tenant'"
-              v-model="inviteRole"
-              :options="roleOptions"
-              option-value="value"
-              option-label="label"
-              emit-value
-              map-options
-              outlined
-              dense
-              dark
-              label="Ruolo da assegnare"
-            />
+          <!-- Form Body -->
+          <q-card-section class="q-px-lg q-py-md q-gutter-y-md">
+            <div>
+              <div class="text-caption text-weight-bold text-navy q-mb-xs">
+                Indirizzo Email Aziendale
+              </div>
+              <q-input
+                v-model="inviteEmail"
+                type="email"
+                outlined
+                dense
+                placeholder="collaboratore@azienda.com"
+                autocomplete="off"
+                spellcheck="false"
+                bg-color="grey-1"
+                class="elite-input"
+                :disable="isInviting"
+                @keydown.enter.prevent="sendInvite"
+              >
+                <template #prepend>
+                  <q-icon name="mail_outline" color="primary" size="20px" />
+                </template>
+                <template v-if="inviteEmail" #append>
+                  <q-btn
+                    flat
+                    round
+                    dense
+                    icon="close"
+                    size="xs"
+                    color="grey-5"
+                    @click="inviteEmail = ''"
+                  />
+                </template>
+              </q-input>
+              <div class="text-caption text-grey-6 q-mt-xs" style="font-size: 0.76rem">
+                Verrà generato un link di accesso sicuro e inviata la notifica.
+              </div>
+            </div>
+
+            <div v-if="scope === 'tenant'">
+              <div class="text-caption text-weight-bold text-navy q-mb-xs">
+                Ruolo &amp; Privilegi
+              </div>
+              <q-select
+                v-model="inviteRole"
+                :options="roleOptions"
+                option-value="value"
+                option-label="label"
+                emit-value
+                map-options
+                outlined
+                dense
+                bg-color="grey-1"
+                class="elite-input"
+                :disable="isInviting"
+              >
+                <template #prepend>
+                  <q-icon name="admin_panel_settings" color="primary" size="20px" />
+                </template>
+              </q-select>
+            </div>
+
+            <!-- GDPR Security Pill -->
+            <div class="gdpr-security-pill row items-center q-px-sm q-py-xs q-mt-sm">
+              <q-icon name="verified_user" size="15px" color="positive" class="q-mr-xs" />
+              <span class="text-caption text-grey-8" style="font-size: 0.74rem">
+                Conforme GDPR Art. 32 con token crittografico monouso.
+              </span>
+            </div>
           </q-card-section>
 
-          <q-card-actions align="right">
-            <q-btn flat label="Annulla" color="grey-4" v-close-popup :disable="isInviting" />
+          <!-- Footer Actions -->
+          <q-card-actions class="q-px-lg q-pb-lg q-pt-xs row items-center justify-end">
+            <q-btn
+              flat
+              rounded
+              no-caps
+              label="Annulla"
+              color="grey-7"
+              class="q-px-md q-mr-sm"
+              v-close-popup
+              :disable="isInviting"
+            />
             <q-btn
               unelevated
-              color="primary"
+              rounded
+              no-caps
               label="Invia Invito"
               icon="send"
+              class="btn-elite-send q-px-lg"
               :loading="isInviting"
+              :disable="isInviting || !inviteEmail.trim()"
               @click="sendInvite"
             />
           </q-card-actions>
@@ -966,11 +1070,75 @@ onMounted(() => {
   margin: 0 auto;
 }
 
-.glass-invite-card {
-  background: rgba(10, 35, 66, 0.94);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(197, 160, 101, 0.25);
-  border-radius: 16px;
-  color: #f9f7f2;
+.elite-invite-dialog-card {
+  width: 100%;
+  max-width: 480px;
+  min-width: 360px;
+  background: #ffffff;
+  border-radius: 20px;
+  border-top: 4px solid #c5a065;
+  box-shadow:
+    0 24px 60px -12px rgba(10, 35, 66, 0.22),
+    0 2px 8px rgba(10, 35, 66, 0.06);
+  overflow: hidden;
+}
+
+.text-navy {
+  color: #0a2342;
+}
+
+.text-gold {
+  color: #c5a065;
+}
+
+.invite-icon-badge {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: rgba(10, 35, 66, 0.05);
+  border: 1px solid rgba(197, 160, 101, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scope-pill-banner {
+  background: #f8fafc;
+  border: 1px solid rgba(10, 35, 66, 0.08);
+  border-radius: 10px;
+}
+
+.gdpr-security-pill {
+  background: rgba(46, 125, 50, 0.06);
+  border-radius: 8px;
+  border: 1px solid rgba(46, 125, 50, 0.15);
+}
+
+.elite-input {
+  :deep(.q-field__control) {
+    border-radius: 10px;
+    transition: all 0.2s ease;
+    &:hover {
+      border-color: rgba(10, 35, 66, 0.35);
+    }
+    &.q-field__control--focused {
+      border-color: #0a2342;
+      box-shadow: 0 0 0 3px rgba(10, 35, 66, 0.1);
+    }
+  }
+}
+
+.btn-elite-send {
+  background: linear-gradient(135deg, #0a2342 0%, #153a66 100%) !important;
+  color: #ffffff !important;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  box-shadow: 0 4px 12px rgba(10, 35, 66, 0.2);
+  transition: all 0.2s ease;
+
+  &:hover {
+    box-shadow: 0 6px 18px rgba(10, 35, 66, 0.32);
+    transform: translateY(-1px);
+  }
 }
 </style>
