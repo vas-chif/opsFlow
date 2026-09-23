@@ -123,7 +123,26 @@ function buildAIMetadata(metadata?: Partial<TaskAIMetadata>): TaskAIMetadata {
     : DEFAULT_AI_METADATA;
 } /*end buildAIMetadata*/
 
-const WORKSPACES_CACHE_KEY = "opsflow_workspaces_cache";
+function getCurrentCachedUserId(): string | null {
+  try {
+    const raw = localStorage.getItem("opsflow_user_session");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { uid?: string };
+    return parsed?.uid ?? null;
+  } catch {
+    return null;
+  }
+} /*end getCurrentCachedUserId*/
+
+function getWorkspacesCacheKey(): string {
+  const uid = getCurrentCachedUserId();
+  return uid ? `opsflow_user_${uid}_workspaces` : "opsflow_workspaces_cache";
+} /*end getWorkspacesCacheKey*/
+
+function getActiveWorkspaceCacheKey(): string {
+  const uid = getCurrentCachedUserId();
+  return uid ? `opsflow_user_${uid}_active_workspace_id` : "opsflow_active_workspace_id";
+} /*end getActiveWorkspaceCacheKey*/
 
 /**
  * Hydrate/migrate legacy workspace linkedResources to WorkspaceAttitude (Step 10 Fase 1.7).
@@ -149,7 +168,7 @@ function hydrateWorkspaceAttitude(ws: Workspace): Workspace {
 
 function loadCachedWorkspaces(): Workspace[] {
   try {
-    const raw = localStorage.getItem(WORKSPACES_CACHE_KEY);
+    const raw = localStorage.getItem(getWorkspacesCacheKey());
     if (!raw) return [];
     const parsed = JSON.parse(raw) as Workspace[];
     return Array.isArray(parsed) ? parsed.map(hydrateWorkspaceAttitude) : [];
@@ -158,11 +177,9 @@ function loadCachedWorkspaces(): Workspace[] {
   }
 } /*end loadCachedWorkspaces*/
 
-const ACTIVE_WORKSPACE_KEY = "opsflow_active_workspace_id";
-
 function loadCachedActiveWorkspaceId(): string | null {
   try {
-    return localStorage.getItem(ACTIVE_WORKSPACE_KEY) || null;
+    return localStorage.getItem(getActiveWorkspaceCacheKey()) || null;
   } catch {
     return null;
   }
@@ -170,10 +187,11 @@ function loadCachedActiveWorkspaceId(): string | null {
 
 function saveCachedActiveWorkspaceId(id: string | null): void {
   try {
+    const key = getActiveWorkspaceCacheKey();
     if (id) {
-      localStorage.setItem(ACTIVE_WORKSPACE_KEY, id);
+      localStorage.setItem(key, id);
     } else {
-      localStorage.removeItem(ACTIVE_WORKSPACE_KEY);
+      localStorage.removeItem(key);
     }
   } catch {
     // Ignore quota error
@@ -182,7 +200,7 @@ function saveCachedActiveWorkspaceId(id: string | null): void {
 
 function saveCachedWorkspaces(workspaces: Workspace[]): void {
   try {
-    localStorage.setItem(WORKSPACES_CACHE_KEY, JSON.stringify(workspaces));
+    localStorage.setItem(getWorkspacesCacheKey(), JSON.stringify(workspaces));
   } catch {
     // Ignore quota error
   }
@@ -277,11 +295,12 @@ export const useTaskStore = defineStore("tasks", {
         const authStore = useAuthStore();
         let visibleWorkspaces = docs;
         if (authStore.role === "user" && authStore.user) {
-          const userEmail = authStore.user.email;
+          const userEmail = authStore.user.email.toLowerCase();
           const userUid = authStore.user.uid;
           visibleWorkspaces = docs.filter((ws) => {
-            if (!ws.assignedMembers || ws.assignedMembers.length === 0) return true;
-            return ws.assignedMembers.includes(userEmail) || ws.assignedMembers.includes(userUid);
+            // Workspaces without assigned members are strictly private to Owner/Admin (§7.4 .logicFlow)
+            if (!ws.assignedMembers || ws.assignedMembers.length === 0) return false;
+            return ws.assignedMembers.some((m) => m.toLowerCase() === userEmail || m === userUid);
           });
         }
         this.workspaces = visibleWorkspaces;
@@ -327,14 +346,13 @@ export const useTaskStore = defineStore("tasks", {
         const authStore = useAuthStore();
         let visibleTasks = allTasks;
         if (authStore.role === "user" && authStore.user) {
-          const userEmail = authStore.user.email;
+          const userEmail = authStore.user.email.toLowerCase();
           const userUid = authStore.user.uid;
           const currentWs = this.workspaces.find((w) => w.id === workspaceId);
-          const isWorkspaceMember =
-            !currentWs?.assignedMembers ||
-            currentWs.assignedMembers.length === 0 ||
-            currentWs.assignedMembers.includes(userEmail) ||
-            currentWs.assignedMembers.includes(userUid);
+          const isWorkspaceMember = Boolean(
+            currentWs?.assignedMembers &&
+            currentWs.assignedMembers.some((m) => m.toLowerCase() === userEmail || m === userUid),
+          );
 
           if (!isWorkspaceMember) {
             // Task-scoped collaborator: user only sees tasks where they are explicitly assigned
@@ -342,7 +360,7 @@ export const useTaskStore = defineStore("tasks", {
               (t) =>
                 t.assignedTo === userUid ||
                 (t.assignedMembers &&
-                  (t.assignedMembers.includes(userEmail) || t.assignedMembers.includes(userUid))),
+                  t.assignedMembers.some((m) => m.toLowerCase() === userEmail || m === userUid)),
             );
           }
         }
@@ -907,6 +925,11 @@ export const useTaskStore = defineStore("tasks", {
       this.error = null;
 
       try {
+        const membersList = draft.assignedMembers ? [...draft.assignedMembers] : [];
+        if (authStore.user?.email && !membersList.includes(authStore.user.email)) {
+          membersList.push(authStore.user.email);
+        }
+
         const workspaceData: Omit<Workspace, "id" | "createdAt" | "updatedAt"> = {
           name: draft.name,
           description: draft.description ?? "",
@@ -915,8 +938,8 @@ export const useTaskStore = defineStore("tasks", {
         if (draft.icon !== undefined) {
           workspaceData.icon = draft.icon;
         }
-        if (draft.assignedMembers !== undefined) {
-          workspaceData.assignedMembers = draft.assignedMembers;
+        if (membersList.length > 0) {
+          workspaceData.assignedMembers = membersList;
         }
 
         const workspaceId = await firestore.addTenantDoc<
@@ -934,8 +957,8 @@ export const useTaskStore = defineStore("tasks", {
         if (draft.icon !== undefined) {
           newWorkspace.icon = draft.icon;
         }
-        if (draft.assignedMembers !== undefined) {
-          newWorkspace.assignedMembers = draft.assignedMembers;
+        if (membersList.length > 0) {
+          newWorkspace.assignedMembers = membersList;
         }
 
         this.workspaces.push(newWorkspace);
@@ -1127,6 +1150,16 @@ export const useTaskStore = defineStore("tasks", {
       });
       task.assignedMembers = updated;
     } /*end removeMemberFromTask*/,
+
+    /**
+     * Purge in-memory workspace and task state on logout (§5 AGENTS.md, §7.4 .logicFlow).
+     */
+    resetWorkspaceState(): void {
+      this.tasks = [];
+      this.workspaces = [];
+      this.activeWorkspaceId = null;
+      this.error = null;
+    } /*end resetWorkspaceState*/,
 
     /**
      * Clear error state.

@@ -135,6 +135,7 @@ const invitationColumns = [
 
 // ── Computed ──────────────────────────────────────────────────────────────────
 const roleBadgeColor = computed(() => (role: TenantRole) => {
+  if (role === "owner") return "amber-9";
   if (role === "superadmin") return "negative";
   if (role === "admin") return "warning";
   return "positive";
@@ -191,10 +192,29 @@ async function loadMembers(): Promise<void> {
   try {
     const db = getFirestore(app);
     const snap = await getDocs(collection(db, `tenants/${authStore.tenantId}/members`));
-    members.value = snap.docs.map((d) => ({
+    const rolePriority: Record<TenantRole, number> = {
+      owner: 1,
+      superadmin: 2,
+      admin: 3,
+      user: 4,
+      member: 5,
+      manager: 6,
+      operator: 7,
+      viewer: 8,
+    };
+    const rawMembers = snap.docs.map((d) => ({
       uid: d.id,
       ...(d.data() as Omit<MemberRow, "uid">),
     }));
+    // Sort hierarchy: Owner first, then SuperAdmin, Admin, User, then alphabetical
+    members.value = rawMembers.sort((a, b) => {
+      const orderA = rolePriority[a.role] ?? 99;
+      const orderB = rolePriority[b.role] ?? 99;
+      if (orderA !== orderB) return orderA - orderB;
+      const nameA = a.displayName || a.email || "";
+      const nameB = b.displayName || b.email || "";
+      return nameA.localeCompare(nameB);
+    });
   } catch {
     $q.notify({ type: "negative", message: "Errore nel caricamento dei membri." });
   } finally {
@@ -650,12 +670,32 @@ onMounted(() => {
             dense
             :rows-per-page-options="[10, 20, 50]"
           >
+            <!-- Display name column with Owner badge -->
+            <template #body-cell-displayName="{ row }">
+              <q-td align="left">
+                <div class="row items-center no-wrap">
+                  <span class="text-weight-bold">{{ row.displayName || "Senza Nome" }}</span>
+                  <q-badge
+                    v-if="row.role === 'owner'"
+                    color="amber-9"
+                    text-color="white"
+                    label="👑 Owner"
+                    class="q-ml-sm text-caption"
+                  />
+                </div>
+              </q-td>
+            </template>
+
             <!-- Role column -->
             <template #body-cell-role="{ row }">
               <q-td align="center">
-                <q-badge :color="roleBadgeColor(row.role)" :label="row.role" />
+                <q-badge
+                  :color="roleBadgeColor(row.role)"
+                  :label="row.role"
+                  :class="{ 'text-weight-bold shadow-1': row.role === 'owner' }"
+                />
                 <q-btn
-                  v-if="authStore.isAdmin && row.role !== 'superadmin'"
+                  v-if="authStore.isAdmin && row.role !== 'superadmin' && row.role !== 'owner'"
                   flat
                   round
                   dense
@@ -686,10 +726,11 @@ onMounted(() => {
             <template #body-cell-isActive="{ row }">
               <q-td align="center">
                 <q-badge
-                  :color="row.isActive ? 'positive' : 'grey'"
+                  :color="row.isActive ? (row.role === 'owner' ? 'amber-9' : 'positive') : 'grey'"
                   :label="row.isActive ? 'Attivo' : 'Sospeso'"
                 />
                 <q-btn
+                  v-if="row.role !== 'owner'"
                   flat
                   round
                   dense
@@ -712,7 +753,18 @@ onMounted(() => {
                 <!-- If inside workspace or task scope, show quick assign button -->
                 <template v-if="scope !== 'tenant'">
                   <q-badge
-                    v-if="assignedMembersList.includes(row.email)"
+                    v-if="row.role === 'owner'"
+                    color="amber-9"
+                    label="👑 Accesso Globale"
+                    class="q-mr-xs text-weight-bold"
+                  >
+                    <q-tooltip
+                      >L'Owner ha accesso completo per definizione a tutti i workspace e
+                      task</q-tooltip
+                    >
+                  </q-badge>
+                  <q-badge
+                    v-else-if="assignedMembersList.includes(row.email)"
                     color="positive"
                     label="Assegnato"
                     class="q-mr-xs"

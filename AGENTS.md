@@ -26,6 +26,20 @@ Non procedere mai ad applicare modifiche senza aver prima scritto questo blocco 
 
 ---
 
+### 🌐 DIRETTIVA FONDAMENTALE: Visione Olistica della Codebase & Allineamento con `.logicFlow/`
+
+Prima di ogni modifica, l'Agent deve obbligatoriamente:
+
+1. **Analisi Olistica dell'Intera Codebase**: Considerare sempre l'intero sistema (Frontend Quasar, Pinia Store, Backend Cloud Functions, Firestore Security Rules e contratti TypeScript). È severamente vietato applicare modifiche "cieche" o locali senza aver valutato l'impatto trasversale sull'intera architettura.
+2. **Rispetto Tassativo dei Flussi Architetturali (`.logicFlow/`)**: Ogni modifica al codice deve rigorosamente seguire i flussi logico-operativi già stabiliti nei documenti della cartella `.logicFlow/` (es. ciclo di vita workspace, segregazione ruoli, autenticazione, esecuzione task).
+3. **Aggiornamento Sincrono dei Flussi di Logica**: Se un nuovo requisito, una correzione di bug o una modifica architetturale altera o estende i comportamenti stabiliti, l'Agent **DEVE contestualmente aggiornare i file pertinenti in `.logicFlow/`**.
+4. **Spiegazione Preventiva del Differenziale**: Prima di applicare qualsiasi modifica, l'Agent deve spiegare all'utente in modo chiaro e trasparente:
+   - **Cosa modifica** (file, funzioni, righe)
+   - **Perché lo modifica** (causa radice del problema e regola applicata)
+   - **Cosa cambia rispetto a prima** (il comportamento vecchio vs il nuovo comportamento introdotto)
+
+---
+
 ## 📌 §1 — Git & Branch Management (Regola §1.9 — Workflow Unificato su dev)
 
 - **Branch Check**: All'inizio di ogni sessione, verificare il branch corrente (`git branch`). Assicurarsi di essere SEMPRE posizionati su `dev`.

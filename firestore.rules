@@ -60,10 +60,13 @@ service cloud.firestore {
     }
 
     match /tenants/{tenantId}/workspaces/{workspaceId} {
-      // Workspace metadata: admin can create/update/delete; users can read and manage within quota
+      // Workspace metadata: admin can create/update/delete; users can read and manage only their assigned workspaces
       allow read: if isActiveAndVerified() && belongsToTenant(tenantId);
-      allow create, update: if isActiveAndVerified() && (isAdmin() || isUser()) && belongsToTenant(tenantId);
-      allow delete: if isActiveAndVerified() && (isAdmin() || isUser()) && belongsToTenant(tenantId);
+      allow create: if isActiveAndVerified() && (isAdmin() || isUser()) && belongsToTenant(tenantId);
+      allow update: if isActiveAndVerified() && belongsToTenant(tenantId)
+        && (isAdmin() || (isUser() && ('assignedMembers' in resource.data) && resource.data.assignedMembers.hasAny([request.auth.token.email, request.auth.uid])));
+      allow delete: if isActiveAndVerified() && belongsToTenant(tenantId)
+        && (isAdmin() || (isUser() && ('assignedMembers' in resource.data) && resource.data.assignedMembers.hasAny([request.auth.token.email, request.auth.uid])));
     }
 
     // Step 19: Scheduled Sourcing Jobs — Principle of Least Privilege (§3 AGENTS.md)

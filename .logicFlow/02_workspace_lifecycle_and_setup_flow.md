@@ -259,3 +259,25 @@ Per garantire la sostenibilità economica dei costi cloud (§5 AGENTS.md):
   - Massimo **3 Task** contemporanei (attivi o archiviati).
   - Meccanismo di tolleranza cancellazione: fino a **3 cancellazioni** (massimo **6 task totali nel ciclo vitale**).
   - Al raggiungimento delle soglie: blocco preventivo con notifica esplicativa e invito a collaborare su workspace di tenant aziendali o richiedere upgrade al proprio Admin.
+
+---
+
+### 7.4 Regole Tassative di Isolamento Scoping & Immunità dell'Owner
+
+A garanzia della privacy dei dati e della sicurezza multi-tenant (§3 AGENTS.md):
+
+1. **Isolamento Workspace per `role: 'user'` (Strict Opt-In):**
+   - Un utente con ruolo `user` visualizza **ESCLUSIVAMENTE** i workspace in cui la sua email o il suo UID è esplicitamente registrato in `assignedMembers`.
+   - Se `assignedMembers` è assente o vuoto, il workspace è considerato **STRETTAMENTE PRIVATO di Owner e Admin**. È fatto divieto assoluto di trattare workspace privi di membri come pubblici a tutti i collaboratori del tenant.
+2. **Isolamento Task per `role: 'user'`:**
+   - Se un utente con ruolo `user` ha accesso a un workspace (`assignedMembers`), visualizza tutti i task di quel workspace.
+   - Se l'utente è stato invitato con `scope: 'task'`, all'interno del workspace container visualizza **SOLO ed ESCLUSIVAMENTE i task in cui è registrato in `task.assignedMembers` o assegnato come `assignedTo`**.
+3. **Immunità e Privilegi dell'Owner (`owner`):**
+   - L'Owner è il proprietario assoluto del tenant: possiede accesso globale a tutti i workspace e task.
+   - **No Auto-Sospensione:** Il pulsante di sospensione/pausa account è disabilitato/nascosto per l'Owner (prevenzione blocco/lockout).
+   - **No Assegnazione Ridondante:** Nella tabella dei collaboratori di workspace o task, l'Owner non mostra il pulsante `+ Assegna` ma il badge permanente `👑 Accesso Globale`.
+   - **No Modifica Ruolo:** Il ruolo dell'Owner non può essere modificato o declassato da dropdown.
+   - **Ordinamento & Stile:** L'Owner compare sempre come prima riga in cima a ogni elenco membri, contraddistinto dal colore Oro/Ambra (`amber-9`).
+4. **Isolamento della Cache Locale Utente:**
+   - La memorizzazione locale dei workspace (`Pinia` / `localStorage`) rispetta tassativamente il namespace utente `opsflow_user_{userId}_workspaces` e `opsflow_user_{userId}_active_workspace_id`.
+   - Al logout o cambio utente, lo stato in memoria di `taskStore` viene azzerato istantaneamente per evitare qualsiasi leakage di workspace su postazioni di lavoro condivise.

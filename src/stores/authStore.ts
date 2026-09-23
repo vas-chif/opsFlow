@@ -334,6 +334,12 @@ export const useAuthStore = defineStore("auth", {
         // Reset session state & clear session cache only — do NOT call localStorage.clear() (§5, §11)
         this.user = null;
         saveCachedUser(null);
+        try {
+          const { useTaskStore } = await import("@/stores/taskStore");
+          useTaskStore().resetWorkspaceState();
+        } catch {
+          // Ignore taskStore import error if store not yet registered
+        }
       } catch {
         this.error = "Logout failed";
         throw new Error("Logout failed");
