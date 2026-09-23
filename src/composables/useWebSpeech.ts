@@ -62,6 +62,7 @@ export function useWebSpeech() {
   const isTtsSupported = typeof window !== "undefined" && "speechSynthesis" in window;
 
   let recognition: SpeechRecognitionInstance | null = null;
+  let shouldKeepListening = false;
 
   function startListening(onResultCallback?: (text: string) => void): void {
     if (!SpeechRecognitionClass) {
@@ -73,8 +74,10 @@ export function useWebSpeech() {
     try {
       error.value = null;
       transcript.value = "";
+      shouldKeepListening = true;
+
       recognition = new SpeechRecognitionClass();
-      recognition.continuous = false;
+      recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = "it-IT";
 
@@ -93,25 +96,48 @@ export function useWebSpeech() {
       };
 
       recognition.onerror = (evt: SpeechRecognitionErrorEvent) => {
+        // "no-speech" significa solo che l'utente è rimasto in silenzio per qualche istante:
+        // non è un errore fatale, il microfono deve rimanere attivo in modalità manuale
+        if (evt.error === "no-speech" || evt.error === "aborted") {
+          return;
+        }
         error.value = `Errore riconoscimento vocale: ${evt.error}`;
+        shouldKeepListening = false;
         isListening.value = false;
       };
 
       recognition.onend = () => {
-        isListening.value = false;
+        // Se l'utente non ha premuto esplicitamente "Ferma dettatura", riavvia automaticamente
+        if (shouldKeepListening && isListening.value) {
+          try {
+            recognition?.start();
+          } catch {
+            // Se il riavvio fallisce (es. tab in background o microfono disconnesso), disattiva
+            shouldKeepListening = false;
+            isListening.value = false;
+          }
+        } else {
+          isListening.value = false;
+        }
       };
 
       recognition.start();
       isListening.value = true;
     } catch (err) {
       error.value = err instanceof Error ? err.message : "Impossibile avviare il microfono.";
+      shouldKeepListening = false;
       isListening.value = false;
     }
   } /*end startListening*/
 
   function stopListening(): void {
+    shouldKeepListening = false;
     if (recognition) {
-      recognition.stop();
+      try {
+        recognition.stop();
+      } catch {
+        // Ignora se già fermato
+      }
       isListening.value = false;
     }
   } /*end stopListening*/

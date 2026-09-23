@@ -155,8 +155,10 @@ function toggleVoiceDictation(): void {
   if (isListening.value) {
     stopListening();
   } else {
+    const baseText = chatMessage.value.trim();
+    const prefix = baseText ? `${baseText} ` : "";
     startListening((text) => {
-      chatMessage.value = text;
+      chatMessage.value = prefix + text;
     });
   }
 } /*end toggleVoiceDictation*/
@@ -1038,6 +1040,10 @@ const handleStatusChange = async (newStatus: TaskStatus): Promise<void> => {
 
 const handleSendChatMessage = async (): Promise<void> => {
   if (!chatMessage.value.trim() || !task.value || isSending.value) return;
+
+  if (isListening.value) {
+    stopListening();
+  }
 
   const userText = chatMessage.value.trim();
   const taskId = task.value.id;
@@ -2718,7 +2724,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                           @click="toggleVoiceDictation"
                         >
                           <q-tooltip>{{
-                            isListening ? "Ferma dettatura" : "Dettatura vocale nativa (€0)"
+                            isListening ? "Ferma dettatura" : "Dettatura vocale nativa"
                           }}</q-tooltip>
                         </q-btn>
                       </template>
