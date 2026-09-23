@@ -281,3 +281,6 @@ A garanzia della privacy dei dati e della sicurezza multi-tenant (§3 AGENTS.md)
 4. **Isolamento della Cache Locale Utente:**
    - La memorizzazione locale dei workspace (`Pinia` / `localStorage`) rispetta tassativamente il namespace utente `opsflow_user_{userId}_workspaces` e `opsflow_user_{userId}_active_workspace_id`.
    - Al logout o cambio utente, lo stato in memoria di `taskStore` viene azzerato istantaneamente per evitare qualsiasi leakage di workspace su postazioni di lavoro condivise.
+5. **Sospensione Scoped Locale vs Sovranità Account Freemium:**
+   - La sospensione/pausa operata dall'Owner all'interno di `TeamMembersPanel.vue` agisce unicamente all'interno del tenant (`tenants/{tenantId}/members/{uid}` con `isActive: false` e rimozione da `assignedMembers`).
+   - L'azione non altera mai i claim globali di Firebase Auth, garantendo che il collaboratore mantenga incondizionatamente il diritto di accesso al proprio workspace personale e ai 3 task previsti dal piano Freemium.

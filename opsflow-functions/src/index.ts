@@ -118,7 +118,7 @@ export const setUserRole = onCall(
     } = request.data as {
       uid: string;
       tenantId: string;
-      role: "superadmin" | "admin" | "user";
+      role: "superadmin" | "admin" | "user" | "owner";
       isActive?: boolean;
     };
 
@@ -140,7 +140,16 @@ export const setUserRole = onCall(
       throw new HttpsError("permission-denied", "Un admin o owner non può assegnare il ruolo superadmin.");
     }
 
-    await getAuth().setCustomUserClaims(uid, { tenantId, role, isActive });
+    // Immunità Owner e SuperAdmin da blocco (§7.4)
+    if (isActive === false && (role === "owner" || role === "superadmin")) {
+      throw new HttpsError("invalid-argument", "Non è consentito sospendere un account Owner o Superadmin.");
+    }
+
+    // Solo un superadmin di piattaforma può disattivare globalmente un account utente
+    // Le modifiche effettuate da admin/owner di un tenant preservano l'accesso globale (piano Freemium personale)
+    const effectiveIsActive = callerRole === "superadmin" ? (isActive !== false) : true;
+
+    await getAuth().setCustomUserClaims(uid, { tenantId, role, isActive: effectiveIsActive });
 
     // GDPR Art. 30 audit log
     const db = getFirestore();

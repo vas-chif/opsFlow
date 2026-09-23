@@ -152,11 +152,26 @@ export const useAuthStore = defineStore("auth", {
 
   getters: {
     isAuthenticated: (state): boolean => {
-      return (
-        state.user !== null &&
-        state.user.emailVerified === true &&
-        (state.user.claims === null || state.user.claims.isActive === true)
-      );
+      if (!state.user || !state.user.emailVerified) {
+        return false;
+      }
+      // Owner e Superadmin hanno immunità assoluta da blocco (§7.4)
+      const role = state.user.claims?.role;
+      if (role === "owner" || role === "superadmin") {
+        return true;
+      }
+      return state.user.claims === null || state.user.claims.isActive !== false;
+    },
+
+    /**
+     * True se l'account è stato esplicitamente disabilitato a livello globale di piattaforma.
+     * Owner e Superadmin sono immuni.
+     */
+    isSuspended: (state): boolean => {
+      if (!state.user?.claims) return false;
+      const role = state.user.claims.role;
+      if (role === "owner" || role === "superadmin") return false;
+      return state.user.claims.isActive === false;
     },
 
     tenantId: (state): string => {

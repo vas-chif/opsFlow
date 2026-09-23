@@ -268,27 +268,36 @@ async function assignRole(member: MemberRow, newRole: TenantRole): Promise<void>
 } /*end assignRole*/
 
 async function toggleActive(member: MemberRow): Promise<void> {
-  const payload: SetUserRoleRequest = {
-    uid: member.uid,
-    tenantId: authStore.tenantId,
-    role: member.role,
-    isActive: !member.isActive,
-  };
+  // Immunità assoluta per Owner e Superadmin (§7.4)
+  if (member.role === "owner" || member.role === "superadmin") {
+    return;
+  }
+
+  const nextActive = !member.isActive;
   try {
-    await authStore.setUserRole(payload);
-    member.isActive = !member.isActive;
     const db = getFirestore(app);
     await setDoc(
       doc(db, `tenants/${authStore.tenantId}/members/${member.uid}`),
-      { isActive: member.isActive },
+      { isActive: nextActive },
       { merge: true },
     );
+    member.isActive = nextActive;
+
+    // Se sospeso all'interno di un workspace specifico, revoca l'accesso a quel workspace
+    if (!nextActive && props.scope === "workspace" && props.workspaceId && member.email) {
+      try {
+        await taskStore.removeMemberFromWorkspace(props.workspaceId, member.email);
+      } catch {
+        // Se non era già assegnato, ignora
+      }
+    }
+
     $q.notify({
       type: "info",
-      message: `Account ${member.isActive ? "riattivato" : "sospeso"}: ${member.email}`,
+      message: `Collaborazione ${nextActive ? "riattivata" : "sospesa"} nel tenant: ${member.email}`,
     });
   } catch {
-    $q.notify({ type: "negative", message: "Errore nell'aggiornamento stato account." });
+    $q.notify({ type: "negative", message: "Errore nell'aggiornamento dello stato nel tenant." });
   }
 } /*end toggleActive*/
 
@@ -730,7 +739,7 @@ onMounted(() => {
                   :label="row.isActive ? 'Attivo' : 'Sospeso'"
                 />
                 <q-btn
-                  v-if="row.role !== 'owner'"
+                  v-if="row.role !== 'owner' && row.role !== 'superadmin'"
                   flat
                   round
                   dense
@@ -741,7 +750,9 @@ onMounted(() => {
                   @click="toggleActive(row)"
                 >
                   <q-tooltip>{{
-                    row.isActive ? "Sospendi account" : "Riattiva account"
+                    row.isActive
+                      ? "Sospendi collaborazione nel tenant"
+                      : "Riattiva collaborazione nel tenant"
                   }}</q-tooltip>
                 </q-btn>
               </q-td>

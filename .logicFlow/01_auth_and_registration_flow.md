@@ -174,3 +174,16 @@ router.beforeEach(async (to, from, next) => {
   - L'utente invitato ha accesso a tutti i task contenuti nel workspace a cui è assegnato (`ws.assignedMembers`).
 - **Invito Task-Scoped (`scope: 'task'`):**
   - L'utente invitato ha visibilità e accesso **esclusivamente su quel singolo task** (`task.assignedMembers`), senza poter visualizzare o modificare gli altri task del workspace.
+
+---
+
+## 🛡️ 7. Disaccoppiamento tra Account Globale Freemium e Membership Aziendale
+
+1. **Principio di Sovranità dell'Account Personale:**
+   - L'account Firebase Auth (`uid`, `email`) appartiene alla persona e garantisce l'accesso alla piattaforma per usufruire del piano **Freemium** (1 workspace personale, 3 task gratuiti).
+   - È fatto divieto assoluto all'Owner o Admin di un'azienda terza di revocare l'accesso globale a OpsFlow di un collaboratore (`isActive: false` nel JWT). Solo un SuperAdmin di piattaforma può sospendere globalmente un account.
+2. **Sospensione Scoped nel Tenant (`TeamMembersPanel.vue`):**
+   - L'azione di pausa o sospensione di un collaboratore eseguita da un Owner aziendale ha valenza **esclusivamente locale** (`tenants/{tenantId}/members/{uid}` con `isActive: false` e revoca da `assignedMembers`).
+   - L'utente sospeso in un tenant perde l'accesso ai progetti di quell'azienda, ma continua ad accedere a OpsFlow per lavorare sul **proprio workspace personale gratuito**.
+3. **Immunità Totale dell'Owner:**
+   - L'Owner e il SuperAdmin non possono mai essere sospesi o disattivati (immunità nativa in `authStore.isAuthenticated` e nella Cloud Function `setUserRole`).

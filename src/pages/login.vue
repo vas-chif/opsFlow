@@ -82,8 +82,24 @@ const handleLogin = async (): Promise<void> => {
       await authStore.provisionInitialTenant();
     }
 
+    if (authStore.isSuspended) {
+      await authStore.logout();
+      q.notify({
+        type: "warning",
+        icon: "block",
+        message:
+          "Account Sospeso: il tuo accesso è stato disattivato dall'amministratore di sistema.",
+        position: "top",
+        timeout: 8000,
+      });
+      return;
+    }
+
     const redirect = (route.query.redirect as string) || "/";
-    await router.push(redirect);
+    const navResult = await router.push(redirect);
+    if (navResult) {
+      return;
+    }
 
     q.notify({
       type: "positive",
@@ -160,8 +176,24 @@ const handleGoogleLogin = async (): Promise<void> => {
       await authStore.provisionInitialTenant();
     }
 
+    if (authStore.isSuspended) {
+      await authStore.logout();
+      q.notify({
+        type: "warning",
+        icon: "block",
+        message:
+          "Account Sospeso: il tuo accesso è stato disattivato dall'amministratore di sistema.",
+        position: "top",
+        timeout: 8000,
+      });
+      return;
+    }
+
     const redirect = (route.query.redirect as string) || "/";
-    await router.push(redirect);
+    const navResult = await router.push(redirect);
+    if (navResult) {
+      return;
+    }
 
     q.notify({
       type: "positive",
