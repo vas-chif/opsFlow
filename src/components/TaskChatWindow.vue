@@ -145,7 +145,7 @@ function handleFileSelected(event: Event): void {
     selectedFile.value = target.files[0];
     q.notify({
       type: "info",
-      message: `Documento allegato: ${selectedFile.value.name}`,
+      message: `Document attached: ${selectedFile.value.name}`,
       icon: "attach_file",
     });
   }
@@ -308,7 +308,7 @@ const saveEditedDescription = async (): Promise<void> => {
     showEditDescriptionDialog.value = false;
     q.notify({
       type: "positive",
-      message: "Descrizione aggiornata!",
+      message: "Description updated!",
       icon: "edit_note",
       position: "top",
       timeout: 1500,
@@ -316,7 +316,7 @@ const saveEditedDescription = async (): Promise<void> => {
   } catch (err) {
     q.notify({
       type: "negative",
-      message: `Errore: ${err instanceof Error ? err.message : String(err)}`,
+      message: `Error: ${err instanceof Error ? err.message : String(err)}`,
       position: "top",
     });
   }
@@ -341,7 +341,7 @@ const saveEditedSubtasks = async (): Promise<void> => {
     showEditSubtasksDialog.value = false;
     q.notify({
       type: "positive",
-      message: "Sotto-Task aggiornate!",
+      message: "Subtasks updated!",
       icon: "checklist",
       position: "top",
       timeout: 1500,
@@ -349,7 +349,7 @@ const saveEditedSubtasks = async (): Promise<void> => {
   } catch (err) {
     q.notify({
       type: "negative",
-      message: `Errore: ${err instanceof Error ? err.message : String(err)}`,
+      message: `Error: ${err instanceof Error ? err.message : String(err)}`,
       position: "top",
     });
   }
@@ -424,17 +424,17 @@ const isDeletingSubtask = ref<boolean>(false);
 
 const promptDeleteSubtask = (st: EntitySubTask): void => {
   q.dialog({
-    title: "Elimina Sub-Task",
-    message: `Sei sicuro di voler eliminare definitivamente la risorsa "${st.title}"? L'elemento verrà rimosso sia da Firebase che dall'elenco locale.`,
+    title: "Delete Subtask",
+    message: `Are you sure you want to permanently delete resource "${st.title}"? This item will be removed from both Firebase and the local list.`,
     cancel: {
       flat: true,
       color: "grey-7",
-      label: "Annulla",
+      label: "Cancel",
     },
     ok: {
       unelevated: true,
       color: "negative",
-      label: "Elimina Definitivamente",
+      label: "Delete Permanently",
       icon: "delete_forever",
     },
     persistent: true,
@@ -460,14 +460,14 @@ const promptDeleteSubtask = (st: EntitySubTask): void => {
       logger.info("TaskChatWindow", `Subtask ${st.id} permanently deleted from Firestore`);
       q.notify({
         type: "positive",
-        message: `Sub-task "${st.title}" eliminato con successo.`,
+        message: `Subtask "${st.title}" successfully deleted.`,
         position: "top",
       });
     } catch (err: unknown) {
       logger.error("TaskChatWindow", "Error deleting subtask from Firestore", err);
       q.notify({
         type: "negative",
-        message: "Errore durante l'eliminazione del sub-task.",
+        message: "Error deleting subtask.",
         position: "top",
       });
     } finally {
@@ -627,7 +627,7 @@ const saveNote = (): void => {
   showNoteDialog.value = false;
   q.notify({
     type: "positive",
-    message: "Nota salvata sulla timeline",
+    message: "Note saved to timeline",
     position: "top",
     timeout: 1500,
   });
@@ -639,7 +639,7 @@ const deleteNote = (): void => {
   showNoteDialog.value = false;
   q.notify({
     type: "info",
-    message: "Nota rimossa dallo step",
+    message: "Note removed from step",
     position: "top",
     timeout: 1500,
   });
@@ -921,7 +921,7 @@ const reactivateScheduledJob = async (): Promise<void> => {
     };
     q.notify({
       type: "positive",
-      message: "Ricerca programmata notturna riattivata con successo.",
+      message: "Scheduled overnight sourcing successfully reactivated.",
       position: "top",
     });
   } catch (err) {
@@ -943,7 +943,7 @@ const executeStatusUpdate = async (newStatus: TaskStatus): Promise<void> => {
       status: newStatus,
       title: sObj.label,
       subtitle: nowStr,
-      description: `Stato aggiornato a ${sObj.label}`,
+      description: `Status updated to ${sObj.label}`,
       icon: sObj.icon,
       color: sObj.color,
       timestamp: nowStr,
@@ -1190,7 +1190,7 @@ const handleStopAiExecution = (): void => {
   }
   q.notify({
     type: "warning",
-    message: "Elaborazione IA interrotta dall'utente.",
+    message: "AI processing stopped by user.",
     icon: "stop_circle",
     timeout: 1500,
   });
@@ -1205,14 +1205,14 @@ const handleCopyMessage = async (text: string): Promise<void> => {
     }
     q.notify({
       type: "positive",
-      message: "Testo copiato negli appunti",
+      message: "Text copied to clipboard",
       icon: "content_copy",
       timeout: 1500,
     });
   } catch {
     q.notify({
       type: "negative",
-      message: "Impossibile copiare il testo",
+      message: "Failed to copy text",
       icon: "error",
       timeout: 1500,
     });
@@ -1233,7 +1233,7 @@ const handleRetryLastMessage = async (): Promise<void> => {
   chatMessage.value = lastUserMsg.text;
   q.notify({
     type: "info",
-    message: "Rigenerazione risposta in corso...",
+    message: "Regenerating response...",
     icon: "replay",
     timeout: 1500,
   });
@@ -1245,7 +1245,7 @@ const handleEditUserPrompt = (msg: TaskChatMessage): void => {
   focusChatInput();
   q.notify({
     type: "info",
-    message: "Prompt ricaricato per la modifica.",
+    message: "Prompt reloaded for editing.",
     icon: "edit",
     timeout: 1500,
   });
@@ -1339,31 +1339,31 @@ const handleApproveAction = async (
       q.notify({
         type: "positive",
         message: result.alreadyResolved
-          ? result.message || "Azione già approvata in precedenza."
-          : "Azione approvata ed eseguita con successo!",
+          ? result.message || "Action already approved previously."
+          : "Action approved and executed successfully!",
         icon: "check_circle",
       });
     } else if (res.status === 401 && result?.error === "oauth_error") {
       // Step 21 §5.2 — Token scaduto: mostra banner di riconnessione, non errore generico
       chatStore.setSessionOAuthError(taskId, {
         code: (result.code as import("../types/models").OAuthErrorCode) ?? "TOKEN_EXPIRED",
-        message: result.message ?? "Il token Google è scaduto. Riconnetti il tuo account.",
+        message: result.message ?? "Google token expired. Please reconnect your account.",
       });
       q.notify({
         type: "warning",
-        message: "🔑 Token Google scaduto. Riconnetti il tuo account Google per continuare.",
+        message: "🔑 Google token expired. Please reconnect your Google account to continue.",
         icon: "lock_reset",
         timeout: 6000,
         position: "top",
       });
     } else {
-      throw new Error(result?.error || "Errore durante l'esecuzione dell'azione.");
+      throw new Error(result?.error || "Error executing action.");
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     q.notify({
       type: "negative",
-      message: `Errore approvazione: ${msg}`,
+      message: `Approval error: ${msg}`,
       icon: "error",
     });
   } finally {
@@ -1414,17 +1414,17 @@ const handleRejectAction = async (
       chatStore.resolveApprovalInSession(taskId, approvalId, "rejected");
       q.notify({
         type: "info",
-        message: "Azione rifiutata.",
+        message: "Action rejected.",
         icon: "cancel",
       });
     } else {
-      throw new Error(result?.error || "Errore durante il rifiuto dell'azione.");
+      throw new Error(result?.error || "Error rejecting action.");
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     q.notify({
       type: "negative",
-      message: `Errore rifiuto: ${msg}`,
+      message: `Rejection error: ${msg}`,
       icon: "error",
     });
   } finally {
@@ -1564,14 +1564,14 @@ const handleDecomposeExistingTask = async (): Promise<void> => {
 
       q.notify({
         type: "positive",
-        message: `${generatedSubtasks.length} sotto-task generate con successo!`,
+        message: `${generatedSubtasks.length} subtasks generated successfully!`,
         icon: "auto_awesome",
       });
     }
   } catch {
     q.notify({
       type: "negative",
-      message: "Impossibile decomporre il task con AI. Riprova.",
+      message: "Unable to decompose task with AI. Please retry.",
       icon: "error",
     });
   } finally {
@@ -1682,7 +1682,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
             text-color="grey-4"
             size="xs"
             :options="[
-              { label: 'Entrambi', value: 'both', icon: 'splitscreen' },
+              { label: 'Both', value: 'both', icon: 'splitscreen' },
               { label: 'Task', value: 'details', icon: 'assignment' },
               { label: 'Chat', value: 'chat', icon: 'chat' },
               { label: 'Timeline', value: 'timeline', icon: 'timeline' },
@@ -1733,8 +1733,8 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
         >
           {{ scheduledJobStatusLabel }}
           <q-tooltip>
-            Pianificazione ricorrente ({{ activeScheduledJob.frequency }}): Scadenza
-            {{ activeScheduledJob.endDate }} — Clicca per gestire
+            Recurring schedule ({{ activeScheduledJob.frequency }}): Expires
+            {{ activeScheduledJob.endDate }} — Click to manage
           </q-tooltip>
         </q-chip>
 
@@ -1758,8 +1758,8 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
           <q-tooltip>
             {{
               activeScheduledJob
-                ? `Pianificazione Ricorrente: ${activeScheduledJob.title} (${activeScheduledJob.status})`
-                : "Pianifica Ricerca Ricorrente (04:00 AM)"
+                ? `Recurring Schedule: ${activeScheduledJob.title} (${activeScheduledJob.status})`
+                : "Schedule Recurring Sourcing (04:00 AM)"
             }}
           </q-tooltip>
           <q-badge
@@ -1781,7 +1781,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
           @click.stop="showTaskSettingsModal = true"
           @mousedown.stop
         >
-          <q-tooltip>Impostazioni Task, Foglio Google & Firma</q-tooltip>
+          <q-tooltip>Task Settings, Google Sheet &amp; Signature</q-tooltip>
         </q-btn>
 
         <!-- Send To Back Button -->
@@ -1795,7 +1795,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
           @click.stop="sendToBack"
           @mousedown.stop
         >
-          <q-tooltip>Sposta finestra in secondo piano (dietro le altre)</q-tooltip>
+          <q-tooltip>Send window to back (behind others)</q-tooltip>
         </q-btn>
 
         <!-- Fullscreen Button -->
@@ -1809,9 +1809,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
           @click.stop="toggleFullscreen"
           @mousedown.stop
         >
-          <q-tooltip>{{
-            isFullscreen ? "Ripristina dimensione (Esc)" : "Schermo intero (Fullscreen)"
-          }}</q-tooltip>
+          <q-tooltip>{{ isFullscreen ? "Restore size (Esc)" : "Fullscreen" }}</q-tooltip>
         </q-btn>
 
         <!-- Minimize Button -->
@@ -1824,7 +1822,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
           color="white"
           @click="chatStore.toggleMinimizeWindow(windowState.taskId)"
         >
-          <q-tooltip>{{ windowState.isMinimized ? "Espandi" : "Riduci a icona" }}</q-tooltip>
+          <q-tooltip>{{ windowState.isMinimized ? "Expand" : "Minimize" }}</q-tooltip>
         </q-btn>
 
         <!-- Close Button -->
@@ -1837,7 +1835,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
           color="white"
           @click="chatStore.closeFloatingWindow(windowState.taskId)"
         >
-          <q-tooltip>Chiudi finestra</q-tooltip>
+          <q-tooltip>Close window</q-tooltip>
         </q-btn>
       </div>
     </div>
@@ -1882,7 +1880,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
 
         <div class="col scroll q-pa-lg" style="overflow-y: auto">
           <q-timeline :layout="timelineLayout" :side="timelineSide" color="secondary">
-            <q-timeline-entry heading>Stato e Cronologia Task</q-timeline-entry>
+            <q-timeline-entry heading>Task Status &amp; Timeline History</q-timeline-entry>
 
             <q-timeline-entry
               v-for="entry in activeSession.timelineEvents"
@@ -1917,7 +1915,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                       @click.stop="toggleNoteVisibility(entry)"
                     >
                       <q-tooltip>{{
-                        entry.showNote !== false ? "Nascondi nota" : "Mostra nota"
+                        entry.showNote !== false ? "Hide note" : "Show note"
                       }}</q-tooltip>
                     </q-btn>
                     <q-btn
@@ -1929,9 +1927,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                       color="amber-9"
                       @click.stop="openNoteDialog(entry)"
                     >
-                      <q-tooltip>{{
-                        entry.note ? "Modifica nota" : "Aggiungi nota allo step"
-                      }}</q-tooltip>
+                      <q-tooltip>{{ entry.note ? "Edit note" : "Add note to step" }}</q-tooltip>
                     </q-btn>
                   </div>
                 </div>
@@ -1961,7 +1957,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                     class="text-caption text-weight-bold text-amber-10 row items-center q-gutter-xs"
                   >
                     <q-icon name="sticky_note_2" size="14px" color="amber-10" />
-                    <span>Nota Operativa</span>
+                    <span>Operational Note</span>
                   </span>
                   <div class="row items-center q-gutter-2xs">
                     <q-btn
@@ -1973,7 +1969,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                       color="grey-7"
                       @click.stop="openNoteDialog(entry)"
                     >
-                      <q-tooltip>Modifica nota</q-tooltip>
+                      <q-tooltip>Edit note</q-tooltip>
                     </q-btn>
                     <q-btn
                       flat
@@ -1984,7 +1980,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                       color="grey-6"
                       @click.stop="toggleNoteVisibility(entry)"
                     >
-                      <q-tooltip>Nascondi nota</q-tooltip>
+                      <q-tooltip>Hide note</q-tooltip>
                     </q-btn>
                   </div>
                 </div>
@@ -2001,7 +1997,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                   size="xs"
                   icon="visibility"
                   color="amber-9"
-                  label="Mostra nota nascosta"
+                  label="Show hidden note"
                   no-caps
                   class="text-caption"
                   style="font-size: 0.72rem; padding: 0 4px"
@@ -2021,7 +2017,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                   <div class="row items-center q-gutter-x-xs">
                     <q-icon name="group_work" color="primary" size="18px" />
                     <span class="text-caption text-weight-bold text-primary">
-                      Sub-Task Operativi
+                      Operational Subtasks
                     </span>
                     <q-badge
                       color="amber-9"
@@ -2034,8 +2030,8 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                   <span class="text-caption text-grey-7" style="font-size: 0.68rem">
                     {{
                       subtaskFinishedCount === subtasks.length && subtasks.length > 0
-                        ? "Tutti conclusi"
-                        : `${subtasks.length - subtaskFinishedCount} in corso`
+                        ? "All completed"
+                        : `${subtasks.length - subtaskFinishedCount} in progress`
                     }}
                   </span>
                 </div>
@@ -2050,11 +2046,11 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                     size="xs"
                     color="primary"
                     icon="person_add"
-                    label="Nuova Risorsa"
+                    label="New Resource"
                     class="text-weight-bold q-px-xs"
                     @click="handleCreateManualSubtask"
                   >
-                    <q-tooltip>Aggiungi o estrai risorsa dalla chat</q-tooltip>
+                    <q-tooltip>Add or extract resource from chat</q-tooltip>
                   </q-btn>
 
                   <q-btn
@@ -2067,7 +2063,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                     class="q-px-xs"
                     @click="handleOpenOrSyncSheet"
                   >
-                    <q-tooltip>Apri o sincronizza foglio Google</q-tooltip>
+                    <q-tooltip>Open or sync Google Sheet</q-tooltip>
                   </q-btn>
 
                   <q-btn
@@ -2080,7 +2076,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                     class="q-px-xs"
                     @click="handleEmailAction"
                   >
-                    <q-tooltip>Genera bozza email per i contatti</q-tooltip>
+                    <q-tooltip>Generate email draft for contacts</q-tooltip>
                   </q-btn>
 
                   <q-space />
@@ -2095,7 +2091,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                     :loading="isLoadingSubtasks"
                     @click="fetchSubtasks"
                   >
-                    <q-tooltip>Ricarica risorse</q-tooltip>
+                    <q-tooltip>Reload resources</q-tooltip>
                   </q-btn>
                 </div>
 
@@ -2167,7 +2163,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                         class="q-ml-2xs"
                         @click.stop="promptDeleteSubtask(st)"
                       >
-                        <q-tooltip>Elimina definitivamente</q-tooltip>
+                        <q-tooltip>Delete permanently</q-tooltip>
                       </q-btn>
                       <q-icon name="chevron_right" color="grey-5" size="14px" />
                     </div>
@@ -2179,8 +2175,8 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                   class="text-caption text-grey-6 text-center q-pa-sm"
                   style="font-size: 0.7rem"
                 >
-                  Nessuna risorsa monitorata. Clicca su
-                  <strong>"+ Nuova Risorsa"</strong> per crearne una o estrarla dai messaggi.
+                  No monitored resources yet. Click
+                  <strong>"+ New Resource"</strong> to add or extract from chat messages.
                 </div>
               </div>
             </q-timeline-entry>
@@ -2207,7 +2203,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
             <div class="scroll col q-pr-sm">
               <!-- Step 21 §2.1: Descrizione Task header with edit button -->
               <div class="row items-center justify-between q-mb-xs no-wrap">
-                <div class="text-caption text-weight-bold text-primary">📌 Descrizione Task</div>
+                <div class="text-caption text-weight-bold text-primary">📌 Task Description</div>
                 <q-btn
                   flat
                   round
@@ -2217,7 +2213,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                   color="primary"
                   @click="openEditDescriptionDialog"
                 >
-                  <q-tooltip>Modifica Descrizione</q-tooltip>
+                  <q-tooltip>Edit Description</q-tooltip>
                 </q-btn>
               </div>
               <div
@@ -2229,7 +2225,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                   line-height: 1.5;
                 "
               >
-                {{ task.description || "Nessuna descrizione." }}
+                {{ task.description || "No description." }}
               </div>
 
               <!-- Fallback button: Decompose with AI Architect if task has no subtasks -->
@@ -2243,12 +2239,12 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                   size="sm"
                   color="amber-9"
                   icon="auto_awesome"
-                  label="✨ Scomponi in Sotto-Task con AI Architect"
+                  label="✨ Decompose into Subtasks with AI Architect"
                   class="full-width rounded-borders text-caption text-weight-bold"
                   @click="handleOpenRegenerateModal()"
                 >
                   <q-tooltip
-                    >Analizza e genera automaticamente le sotto-task operative con Gemini</q-tooltip
+                    >Analyze and generate operational subtasks automatically with Gemini</q-tooltip
                   >
                 </q-btn>
               </div>
@@ -2265,8 +2261,8 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                 <div class="row items-center no-wrap ellipsis q-mr-sm" style="flex: 1">
                   <q-icon name="emoji_events" color="amber-9" size="26px" class="q-mr-xs" />
                   <div class="text-caption text-primary ellipsis">
-                    <strong>Tutte le risorse gestite</strong> ({{ subtaskWonCount }} won,
-                    {{ subtaskLostCount }} lost). Completare il macro-task?
+                    <strong>All resources managed</strong> ({{ subtaskWonCount }} won,
+                    {{ subtaskLostCount }} lost). Complete macro-task?
                   </div>
                 </div>
                 <q-btn
@@ -2275,7 +2271,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                   size="sm"
                   color="positive"
                   icon="check_circle"
-                  label="Completa Macro-Task"
+                  label="Complete Macro-Task"
                   class="text-weight-bold q-px-sm"
                   @click="handleStatusChange('completed')"
                 />
@@ -2287,7 +2283,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                 v-if="task.aiMetadata?.subtasks && task.aiMetadata.subtasks.length > 0"
                 dense
                 icon="checklist"
-                :label="`Sotto-Task Operative (${task.aiMetadata.subtasks.filter((s) => s.completed).length}/${task.aiMetadata.subtasks.length})`"
+                :label="`Operational Subtasks (${task.aiMetadata.subtasks.filter((s) => s.completed).length}/${task.aiMetadata.subtasks.length})`"
                 header-class="text-caption text-weight-bold text-primary q-pa-xs bg-blue-1 rounded-borders"
                 class="q-mb-sm task-subtasks-expansion rounded-borders"
                 style="border: 1px solid rgba(10, 35, 66, 0.15)"
@@ -2295,7 +2291,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                 <template #header>
                   <q-item-section>
                     <span class="text-caption text-weight-bold text-primary">
-                      🔀 Sotto-Task Operative ({{
+                      🔀 Operational Subtasks ({{
                         task.aiMetadata.subtasks.filter((s) => s.completed).length
                       }}/{{ task.aiMetadata.subtasks.length }})
                     </span>
@@ -2310,7 +2306,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                       color="primary"
                       @click.stop="openEditSubtasksDialog"
                     >
-                      <q-tooltip>Modifica Sotto-Task</q-tooltip>
+                      <q-tooltip>Edit Subtasks</q-tooltip>
                     </q-btn>
                   </q-item-section>
                 </template>
@@ -2363,7 +2359,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
               <q-expansion-item
                 dense
                 icon="tips_and_updates"
-                label="Punti Chiave del Task"
+                label="Task Key Points"
                 header-class="text-caption text-weight-bold text-secondary q-pa-xs"
                 class="q-mb-sm task-kp-expansion"
               >
@@ -2379,7 +2375,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                     <q-btn
                       color="primary"
                       icon="auto_awesome"
-                      :label="isSending ? 'Elaborazione...' : '🚀 Avvia Esecuzione IA'"
+                      :label="isSending ? 'Processing...' : '🚀 Launch AI Execution'"
                       no-caps
                       dense
                       class="full-width text-weight-bold"
@@ -2398,7 +2394,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                       class="full-width text-weight-bold"
                       @click="handleStopAiExecution"
                     >
-                      <q-tooltip>Interrompi immediatamente l'esecuzione dell'Agente IA</q-tooltip>
+                      <q-tooltip>Immediately interrupt AI Agent execution</q-tooltip>
                     </q-btn>
                   </div>
                 </div>
@@ -2410,13 +2406,13 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                       size="sm"
                       color="secondary"
                       icon="search"
-                      label="Cerca Lead"
+                      label="Search Leads"
                       no-caps
                       class="full-width q-py-xs text-weight-bold"
                       :disabled="isSending"
                       @click="
                         handleSendCustomPrompt(
-                          'Trova e mappa lead o snodi territoriali per questo task in conformità deontologica e GDPR.',
+                          'Find and map target leads or territorial hubs for this task in compliance with regulations and GDPR.',
                         )
                       "
                     />
@@ -2428,13 +2424,13 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                       size="sm"
                       color="positive"
                       icon="mail"
-                      label="Bozza Email"
+                      label="Email Draft"
                       no-caps
                       class="full-width q-py-xs text-weight-bold"
                       :disabled="isSending"
                       @click="
                         handleSendCustomPrompt(
-                          'Genera una bozza email formale per i destinatari identificati, con oggetto chiaro e la firma configurata per questo task/workspace.',
+                          'Generate a formal email draft for identified recipients with clear subject line and configured signature for this workspace.',
                         )
                       "
                     />
@@ -2446,13 +2442,13 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                       size="sm"
                       color="amber-10"
                       icon="table_chart"
-                      label="Salva su Sheets"
+                      label="Save to Sheets"
                       no-caps
                       class="full-width q-py-xs text-weight-bold"
                       :disabled="isSending"
                       @click="
                         handleSendCustomPrompt(
-                          'Salva e organizza i dati estratti nel foglio Google Sheets predefinito.',
+                          'Save and organize extracted data into default Google Sheets spreadsheet.',
                         )
                       "
                     />
@@ -2468,7 +2464,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                 <div
                   class="row items-center justify-between text-caption text-weight-bold text-grey-8"
                 >
-                  <span>Complexity IA:</span>
+                  <span>AI Complexity:</span>
                   <span>{{ task.aiMetadata.complexityScore }}/10</span>
                 </div>
                 <q-linear-progress
@@ -2507,7 +2503,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                       class="text-caption text-weight-bold text-primary row items-center q-gutter-xs"
                     >
                       <q-icon name="chat" size="16px" color="primary" />
-                      <span>Assistente IA & Operazioni</span>
+                      <span>AI Assistant &amp; Operations</span>
                     </div>
                     <q-btn
                       flat
@@ -2519,7 +2515,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                       @click="toggleTimeline"
                     >
                       <q-tooltip>{{
-                        showTimeline ? "Nascondi Timeline Stati" : "Mostra Timeline Stati"
+                        showTimeline ? "Hide Status Timeline" : "Show Status Timeline"
                       }}</q-tooltip>
                     </q-btn>
                   </div>
@@ -2562,7 +2558,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                             :disabled="isSending"
                             @click="handleEditUserPrompt(msg)"
                           >
-                            <q-tooltip>Torna indietro e modifica prompt</q-tooltip>
+                            <q-tooltip>Edit prompt</q-tooltip>
                           </q-btn>
                           <q-btn
                             flat
@@ -2573,7 +2569,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                             color="white"
                             @click="handleCopyMessage(msg.text)"
                           >
-                            <q-tooltip>Copia prompt</q-tooltip>
+                            <q-tooltip>Copy prompt</q-tooltip>
                           </q-btn>
                         </div>
 
@@ -2591,7 +2587,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                             color="grey-7"
                             @click="handleCopyMessage(msg.text)"
                           >
-                            <q-tooltip>Copia testo negli appunti</q-tooltip>
+                            <q-tooltip>Copy text to clipboard</q-tooltip>
                           </q-btn>
                           <q-btn
                             v-if="isLastAgentMessage(msg)"
@@ -2604,7 +2600,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                             :disabled="isSending"
                             @click="handleRetryLastMessage"
                           >
-                            <q-tooltip>Rigenera risposta dell'Agente</q-tooltip>
+                            <q-tooltip>Regenerate agent response</q-tooltip>
                           </q-btn>
                           <q-btn
                             flat
@@ -2616,7 +2612,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                             @click="handleSpeakMessage(msg.text)"
                           >
                             <q-tooltip>{{
-                              isSpeaking ? "Interrompi audio" : "Ascolta risposta vocale"
+                              isSpeaking ? "Stop audio" : "Listen to voice response"
                             }}</q-tooltip>
                           </q-btn>
                         </div>
@@ -2696,7 +2692,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                       outlined
                       dense
                       rows="1"
-                      placeholder="Scrivi un'istruzione o detta a voce... (Shift+Invio per a capo)"
+                      placeholder="Type an instruction or dictate by voice... (Shift+Enter for newline)"
                       :disabled="isSending"
                       class="chat-prompt-textarea"
                       @keydown.enter.exact.prevent="handleSendChatMessage"
@@ -2711,7 +2707,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                           :disabled="isSending"
                           @click="triggerFileInput"
                         >
-                          <q-tooltip>Allega documento PDF o testo</q-tooltip>
+                          <q-tooltip>Attach PDF or text document</q-tooltip>
                         </q-btn>
                         <q-btn
                           flat
@@ -2724,7 +2720,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                           @click="toggleVoiceDictation"
                         >
                           <q-tooltip>{{
-                            isListening ? "Ferma dettatura" : "Dettatura vocale nativa"
+                            isListening ? "Stop dictation" : "Native voice dictation"
                           }}</q-tooltip>
                         </q-btn>
                       </template>
@@ -2740,7 +2736,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                           @click="isSending ? handleStopAiExecution() : handleSendChatMessage()"
                         >
                           <q-tooltip>{{
-                            isSending ? "Interrompi elaborazione IA" : "Invia messaggio"
+                            isSending ? "Stop AI processing" : "Send message"
                           }}</q-tooltip>
                         </q-btn>
                       </template>
@@ -2761,7 +2757,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                   >
                     <div class="row items-center q-gutter-xs">
                       <q-icon name="timeline" color="primary" size="15px" />
-                      <span>Timeline Stati</span>
+                      <span>Status Timeline</span>
                     </div>
                     <div class="row items-center q-gutter-xs">
                       <q-btn
@@ -2778,7 +2774,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                         @click="timelineSide = timelineSide === 'right' ? 'left' : 'right'"
                       >
                         <q-tooltip>{{
-                          timelineSide === "right" ? "Contenuto a sinistra" : "Contenuto a destra"
+                          timelineSide === "right" ? "Content on left" : "Content on right"
                         }}</q-tooltip>
                       </q-btn>
                       <q-btn
@@ -2790,7 +2786,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                         color="grey-7"
                         @click="toggleTimeline"
                       >
-                        <q-tooltip>Nascondi Timeline</q-tooltip>
+                        <q-tooltip>Hide Timeline</q-tooltip>
                       </q-btn>
                     </div>
                   </div>
@@ -2835,7 +2831,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                                 @click.stop="toggleNoteVisibility(entry)"
                               >
                                 <q-tooltip>{{
-                                  entry.showNote !== false ? "Nascondi nota" : "Mostra nota"
+                                  entry.showNote !== false ? "Hide note" : "Show note"
                                 }}</q-tooltip>
                               </q-btn>
                               <q-btn
@@ -2848,7 +2844,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                                 @click.stop="openNoteDialog(entry)"
                               >
                                 <q-tooltip>{{
-                                  entry.note ? "Modifica nota" : "Aggiungi nota allo step"
+                                  entry.note ? "Edit note" : "Add note to step"
                                 }}</q-tooltip>
                               </q-btn>
                             </div>
@@ -2885,7 +2881,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                               class="text-caption text-weight-bold text-amber-10 row items-center q-gutter-2xs"
                             >
                               <q-icon name="sticky_note_2" size="12px" color="amber-10" />
-                              <span style="font-size: 0.7rem">Nota</span>
+                              <span style="font-size: 0.7rem">Note</span>
                             </span>
                             <div class="row items-center q-gutter-2xs">
                               <q-btn
@@ -2897,7 +2893,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                                 color="grey-7"
                                 @click.stop="openNoteDialog(entry)"
                               >
-                                <q-tooltip>Modifica nota</q-tooltip>
+                                <q-tooltip>Edit note</q-tooltip>
                               </q-btn>
                               <q-btn
                                 flat
@@ -2908,7 +2904,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                                 color="grey-6"
                                 @click.stop="toggleNoteVisibility(entry)"
                               >
-                                <q-tooltip>Nascondi nota</q-tooltip>
+                                <q-tooltip>Hide note</q-tooltip>
                               </q-btn>
                             </div>
                           </div>
@@ -2928,7 +2924,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                             size="xs"
                             icon="visibility"
                             color="amber-9"
-                            label="Mostra nota nascosta"
+                            label="Show hidden note"
                             no-caps
                             class="text-caption"
                             style="font-size: 0.68rem; padding: 0 4px"
@@ -2948,7 +2944,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                             <div class="row items-center q-gutter-x-xs">
                               <q-icon name="group_work" color="primary" size="18px" />
                               <span class="text-caption text-weight-bold text-primary">
-                                Sub-Task Operativi
+                                Operational Subtasks
                               </span>
                               <q-badge
                                 color="amber-9"
@@ -2961,8 +2957,8 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                             <span class="text-caption text-grey-7" style="font-size: 0.68rem">
                               {{
                                 subtaskFinishedCount === subtasks.length && subtasks.length > 0
-                                  ? "Tutti conclusi"
-                                  : `${subtasks.length - subtaskFinishedCount} in corso`
+                                  ? "All completed"
+                                  : `${subtasks.length - subtaskFinishedCount} in progress`
                               }}
                             </span>
                           </div>
@@ -2977,11 +2973,11 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                               size="xs"
                               color="primary"
                               icon="person_add"
-                              label="Nuova Risorsa"
+                              label="New Resource"
                               class="text-weight-bold q-px-xs"
                               @click="handleCreateManualSubtask"
                             >
-                              <q-tooltip>Aggiungi o estrai risorsa dalla chat</q-tooltip>
+                              <q-tooltip>Add or extract resource from chat</q-tooltip>
                             </q-btn>
 
                             <q-btn
@@ -2994,7 +2990,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                               class="q-px-xs"
                               @click="handleOpenOrSyncSheet"
                             >
-                              <q-tooltip>Apri o sincronizza foglio Google</q-tooltip>
+                              <q-tooltip>Open or sync Google Sheet</q-tooltip>
                             </q-btn>
 
                             <q-btn
@@ -3007,7 +3003,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                               class="q-px-xs"
                               @click="handleEmailAction"
                             >
-                              <q-tooltip>Genera bozza email per i contatti</q-tooltip>
+                              <q-tooltip>Generate email draft for contacts</q-tooltip>
                             </q-btn>
 
                             <q-space />
@@ -3022,7 +3018,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                               :loading="isLoadingSubtasks"
                               @click="fetchSubtasks"
                             >
-                              <q-tooltip>Ricarica risorse</q-tooltip>
+                              <q-tooltip>Reload resources</q-tooltip>
                             </q-btn>
                           </div>
 
@@ -3108,7 +3104,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                                   color="grey-6"
                                   @click.stop="promptDeleteSubtask(st)"
                                 >
-                                  <q-tooltip>Elimina definitivamente</q-tooltip>
+                                  <q-tooltip>Delete permanently</q-tooltip>
                                 </q-btn>
                                 <q-icon name="chevron_right" color="grey-5" size="14px" />
                               </div>
@@ -3120,9 +3116,8 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                             class="text-caption text-grey-6 text-center q-pa-sm"
                             style="font-size: 0.7rem"
                           >
-                            Nessuna risorsa monitorata. Clicca su
-                            <strong>"+ Nuova Risorsa"</strong> per crearne una o estrarla dai
-                            messaggi.
+                            No monitored resources yet. Click
+                            <strong>"+ New Resource"</strong> to add or extract from chat messages.
                           </div>
                         </div>
                       </q-timeline-entry>
@@ -3139,7 +3134,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
       <div
         v-if="!isFullscreen"
         class="resize-handle"
-        title="Trascina per ridimensionare finestra"
+        title="Drag to resize window"
         @mousedown="handleResizeMouseDown"
       >
         <q-icon name="south_east" size="14px" color="grey-6" />
@@ -3153,7 +3148,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
           <div class="row items-center q-gutter-xs">
             <q-icon name="note_alt" color="amber-5" size="20px" />
             <div class="text-subtitle2 text-weight-bold">
-              Nota Step: {{ selectedTimelineEntry?.title }}
+              Step Note: {{ selectedTimelineEntry?.title }}
             </div>
           </div>
           <q-btn icon="close" flat round dense size="sm" color="white" v-close-popup />
@@ -3161,7 +3156,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
 
         <q-card-section class="q-pa-md">
           <div class="text-caption text-grey-7 q-mb-sm">
-            Aggiungi una nota o appunto personalizzato per questa specifica fase della timeline.
+            Add a custom note or remark for this timeline phase.
           </div>
           <q-input
             v-model="currentNoteText"
@@ -3169,7 +3164,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
             outlined
             rows="4"
             autofocus
-            placeholder="Inserisci note operative, osservazioni o promemoria..."
+            placeholder="Enter operational notes, observations, or reminders..."
             style="font-size: 0.85rem"
           />
         </q-card-section>
@@ -3179,7 +3174,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
             v-if="selectedTimelineEntry?.note"
             flat
             color="negative"
-            label="Elimina nota"
+            label="Delete note"
             icon="delete"
             size="sm"
             @click="deleteNote"
@@ -3187,10 +3182,10 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
           <div v-else></div>
 
           <div class="row items-center q-gutter-sm">
-            <q-btn flat label="Annulla" color="grey-7" v-close-popup size="sm" />
+            <q-btn flat label="Cancel" color="grey-7" v-close-popup size="sm" />
             <q-btn
               color="primary"
-              label="Salva Nota"
+              label="Save Note"
               icon="save"
               size="sm"
               class="text-weight-bold"
@@ -3261,7 +3256,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
           style="background: #0a2342; border-bottom: 2px solid #c5a065"
         >
           <q-icon name="edit_note" color="amber-5" size="20px" class="q-mr-sm" />
-          <span class="text-subtitle2 text-weight-bold text-white">Modifica Descrizione Task</span>
+          <span class="text-subtitle2 text-weight-bold text-white">Edit Task Description</span>
           <q-space />
           <q-btn flat round dense icon="close" color="white" v-close-popup />
         </q-card-section>
@@ -3272,17 +3267,17 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
             rows="8"
             outlined
             dense
-            label="Descrizione / Obiettivo del Task"
-            hint="Modifica la descrizione del task. Sarà usata come contesto dall'Agente IA."
+            label="Task Description / Objective"
+            hint="Update task description. Used as context by the AI Agent."
           />
         </q-card-section>
         <q-card-actions align="right" class="q-px-md q-pb-md">
-          <q-btn flat label="Annulla" color="grey-7" no-caps v-close-popup />
+          <q-btn flat label="Cancel" color="grey-7" no-caps v-close-popup />
           <q-btn
             unelevated
             color="primary"
             icon="save"
-            label="Salva Descrizione"
+            label="Save Description"
             no-caps
             class="text-weight-bold"
             @click="saveEditedDescription"
@@ -3299,9 +3294,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
           style="background: #0a2342; border-bottom: 2px solid #c5a065"
         >
           <q-icon name="checklist" color="amber-5" size="20px" class="q-mr-sm" />
-          <span class="text-subtitle2 text-weight-bold text-white"
-            >Modifica Sotto-Task Operative</span
-          >
+          <span class="text-subtitle2 text-weight-bold text-white">Edit Operational Subtasks</span>
           <q-space />
           <q-btn flat round dense icon="close" color="white" v-close-popup />
         </q-card-section>
@@ -3310,7 +3303,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
             v-if="editSubtasksDraft.length === 0"
             class="text-caption text-grey-6 italic q-mb-sm"
           >
-            Nessuna sotto-task. Aggiungine una qui sotto.
+            No subtasks. Add one below.
           </div>
           <div
             v-for="(st, idx) in editSubtasksDraft"
@@ -3321,7 +3314,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
               <q-badge color="grey-5" text-color="dark" :label="idx + 1" />
             </div>
             <div class="col">
-              <q-input v-model="st.title" outlined dense placeholder="Titolo sotto-task..." />
+              <q-input v-model="st.title" outlined dense placeholder="Subtask title..." />
             </div>
             <div class="col-auto">
               <q-btn
@@ -3333,7 +3326,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                 color="negative"
                 @click="removeEditSubtaskItem(idx)"
               >
-                <q-tooltip>Elimina</q-tooltip>
+                <q-tooltip>Delete</q-tooltip>
               </q-btn>
             </div>
           </div>
@@ -3344,18 +3337,18 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
             size="sm"
             color="primary"
             icon="add_circle"
-            label="Aggiungi Sotto-Task"
+            label="Add Subtask"
             class="q-mt-sm"
             @click="addEditSubtaskItem"
           />
         </q-card-section>
         <q-card-actions align="right" class="q-px-md q-pb-md">
-          <q-btn flat label="Annulla" color="grey-7" no-caps v-close-popup />
+          <q-btn flat label="Cancel" color="grey-7" no-caps v-close-popup />
           <q-btn
             unelevated
             color="primary"
             icon="save"
-            label="Salva Sotto-Task"
+            label="Save Subtasks"
             no-caps
             class="text-weight-bold"
             @click="saveEditedSubtasks"

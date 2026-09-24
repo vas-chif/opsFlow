@@ -72,7 +72,7 @@ const isOwner = computed((): boolean => {
 });
 
 const requiredConfirmPhrase = computed((): string => {
-  return "ELIMINA DEFINITIVAMENTE";
+  return "PERMANENTLY DELETE";
 });
 
 const isConfirmationValid = computed((): boolean => {
@@ -81,7 +81,11 @@ const isConfirmationValid = computed((): boolean => {
   }
   const typed = confirmationInput.value.trim().toUpperCase();
   const tenantName = authStore.tenantId;
-  return typed === requiredConfirmPhrase.value || typed === tenantName.toUpperCase();
+  return (
+    typed === requiredConfirmPhrase.value ||
+    typed === "ELIMINA DEFINITIVAMENTE" ||
+    typed === tenantName.toUpperCase()
+  );
 });
 
 // ── Actions ──────────────────────────────────────────────────────────────────
@@ -103,7 +107,7 @@ const handleClose = (): void => {
 const performReauth = async (): Promise<void> => {
   const user = auth.currentUser;
   if (!user) {
-    throw new Error("Nessun utente autenticato trovato.");
+    throw new Error("No authenticated user found.");
   }
 
   if (isGoogleUser.value) {
@@ -111,7 +115,7 @@ const performReauth = async (): Promise<void> => {
     await reauthenticateWithPopup(user, provider);
   } else {
     if (!passwordInput.value) {
-      throw new Error("Inserisci la tua password attuale per confermare l'identità.");
+      throw new Error("Please enter your current password to confirm your identity.");
     }
     const credential = EmailAuthProvider.credential(user.email ?? "", passwordInput.value);
     await reauthenticateWithCredential(user, credential);
@@ -148,8 +152,8 @@ const executeDeletion = async (): Promise<void> => {
     q.notify({
       type: "positive",
       message: isOwner.value
-        ? "Organizzazione ed account eliminati definitivamente (GDPR Art. 17)."
-        : "Il tuo account è stato rimosso. I workspace aziendali sono rimasti intatti.",
+        ? "Organization and account permanently deleted (GDPR Art. 17)."
+        : "Your account has been deleted. Workspace records remain intact for your team.",
       position: "top",
       timeout: 5000,
     });
@@ -160,11 +164,11 @@ const executeDeletion = async (): Promise<void> => {
     let userFriendlyMsg = rawMsg;
 
     if (rawMsg.includes("auth/wrong-password") || rawMsg.includes("auth/invalid-credential")) {
-      userFriendlyMsg = "Password errata. Riprova con la password corretta.";
+      userFriendlyMsg = "Incorrect password. Please try again with the correct password.";
     } else if (rawMsg.includes("failed-precondition")) {
       userFriendlyMsg =
-        "Impossibile procedere: sono ancora presenti collaboratori attivi nel team. " +
-        "Rimuovi prima tutti i membri o trasferisci la proprietà.";
+        "Unable to proceed: active team members are still assigned to this organization. " +
+        "Please remove all team members or transfer ownership first.";
     }
 
     q.notify({
@@ -194,15 +198,13 @@ const executeDeletion = async (): Promise<void> => {
         </div>
         <div>
           <div class="text-h6 text-weight-bold text-navy">
-            {{
-              isOwner ? "Dismissione Organizzazione & Account" : "Eliminazione Account Personale"
-            }}
+            {{ isOwner ? "Organization & Account Decommission" : "Personal Account Deletion" }}
           </div>
           <div class="text-caption text-grey-7">
             {{
               isOwner
-                ? "Chiusura definitiva del tenant aziendale"
-                : "Revoca accesso e rimozione dati personali"
+                ? "Permanent termination of company tenant"
+                : "Revoke access and purge personal profile"
             }}
           </div>
         </div>
@@ -214,49 +216,47 @@ const executeDeletion = async (): Promise<void> => {
       <div v-if="currentStep === 1" class="q-py-md">
         <div v-if="isOwner" class="alert-box-owner q-pa-md q-mb-md">
           <div class="text-weight-bold text-negative q-mb-xs">
-            ⚠️ ATTENZIONE: Sei il Titolare Aziendale (Owner)
+            ⚠️ WARNING: You are the Organization Owner
           </div>
           <div class="text-body2 text-grey-9">
-            Questa operazione è <strong>irreversibile</strong>. Verrà eseguita la cancellazione a
-            cascata dell'intera organizzazione (Tenant: <code>{{ authStore.tenantId }}</code
-            >), compresi:
+            This operation is <strong>irreversible</strong>. A cascade deletion will permanently
+            purge the entire organization (Tenant: <code>{{ authStore.tenantId }}</code
+            >), including:
           </div>
           <ul class="text-caption text-grey-8 q-mt-xs q-pl-md">
-            <li>Tutti i workspace ed i progetti aziendali</li>
-            <li>Tutti i task, le approvazioni e lo storico operativo</li>
-            <li>Tutti gli inviti pendenti</li>
-            <li>Il tuo profilo utente e le credenziali di accesso</li>
+            <li>All company workspaces and projects</li>
+            <li>All tasks, approvals, and operational history</li>
+            <li>All pending team invitations</li>
+            <li>Your user profile and authentication credentials</li>
           </ul>
           <div class="text-caption text-weight-medium text-negative q-mt-sm">
-            Nota di sicurezza: se nel team sono ancora presenti altri membri, l'eliminazione verrà
-            bloccata per evitare la perdita accidentale di lavoro altrui.
+            Security notice: if active members remain in the team, deletion will be blocked to
+            prevent accidental loss of collaborators' work.
           </div>
         </div>
 
         <div v-else class="alert-box-member q-pa-md q-mb-md">
-          <div class="text-weight-bold text-primary q-mb-xs">
-            ℹ️ Informazione per Collaboratore del Team
-          </div>
+          <div class="text-weight-bold text-primary q-mb-xs">ℹ️ Notice for Team Collaborator</div>
           <div class="text-body2 text-grey-9">
-            Stai eliminando il tuo account personale dal sistema OpsFlow.
+            You are deleting your personal account from the OpsFlow system.
           </div>
           <ul class="text-caption text-grey-8 q-mt-xs q-pl-md">
             <li>
-              I tuoi dati personali e di login verranno
-              <strong>cancellati definitivamente</strong> (GDPR Art. 17).
+              Your personal login and profile data will be
+              <strong>permanently deleted</strong> (GDPR Art. 17).
             </li>
             <li>
-              <strong>I workspace ed i task aziendali non verranno toccati</strong> e rimarranno a
-              disposizione dei tuoi colleghi.
+              <strong>Company workspaces and tasks will remain untouched</strong> and accessible to
+              your teammates.
             </li>
           </ul>
         </div>
 
         <div class="row justify-end q-gutter-sm q-mt-lg">
-          <q-btn flat label="Annulla" color="grey-8" no-caps @click="handleClose" />
+          <q-btn flat label="Cancel" color="grey-8" no-caps @click="handleClose" />
           <q-btn
             color="negative"
-            label="Ho compreso, Continua"
+            label="I understand, Continue"
             no-caps
             class="elite-btn-danger"
             @click="currentStep = 2"
@@ -267,28 +267,28 @@ const executeDeletion = async (): Promise<void> => {
       <!-- STEP 2: Re-Authentication & Security Gate -->
       <div v-else class="q-py-md">
         <div class="text-body2 text-grey-8 q-mb-md">
-          Per garantire la massima sicurezza (GDPR Art. 32), conferma la tua identità:
+          To ensure maximum security (GDPR Art. 32), please confirm your identity:
         </div>
 
         <!-- Re-Auth: Google Provider -->
         <div v-if="isGoogleUser" class="q-mb-md text-center">
           <q-banner dense rounded class="bg-blue-1 text-primary q-mb-sm">
-            L'account è autenticato con Google OAuth. Ti verrà richiesto di confermare l'account via
-            popup.
+            Account is authenticated via Google OAuth. You will be prompted to re-verify in a popup
+            window.
           </q-banner>
         </div>
 
         <!-- Re-Auth: Password Provider -->
         <div v-else class="q-mb-md">
           <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
-            Inserisci la tua Password attuale:
+            Enter your current Password:
           </div>
           <q-input
             v-model="passwordInput"
             :type="isPasswordVisible ? 'text' : 'password'"
             outlined
             dense
-            placeholder="Password di sicurezza"
+            placeholder="Security password"
           >
             <template #append>
               <q-icon
@@ -303,7 +303,7 @@ const executeDeletion = async (): Promise<void> => {
         <!-- Confirmation phrase for Owner -->
         <div v-if="isOwner" class="q-mb-md">
           <div class="text-caption text-weight-bold text-negative q-mb-xs">
-            Digita <code>{{ requiredConfirmPhrase }}</code> per confermare:
+            Type <code>{{ requiredConfirmPhrase }}</code> to confirm:
           </div>
           <q-input
             v-model="confirmationInput"
@@ -316,7 +316,7 @@ const executeDeletion = async (): Promise<void> => {
         <div class="row justify-between items-center q-mt-lg">
           <q-btn
             flat
-            label="Indietro"
+            label="Back"
             color="grey-7"
             no-caps
             :disable="isLoading"
@@ -326,7 +326,7 @@ const executeDeletion = async (): Promise<void> => {
           <div class="row q-gutter-sm">
             <q-btn
               flat
-              label="Annulla"
+              label="Cancel"
               color="grey-8"
               no-caps
               :disable="isLoading"
@@ -334,9 +334,7 @@ const executeDeletion = async (): Promise<void> => {
             />
             <q-btn
               color="negative"
-              :label="
-                isOwner ? 'Distruggi Organizzazione ed Account' : 'Conferma ed Elimina Account'
-              "
+              :label="isOwner ? 'Destroy Organization and Account' : 'Confirm and Delete Account'"
               no-caps
               class="elite-btn-danger"
               :loading="isLoading"

@@ -3,7 +3,8 @@
 > **Branch:** `dev`  
 > **Status:** COMPLETED  
 > **Owner:** Vasile Chifeac  
-> **Created:** 2026-09-24
+> **Created:** 2026-09-24  
+> **Updated:** 2026-09-24 (Finalizzazione Fase 5 Audit Preventivo)
 
 ---
 
@@ -26,6 +27,10 @@
 
 4. **Allineamento Flussi di Logica (`.logicFlow/`):**
    - Aggiornamento di `02_workspace_lifecycle_and_setup_flow.md` e `03_task_execution_and_ui_flow.md`.
+
+5. **Integrazione Audit Preventivo (Fase 5 - Residui UI & Zero-Shot Meta-Prompting):**
+   - Blindatura in inglese puro del prompt base (Livello 1) per eliminare il prior token bias verso l'italiano.
+   - Standardizzazione dei residui in italiano identificati nella chat operativa (`TaskChatWindow.vue`, `TaskChatModal.vue`) e nel dialogo GDPR Layer 1 (`DeleteAccountDialog.vue`).
 
 ---
 
@@ -64,4 +69,26 @@
 - [x] Esecuzione `yarn lint:check` (0 errori, 0 warning).
 - [x] Esecuzione `yarn typecheck` (0 errori di compilazione TypeScript).
 - [x] Verifica compilazione backend `npm run build` in `opsflow-functions`.
-- [x] Commit Git conforme alle direttive su branch `dev`.
+- [x] Commit Git conforme alle direttive su branch `dev` (`commit 5d13de6`).
+
+### Fase 5: Estensione Standardizzazione Residua & Blindatura Zero-Shot (Audit Preventivo)
+
+- [x] **Blindatura Zero-Shot di Livello 1 in `opsflow-functions/src/ai/promptBuilder.ts`:**
+  - Conversione in inglese internazionale del meta-prompt di Livello 1 (OpsFlow Base Architecture & Security) per eliminare qualsiasi prior token bias verso l'italiano e rafforzare la direttiva di Dynamic Language Mirroring.
+  - Allineamento del messaggio di fallback in `opsflow-functions/src/ai/chatFlow.ts`.
+- [x] **Standardizzazione UI Chat Operativa in `src/components/TaskChatWindow.vue`:**
+  - Aggiornamento placeholder barra messaggi (`"Type an instruction or dictate by voice... (Shift+Enter for newline)"`).
+  - Aggiornamento placeholder note operative (`"Enter operational notes, observations, or reminders..."`).
+  - Aggiornamento placeholder titolo sotto-task (`"Subtask title..."`).
+  - Traduzione bottoni `label="Annulla"` -> `label="Cancel"`.
+  - Standardizzazione notifiche toast e messaggi di errore operativi in lingua inglese.
+- [x] **Standardizzazione Modale Chat in `src/components/TaskChatModal.vue`:**
+  - Traduzione bottoni `label="Annulla"` -> `label="Cancel"` e toast informativi.
+- [x] **Standardizzazione Dialogo Eliminazione Account in `src/components/DeleteAccountDialog.vue`:**
+  - Traduzione bottoni `label="Annulla"` -> `label="Cancel"`, titoli di conferma ed avvisi GDPR.
+- [x] **Validazione Finale di Non-Regressione:**
+  - `yarn lint:check` (0 errori, 0 warning).
+  - `yarn typecheck` (0 errori TypeScript).
+  - `npm run build` in `opsflow-functions` (0 errori backend).
+- [x] **Nuovo Commit Git Conforme su Branch `dev`:**
+  - Messaggio Conventional Commit per la finalizzazione dell'estensione.

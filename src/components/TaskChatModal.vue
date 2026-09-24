@@ -106,14 +106,14 @@ const executeStatusUpdate = async (newStatus: TaskStatus): Promise<void> => {
     await taskStore.updateTaskStatus(props.workspace.id, props.task.id, newStatus);
     q.notify({
       type: "positive",
-      message: `Stato aggiornato a "${newStatus}"`,
+      message: `Status updated to "${newStatus}"`,
       position: "top",
     });
     emit("taskUpdated");
   } catch {
     q.notify({
       type: "negative",
-      message: "Errore nell'aggiornamento dello stato",
+      message: "Error updating task status",
       position: "top",
     });
   }
@@ -126,16 +126,16 @@ const handleStatusChange = async (newStatus: TaskStatus): Promise<void> => {
 
   if (newStatus === "completed" || newStatus === "cancelled") {
     q.dialog({
-      title: newStatus === "completed" ? "Completare il Task?" : "Annullare il Task?",
+      title: newStatus === "completed" ? "Complete Task?" : "Cancel Task?",
       message:
-        "Completando o annullando questo task, tutti i monitoraggi e le pianificazioni ricorrenti attive collegate verranno messi in pausa automaticamente.",
+        "By completing or cancelling this task, all connected active schedules and monitoring will be paused automatically.",
       ok: {
-        label: newStatus === "completed" ? "Completa Task" : "Annulla Task",
+        label: newStatus === "completed" ? "Complete Task" : "Cancel Task",
         color: newStatus === "completed" ? "positive" : "negative",
         flat: true,
       },
       cancel: {
-        label: "Indietro",
+        label: "Back",
         flat: true,
         color: "grey",
       },
@@ -282,14 +282,14 @@ const handleDecomposeExistingTask = async (): Promise<void> => {
 
       q.notify({
         type: "positive",
-        message: `${generatedSubtasks.length} sotto-task generate con successo!`,
+        message: `${generatedSubtasks.length} subtasks generated successfully!`,
         icon: "auto_awesome",
       });
     }
   } catch {
     q.notify({
       type: "negative",
-      message: "Impossibile decomporre il task con AI. Riprova.",
+      message: "Unable to decompose task with AI. Please retry.",
       icon: "error",
     });
   } finally {
@@ -303,7 +303,7 @@ const handleMoveTask = async (): Promise<void> => {
     await taskStore.moveTask(props.task.id, props.workspace.id, selectedTargetWsId.value);
     q.notify({
       type: "positive",
-      message: "Task spostato con successo nel nuovo Workspace!",
+      message: "Task moved successfully to new Workspace!",
       position: "top",
     });
     moveModalOpen.value = false;
@@ -312,7 +312,7 @@ const handleMoveTask = async (): Promise<void> => {
   } catch {
     q.notify({
       type: "negative",
-      message: "Errore durante lo spostamento del task",
+      message: "Error moving task",
       position: "top",
     });
   }
@@ -656,7 +656,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
               </q-chat-message>
             </div>
 
-            <q-chat-message v-if="isSending" name="Agente AI" bg-color="grey-3">
+            <q-chat-message v-if="isSending" name="AI Agent" bg-color="grey-3">
               <q-spinner-dots size="1.8rem" color="primary" />
             </q-chat-message>
           </div>
@@ -667,7 +667,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
               v-model="chatMessage"
               outlined
               dense
-              placeholder="Scrivi una direttiva per questo task..."
+              placeholder="Type an instruction for this task..."
               :disabled="isSending"
               @keyup.enter="handleSendChatMessage"
             >
@@ -693,7 +693,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
   <q-dialog v-model="moveModalOpen">
     <q-card style="width: 450px" class="q-pa-md">
       <q-card-section>
-        <div class="text-h6 text-weight-bold">Sposta Task in Altro Workspace</div>
+        <div class="text-h6 text-weight-bold">Move Task to Another Workspace</div>
       </q-card-section>
       <q-card-section>
         <q-select
@@ -707,14 +707,14 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
           map-options
           outlined
           dense
-          label="Seleziona Workspace di Destinazione"
+          label="Select Destination Workspace"
         />
       </q-card-section>
       <q-card-actions align="right">
-        <q-btn flat label="Annulla" v-close-popup />
+        <q-btn flat label="Cancel" v-close-popup />
         <q-btn
           color="primary"
-          label="Sposta Task"
+          label="Move Task"
           :disabled="!selectedTargetWsId"
           @click="handleMoveTask"
         />

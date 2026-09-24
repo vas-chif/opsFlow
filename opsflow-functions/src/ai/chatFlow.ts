@@ -186,7 +186,7 @@ export const chatWithAgentFlow = ai.defineFlow(
       });
 
       let replyText =
-        llmResponse.text || "Operazione completata con successo dall'Agente IA OpsFlow.";
+        llmResponse.text || "Operation completed successfully by OpsFlow AI Agent.";
 
       const toolsUsed: string[] = [];
       let approvalId: string | undefined;
