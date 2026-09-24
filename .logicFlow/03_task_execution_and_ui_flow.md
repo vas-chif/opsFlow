@@ -278,3 +278,45 @@ I seguenti flussi operativi sono stati completamente integrati nello standard mu
 6. **AI Task Architect & Intelligent Decomposition** (`AITaskArchitectModal.vue` - ID: `ai-task-architect-modal`)
 7. **Scheda Risorsa / Lead Polymorphic SubTask** (`SubTaskEntityModal.vue` - ID: `subtask-entity-modal`)
 8. **Gestione Membri Team & Inviti** (`MainLayout.vue` / `TeamMembersPanel.vue` - ID: `team-members-modal`)
+
+---
+
+## 🏗️ 10. AI Task Architect: Controlli Volumi, Scomposizione Multi-Ruolo & Dynamic Language Mirroring
+
+### 10.1 Controlli di Volume Operativo & Scomposizione a Tranche
+
+Nell'interfaccia di decomposizione (`AITaskArchitectModal.vue`), l'operatore seleziona il volume target di entità/candidati desiderato:
+
+1. **Sprint Target (10 Entità):**
+   - Singola tranche di screening focalizzato. Ideale per ricerche di nicchia o ruoli specifici ad alta specializzazione.
+2. **Benchmark Target (20 Entità):**
+   - Scomposizione in 2 tranche operative (es. Tranche A: Top 10 candidati primari; Tranche B: 10 profili complementari o con stack adiacente).
+3. **Progressive Harvesting (50+ Entità):**
+   - Scomposizione progressiva in 3 tranche distinte:
+     - _Tranche 1 (Quick Wins & Direct Matches):_ Primi 15 profili immediatamente disponibili con match elevato.
+     - _Tranche 2 (Expanded Search & Specialized Channels):_ Successivi 20 profili da canali specialistici e community tecniche.
+     - _Tranche 3 (Alternative Profiles & Passive Sourcing):_ Restanti profili adiacenti o da attivare mediante campagne di outreach.
+
+### 10.2 Decomposizione di Requisiti Multi-Ruolo
+
+Qualora l'operatore immetta una richiesta contenente figure professionali eterogenee (es. "1 Power BI Specialist, 1 Salesforce Consultant, 2 MuleSoft Developers"):
+
+- L'AI scompone la descrizione generale del task in **Sezioni di Requisiti Distinte** per ogni ruolo (`Role A`, `Role B`, ecc.).
+- Genera **Subtask X-Ray Dedicate e Separate per ciascuna figura**, con query booleane specifiche per ogni ruolo (es. stringhe X-Ray per Power BI, separate da quelle per MuleSoft o Salesforce).
+- Mappa sotto-obiettivi operativi e criteri di validazione indipendenti, prevenendo qualsiasi sovrapposizione o fusione caotica dei requisiti.
+
+### 10.3 Strict Ground-Truth & Anti-Hallucination Guardrail (Zero-Bias & Zero-Fake)
+
+Quando il toggle `[🛡️ Strict Ground-Truth & Anti-Hallucination Guardrail]` è attivo (default: `true`):
+
+1. **Zero Profili Fittizi / Sintetici:** L'AI non inventa mai recapiti, nominativi fittizi o URL generati artificialmente.
+2. **GAP TO VERIFY:** Qualora tariffe giornaliere, disponibilità temporale o contatti diretti non siano pubblicamente accertabili dalle fonti web verificate, il campo viene categoricamente contrassegnato con la dicitura: `"GAP TO VERIFY: confirm rate/availability"`.
+3. **GDPR Art. 14 Outreach Planning:** Per ogni campagna di sourcing o acquisizione lead, il task genera automaticamente una subtask di pianificazione informativa GDPR con termine perentorio di 30 giorni dal primo contatto.
+
+### 10.4 Dynamic Language Mirroring (Livello 1 AI Prompt)
+
+A livello di sistema (`promptBuilder.ts` e callable functions), il generatore AI:
+
+- Rileva in tempo reale la lingua dell'input dell'utente.
+- Risponde rigorosamente e con naturalezza nativa nella medesima lingua dell'utente (Italiano con Italiano, Inglese con Inglese, Spagnolo con Spagnolo, ecc.).
+- Rifiuta qualsiasi bias o forzatura statica dell'italiano derivante da titoli di workspace o keyword di contesto.

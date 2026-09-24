@@ -1289,25 +1289,29 @@ export const generateDbsAttitude = onCall(
 // ── AI TASK ARCHITECT: refineTaskDraft (Step 17 / Step 22) ───────────────────
 
 const TASK_ARCHITECT_SYSTEM_PROMPT =
-  "Sei AITaskArchitect, il copilota no-code di OpsFlow specializzato nella creazione e scomposizione di task.\n" +
-  "Il tuo compito è trasformare un appunto informale o un'EMAIL GREZZA ricevuta da un cliente/fornitore " +
-  "in una scheda task professionale e strutturata.\n\n" +
-  "PRINCIPIO ARCHITETTURALE FONDAMENTALE (TASK OPERATIVO DALL'INPUT REALE):\n" +
-  "- Il Task rappresenta l'incarico contingente specifico (IL 'COSA CERCARE / ESEGUIRE').\n" +
-  "- Se l'input è un'email grezza, estrai fedelmente i requisiti reali indicati " +
-  "(tecnologie, seniority, sede/remoto, date indicate).\n" +
-  "- GESTIONE DETERMINISTICA DEI GAP (ZERO-ALLUCINAZIONE): se l'email o appunto NON specifica elementi essenziali " +
-  "(es. tariffa oraria/giornaliera, budget, contatti diretti, disponibilità esatta), NON DEVI MAI INVENTARLI. " +
-  "Inseriscili esplicitamente nella descrizione o nelle sotto-task come 'GAP DA VERIFICARE: concordare " +
-  "tariffa/disponibilità con il cliente o candidato'.\n\n" +
+  "Sei AITaskArchitect, il copilota no-code di OpsFlow specializzato nella creazione e scomposizione di task operativi.\n" +
+  "Il tuo compito è trasformare un appunto informale, una richiesta di sourcing o un'EMAIL GREZZA ricevuta da un cliente/fornitore " +
+  "in una scheda task professionale, strutturata ed eseguibile.\n\n" +
+  "PRINCIPI ARCHITETTURALI FONDAMENTALI:\n" +
+  "1. DYNAMIC LANGUAGE MIRRORING (ZERO-BIAS):\n" +
+  "   - Rileva la lingua dell'input/email dell'utente (italiano, inglese, spagnolo, ecc.) e genera l'output rigorosamente in quella STESSA lingua.\n" +
+  "   - Se l'input è in inglese, produci titolo, descrizione e sotto-task interamente in inglese professionale.\n" +
+  "   - Se l'input è in italiano, produci l'output in italiano.\n\n" +
+  "2. GESTIONE DETERMINISTICA DEI GAP E STRICT GROUND-TRUTH (ZERO-FAKE):\n" +
+  "   - Estrai fedelmente i requisiti reali indicati (ruoli, tecnologie, seniority, sedi/remoto, date, vincoli).\n" +
+  "   - Se l'email o appunto NON specifica elementi essenziali (es. tariffa oraria/giornaliera, budget, contatti diretti, disponibilità esatta), NON DEVI MAI INVENTARLI.\n" +
+  "   - Inseriscili esplicitamente nella descrizione o nelle sotto-task come 'GAP TO VERIFY: confirm rate/availability with client or candidate' (o 'GAP DA VERIFICARE' in italiano).\n\n" +
+  "3. DECOMPOSIZIONE MULTI-RUOLO E TRANCHE OPERATIVE:\n" +
+  "   - Se l'input include ruoli multipli o figure eterogenee (es. '1 Power BI, 1 MuleSoft, 1 Cloud Architect'), crea sotto-task dedicate distinte per ciascun ruolo con query e criteri isolati.\n" +
+  "   - Se viene specificato un volume target elevato (es. 20 o 50+ lead/profili), struttura le sotto-task per tranche progressive (es. Tranche 1: Quick Wins / Top Tier; Tranche 2: Expanded Channel Sourcing; Tranche 3: Passive Engagement).\n\n" +
   "REGOLE TASSATIVE:\n" +
   "1. Rispetta RIGOROSAMENTE il settore, il tono e le regole DO/DON'T della Costituzione DBS del Workspace.\n" +
-  "2. Genera un titolo sintetico orientato all'azione (max 80 caratteri, es. 'Docente Camunda 8 | Milano/Remoto').\n" +
+  "2. Genera un titolo sintetico orientato all'azione (max 80 caratteri, es. 'Lead Cloud Sourcing | Azure & MuleSoft' o 'Docente Camunda 8 | Milano/Remoto').\n" +
   "3. Scrivi una descrizione operativa con contesto, requisiti certi ed evidenziazione dei GAP da verificare.\n" +
   "4. Scegli la categoria più pertinente tra: general, marketing, research, admin, dev, clinical.\n" +
   "5. Definisci la priorità operativa: low, medium o high.\n" +
   "6. Stima il tempo realistico in minuti (5-480).\n" +
-  "7. Crea 2-6 sotto-task progressive in sequenza logica operativa.\n" +
+  "7. Crea 2-10 sotto-task progressive in sequenza logica operativa.\n" +
   "8. Rispondi ESCLUSIVAMENTE in formato JSON strutturato conforme allo schema richiesto.\n" +
   "9. Non aggiungere dati personali identificabili (PII) fittizi o non autorizzati nei campi di output.";
 
@@ -1336,7 +1340,7 @@ export const refineTaskDraft = onCall(
       );
     }
 
-    const { workspaceId, rawDraft, workspaceAttitude } = request.data as {
+    const { workspaceId, rawDraft, workspaceAttitude, targetVolume, strictGroundTruth } = request.data as {
       workspaceId: string;
       rawDraft: string;
       workspaceAttitude?: {
@@ -1348,6 +1352,8 @@ export const refineTaskDraft = onCall(
           dontList?: string[];
         };
       };
+      targetVolume?: number;
+      strictGroundTruth?: boolean;
     };
 
     if (!workspaceId || !rawDraft || typeof rawDraft !== "string" || rawDraft.trim().length < 5) {
@@ -1357,7 +1363,7 @@ export const refineTaskDraft = onCall(
       );
     }
 
-    logger.info("refineTaskDraft triggered", { workspaceId, uid: rawAuth.uid });
+    logger.info("refineTaskDraft triggered", { workspaceId, uid: rawAuth.uid, targetVolume, strictGroundTruth });
 
     // GDPR Art. 32 — PII Sanitization before sending to LLM
     const sanitized = sanitizePii(rawDraft);
@@ -1374,13 +1380,23 @@ export const refineTaskDraft = onCall(
         "--- FINE COSTITUZIONE ---" :
         "";
 
+    const volumeDirectives = targetVolume ?
+      `\n\n--- PARAMETRI OPERATIVI AGGIUNTIVI ---\n` +
+      `Target Volume Richiesto: ${targetVolume} entità/profili da reperire o qualificare.\n` +
+      `Scomponi le sotto-task per scaglioni o tranche progressive per garantire la copertura dell'intero volume in modo ordinato.\n` :
+      "";
+
+    const groundTruthDirectives = (strictGroundTruth !== false) ?
+      `Strict Ground-Truth & Zero-Fake: ATTIVO. Non inventare mai dati non verificabili. Marca esplicitamente ogni incertezza come GAP DA VERIFICARE / GAP TO VERIFY.\n` :
+      "";
+
     const fullPrompt =
-      `${TASK_ARCHITECT_SYSTEM_PROMPT}${constitutionContext}\n\n` +
+      `${TASK_ARCHITECT_SYSTEM_PROMPT}${constitutionContext}${volumeDirectives}${groundTruthDirectives}\n\n` +
       "--- TESTO GREZZO / EMAIL DELL'UTENTE ---\n" +
       `"${sanitized.sanitizedText}"\n` +
       "--- FINE TESTO GREZZO ---\n\n" +
-      "Trasforma l'email o richiesta grezza in una scheda task operativa strutturata " +
-      "conforme allo schema JSON richiesto, evidenziando chiaramente i requisiti certi e i GAP mancanti.";
+      "Trasforma la richiesta/email grezza in una scheda task operativa strutturata " +
+      "rispettando la lingua dell'input ed evidenziando chiaramente requisiti certi, sotto-task per ruoli/tranche e i GAP mancanti.";
 
     try {
       const { ai, RefinedTaskDraftSchema } = await import("./ai/genkitConfig.js");

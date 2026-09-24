@@ -284,3 +284,17 @@ A garanzia della privacy dei dati e della sicurezza multi-tenant (§3 AGENTS.md)
 5. **Sospensione Scoped Locale vs Sovranità Account Freemium:**
    - La sospensione/pausa operata dall'Owner all'interno di `TeamMembersPanel.vue` agisce unicamente all'interno del tenant (`tenants/{tenantId}/members/{uid}` con `isActive: false` e rimozione da `assignedMembers`).
    - L'azione non altera mai i claim globali di Firebase Auth, garantendo che il collaboratore mantenga incondizionatamente il diritto di accesso al proprio workspace personale e ai 3 task previsti dal piano Freemium.
+
+---
+
+### 7.5 Standardizzazione Globale UI in Lingua Inglese e Disaccoppiamento Deontologico del Prompt DNA
+
+Al fine di garantire a OpsFlow il posizionamento come piattaforma SaaS Enterprise internazionale scalabile:
+
+1. **Standardizzazione UI 100% English:**
+   - Tutti i componenti dell'interfaccia utente (modali, intestazioni, pulsanti, tab, campi di input, etichette di stato e notifiche toast Quasar) adottano esclusivamente la lingua **Inglese**.
+   - Tutti i preset e i template rapidi di avvio (`presetTemplates`, `quickExamples`) sono neutrali ed enterprise (es. Cloud Architecture, Multi-Role Sourcing, Compliance Audit, B2B SaaS Growth), eliminando ogni riferimento geografico o clinico locale.
+
+2. **Disaccoppiamento tra Registro Deontologico (Livello 2) e Lingua di Conversazione:**
+   - I metadati dell'Atteggiamento del Workspace (`industryScope`, `tone`, `rules.doList`, `rules.dontList`) definiscono l'etica, il metodo e il rigore professionale (il "COME CI SI COMPORTA"), indipendentemente dalla lingua con cui sono stati redatti.
+   - L'AI applica fedelmente tali principi e toni (es. analitico, formale, orientato al ROI) traducendoli dinamicamente nella lingua utilizzata dall'utente nel suo prompt o messaggio contingente, senza forzare la risposta in italiano anche qualora le istruzioni del Livello 2 contengano termini italiani.

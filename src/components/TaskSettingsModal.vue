@@ -213,7 +213,7 @@ const setPrimarySheet = (sheetId: string, event?: Event): void => {
   primarySheetId.value = sheetId;
   q.notify({
     type: "positive",
-    message: "🎯 Foglio primario di scrittura impostato per questo task!",
+    message: "🎯 Primary writing sheet set for this task!",
     position: "top",
     timeout: 1200,
   });
@@ -235,7 +235,7 @@ const handleAddNewSheetOnTheFly = async (): Promise<void> => {
   if (!newSheetUrlInput.value.trim() || !props.workspace) return;
   const cleanId = extractIdFromUrl(newSheetUrlInput.value);
   const friendlyName =
-    newSheetNameInput.value.trim() || `Foglio Google (${cleanId.slice(0, 10)}...)`;
+    newSheetNameInput.value.trim() || `Google Sheet (${cleanId.slice(0, 10)}...)`;
 
   const newResource: LinkedGoogleResource = {
     id: cleanId,
@@ -277,7 +277,7 @@ const handleAddNewSheetOnTheFly = async (): Promise<void> => {
 
     q.notify({
       type: "positive",
-      message: `Foglio "${friendlyName}" aggiunto al Task e registrato nel Workspace!`,
+      message: `Sheet "${friendlyName}" added to Task and registered in Workspace!`,
       icon: "cloud_done",
       position: "top",
     });
@@ -285,7 +285,7 @@ const handleAddNewSheetOnTheFly = async (): Promise<void> => {
     const msg = err instanceof Error ? err.message : String(err);
     q.notify({
       type: "negative",
-      message: `Errore salvataggio foglio: ${msg}`,
+      message: `Error saving sheet: ${msg}`,
       position: "top",
     });
   }
@@ -296,14 +296,14 @@ const loadWorkspaceSignature = (): void => {
     emailSignature.value = props.workspace.linkedResources.defaultEmailSignature;
     q.notify({
       type: "info",
-      message: "Firma predefinita del Workspace caricata.",
+      message: "Default Workspace signature loaded.",
       icon: "file_download",
       timeout: 1200,
     });
   } else {
     q.notify({
       type: "warning",
-      message: "Nessuna firma predefinita configurata nel Workspace.",
+      message: "No default signature configured in Workspace.",
       icon: "info",
       timeout: 1500,
     });
@@ -373,7 +373,7 @@ const handleSave = async (): Promise<void> => {
 
     q.notify({
       type: "positive",
-      message: "Impostazioni del Task salvate con successo!",
+      message: "Task settings successfully saved!",
       icon: "verified",
       position: "top",
     });
@@ -384,7 +384,7 @@ const handleSave = async (): Promise<void> => {
     const msg = err instanceof Error ? err.message : String(err);
     q.notify({
       type: "negative",
-      message: `Errore salvataggio impostazioni: ${msg}`,
+      message: `Error saving settings: ${msg}`,
       position: "top",
     });
   } finally {
@@ -397,7 +397,7 @@ const handleSave = async (): Promise<void> => {
   <AppFloatingWindow
     v-model="isOpen"
     :window-id="`task-settings-${task.id}`"
-    title="Impostazioni Operative Task"
+    title="Operational Task Settings"
     :subtitle="`Task: ${task.title}`"
     :badge-label="workspace?.name"
     badge-color="amber-9"
@@ -418,11 +418,11 @@ const handleSave = async (): Promise<void> => {
       align="left"
       class="task-settings-card__tabs text-grey-7 bg-grey-2 shrink-0"
     >
-      <!-- Step 21: Tab 1 — Obiettivo & Prompt IA (NEW, prioritario) -->
-      <q-tab name="prompt" icon="psychology" label="1. Obiettivo &amp; Prompt IA" no-caps />
-      <q-tab name="sheet" icon="table_chart" label="2. Fogli Google &amp; Schede" no-caps />
-      <q-tab name="email" icon="mail" label="3. Firma &amp; Intestazione Email" no-caps />
-      <q-tab name="sync" icon="cloud_sync" label="4. Master DB &amp; Cronologia" no-caps />
+      <!-- Step 21: Tab 1 — Objective & AI Prompt -->
+      <q-tab name="prompt" icon="psychology" label="1. Objective &amp; AI Prompt" no-caps />
+      <q-tab name="sheet" icon="table_chart" label="2. Google Sheets &amp; Tabs" no-caps />
+      <q-tab name="email" icon="mail" label="3. Email Signature &amp; Header" no-caps />
+      <q-tab name="sync" icon="cloud_sync" label="4. Master DB &amp; History" no-caps />
     </q-tabs>
 
     <q-separator class="shrink-0" />
@@ -434,25 +434,25 @@ const handleSave = async (): Promise<void> => {
         animated
         class="full-height task-settings-scroll-area custom-scrollbar q-pa-lg bg-transparent"
       >
-        <!-- TAB 0: OBIETTIVO & PROMPT IA (Step 21) -->
+        <!-- TAB 0: OBJECTIVE & AI PROMPT -->
         <q-tab-panel name="prompt" class="q-pa-none">
           <div class="text-subtitle2 text-weight-bold text-navy q-mb-xs">
-            🎯 Obiettivo &amp; Prompt IA per questo Task
+            🎯 Objective &amp; AI Prompt for this Task
           </div>
           <p class="text-caption text-grey-7 q-mb-md">
-            Modifica il titolo, la categoria operativa e il prompt/obiettivo dell'Agente IA per
-            questo task attivo. Le modifiche sono immediate e senza perdita di contesto.
+            Update the title, operational category, and AI Agent prompt/objective for this active
+            task. Changes take effect immediately without context loss.
           </p>
 
-          <!-- Titolo Task -->
+          <!-- Task Title -->
           <div class="q-mb-md">
-            <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">📝 Titolo Task:</div>
+            <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">📝 Task Title:</div>
             <q-input
               v-model="editTitle"
               outlined
               dense
-              placeholder="Es. Docente Oracle/RAC Milano | NobleProg"
-              :rules="[(v: string) => v.trim().length > 0 || 'Il titolo è obbligatorio']"
+              placeholder="e.g. Senior MuleSoft Integration Architect | Remote"
+              :rules="[(v: string) => v.trim().length > 0 || 'Title is required']"
             >
               <template #prepend>
                 <q-icon name="title" color="amber-9" />
@@ -460,21 +460,21 @@ const handleSave = async (): Promise<void> => {
             </q-input>
           </div>
 
-          <!-- Categoria Operativa -->
+          <!-- Operational Category -->
           <div class="q-mb-md">
             <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
-              🏷️ Categoria Operativa:
+              🏷️ Operational Category:
             </div>
             <q-select
               v-model="editCategory"
               outlined
               dense
               :options="[
-                { label: '⚙️ Generale / Operativo', value: 'general' },
-                { label: '🔍 Ricerca &amp; Screening', value: 'web_search' },
-                { label: '📊 Sincronizzazione Sheets', value: 'sheet_sync' },
-                { label: '✉️ Bozze Gmail', value: 'gmail_draft' },
-                { label: '📄 Analisi PDF', value: 'pdf_analysis' },
+                { label: '⚙️ General / Operations', value: 'general' },
+                { label: '🔍 Research &amp; Screening', value: 'web_search' },
+                { label: '📊 Sheets Synchronization', value: 'sheet_sync' },
+                { label: '✉️ Gmail Drafts', value: 'gmail_draft' },
+                { label: '📄 PDF Analysis', value: 'pdf_analysis' },
               ]"
               emit-value
               map-options
@@ -487,10 +487,10 @@ const handleSave = async (): Promise<void> => {
             </q-select>
           </div>
 
-          <!-- Prompt / Obiettivo Agente IA -->
+          <!-- AI Prompt / Objective -->
           <div class="q-mb-md">
             <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
-              🤖 Prompt / Obiettivo dell'Agente IA:
+              🤖 AI Agent Prompt / Objective:
             </div>
             <q-input
               v-model="editPrompt"
@@ -498,8 +498,8 @@ const handleSave = async (): Promise<void> => {
               rows="7"
               outlined
               dense
-              placeholder="Es. Trova candidati docenti Oracle/RAC su LinkedIn e Malt in Lombardia, genera bozze email personalizzate e compila il foglio di monitoraggio..."
-              hint="Questo è l'obiettivo che l'Agente IA utilizzerà ad ogni esecuzione del task."
+              placeholder="e.g. Sourcing certified MuleSoft architects on LinkedIn and tech communities, generate personalized outreach drafts, and log contacts into the tracking sheet..."
+              hint="This is the objective that the AI Agent will utilize during each task execution."
               class="q-mb-sm"
             >
               <template #prepend>
@@ -508,14 +508,14 @@ const handleSave = async (): Promise<void> => {
             </q-input>
           </div>
 
-          <!-- Step 21 §1.5: Rigenera Sotto-Task con AgentePlanner -->
+          <!-- Regenerate Subtasks -->
           <div class="q-pa-sm bg-blue-1 rounded-borders border-primary-light q-mb-xs">
             <div class="row items-center justify-between no-wrap">
               <div class="col">
-                <div class="text-caption text-weight-bold text-primary">✨ Rigenera Sotto-Task</div>
+                <div class="text-caption text-weight-bold text-primary">✨ Regenerate Subtasks</div>
                 <div class="text-caption text-grey-7">
-                  Usa AgentePlanner per scomporre automaticamente il nuovo prompt in sotto-task
-                  operative.
+                  Use AgentePlanner to automatically decompose the updated prompt into operational
+                  subtasks.
                 </div>
               </div>
               <q-btn
@@ -525,12 +525,12 @@ const handleSave = async (): Promise<void> => {
                 size="sm"
                 color="primary"
                 icon="auto_awesome"
-                label="Rigenera"
+                label="Regenerate"
                 :loading="isReplanningSubtasks"
                 class="q-ml-md"
                 @click="handleTriggerRegenerate"
               >
-                <q-tooltip>Ri-decompone il task aggiornato con AgentePlanner</q-tooltip>
+                <q-tooltip>Re-decompose updated task with AgentePlanner</q-tooltip>
               </q-btn>
             </div>
           </div>
@@ -539,19 +539,18 @@ const handleSave = async (): Promise<void> => {
         <!-- TAB 1: GOOGLE SHEETS (MULTI-SELECT) -->
         <q-tab-panel name="sheet" class="q-pa-none">
           <div class="text-subtitle2 text-weight-bold text-navy q-mb-xs">
-            📊 Fogli Google di Lavoro per questo Task (Multi-selezione):
+            📊 Google Sheets Workfiles for this Task (Multi-select):
           </div>
           <p class="text-caption text-grey-7 q-mb-md">
-            Seleziona uno o più fogli Google da collegare a questo task. L'Agente IA conoscerà tutti
-            i fogli selezionati e potrà leggere o salvare dati su ciascuno di essi in base alle tue
-            istruzioni.
+            Select one or more Google Sheets to connect with this task. The AI Agent will reference
+            all selected sheets and read or save data based on your instructions.
           </p>
 
           <!-- Available Sheets Multi-Select List -->
           <div v-if="availableWorkspaceSheets.length > 0" class="q-mb-md">
             <div class="row items-center justify-between q-mb-xs">
               <div class="text-caption text-weight-bold text-grey-8">
-                Seleziona dalla libreria del Workspace:
+                Select from Workspace Library:
               </div>
               <div class="row q-gutter-xs">
                 <q-btn
@@ -560,7 +559,7 @@ const handleSave = async (): Promise<void> => {
                   no-caps
                   size="xs"
                   color="primary"
-                  label="Seleziona tutti"
+                  label="Select All"
                   @click="selectAllSheets"
                 />
                 <span class="text-grey-4">|</span>
@@ -570,7 +569,7 @@ const handleSave = async (): Promise<void> => {
                   no-caps
                   size="xs"
                   color="grey-7"
-                  label="Deseleziona tutti"
+                  label="Deselect All"
                   @click="clearSelectedSheets"
                 />
               </div>
@@ -603,10 +602,10 @@ const handleSave = async (): Promise<void> => {
                       v-if="primarySheetId === sheet.id"
                       color="positive"
                       text-color="white"
-                      label="🎯 Primario"
+                      label="🎯 Primary"
                       class="q-ml-sm"
                     >
-                      <q-tooltip>Foglio target per la scrittura automatica predefinita</q-tooltip>
+                      <q-tooltip>Target sheet for default automated writes</q-tooltip>
                     </q-badge>
                     <q-badge
                       v-else-if="sheet.isMaster"
@@ -631,10 +630,10 @@ const handleSave = async (): Promise<void> => {
                     size="xs"
                     color="positive"
                     icon="check_circle_outline"
-                    label="Rendi Primario"
+                    label="Set as Primary"
                     @click.stop="setPrimarySheet(sheet.id, $event)"
                   >
-                    <q-tooltip>Imposta questo foglio come target primario di scrittura</q-tooltip>
+                    <q-tooltip>Set this sheet as primary write target</q-tooltip>
                   </q-btn>
 
                   <q-btn
@@ -648,27 +647,27 @@ const handleSave = async (): Promise<void> => {
                     :href="sheet.url"
                     target="_blank"
                   >
-                    <q-tooltip>Apri in Google Sheets</q-tooltip>
+                    <q-tooltip>Open in Google Sheets</q-tooltip>
                   </q-btn>
                 </q-item-section>
               </q-item>
             </q-list>
           </div>
           <div v-else class="text-caption text-grey-6 italic q-mb-md">
-            Nessun foglio Google ancora collegato a questo Workspace. Aggiungine uno qui sotto.
+            No Google Sheets connected to this Workspace yet. Add one below.
           </div>
 
           <!-- Tab / Sub-Sheet Specification -->
           <div class="q-mb-md">
             <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
-              🏷️ Nome Scheda / Tab Interna del Foglio:
+              🏷️ Internal Sheet / Tab Name:
             </div>
             <q-input
               v-model="selectedSheetTab"
               outlined
               dense
-              placeholder="Es: Lead_2026, Servizi_Pazienti, Risultati_Task"
-              hint="Se la scheda non esiste ancora, verrà creata automaticamente all'interno dello stesso file durante la prima approvazione!"
+              placeholder="e.g. Leads_2026, Candidates, Task_Results"
+              hint="If the tab does not exist yet, it will be automatically created inside the spreadsheet upon first approval!"
             >
               <template #prepend>
                 <q-icon name="tab" color="primary" />
@@ -687,11 +686,7 @@ const handleSave = async (): Promise<void> => {
               size="sm"
               color="primary"
               :icon="isAddingNewSheet ? 'expand_less' : 'add_circle'"
-              :label="
-                isAddingNewSheet
-                  ? 'Chiudi Form Aggiunta'
-                  : '➕ Collega un Nuovo Foglio Google al volo'
-              "
+              :label="isAddingNewSheet ? 'Close Form' : '➕ Connect a New Google Sheet on the fly'"
               @click="isAddingNewSheet = !isAddingNewSheet"
             />
 
@@ -700,8 +695,7 @@ const handleSave = async (): Promise<void> => {
               class="q-pa-md q-mt-sm bg-grey-1 rounded-borders border-gold-light"
             >
               <div class="text-caption text-weight-bold text-navy q-mb-sm">
-                Aggiungi Nuovo Foglio Google (sarà visibile anche a tutti gli altri task del
-                Workspace):
+                Add New Google Sheet (will be visible across all Workspace tasks):
               </div>
               <div class="row q-col-gutter-sm">
                 <div class="col-12 col-md-5">
@@ -709,7 +703,7 @@ const handleSave = async (): Promise<void> => {
                     v-model="newSheetNameInput"
                     outlined
                     dense
-                    placeholder="Nome Riconoscibile (es. Pazienti Domiciliari)"
+                    placeholder="Recognizable Name (e.g. Recruitment Pipeline)"
                   />
                 </div>
                 <div class="col-12 col-md-7">
@@ -717,13 +711,13 @@ const handleSave = async (): Promise<void> => {
                     v-model="newSheetUrlInput"
                     outlined
                     dense
-                    placeholder="URL o ID Google Sheets"
+                    placeholder="Google Sheets URL or ID"
                   >
                     <template #after>
                       <q-btn
                         unelevated
                         color="positive"
-                        label="Collega e Salva"
+                        label="Connect &amp; Save"
                         no-caps
                         dense
                         class="q-px-md"
@@ -753,11 +747,11 @@ const handleSave = async (): Promise<void> => {
               <q-icon name="schedule" size="26px" color="teal-8" class="q-mr-md" />
               <div>
                 <div class="text-subtitle2 text-weight-bold text-teal-10">
-                  ⏰ Ricerca Programmata & Monitoraggio Notturno (04:00 AM)
+                  ⏰ Scheduled Sourcing &amp; Periodic Harvesting (04:00 AM)
                 </div>
                 <div class="text-caption text-grey-8">
-                  Automatizza l'AgenteRicerca: diffing a doppia chiave preventivo e aggiunta dei
-                  soli profili nuovi.
+                  Automate AgenteRicerca: pre-emptive dual-key diffing and append of new verified
+                  profiles only.
                 </div>
               </div>
             </div>
@@ -765,7 +759,7 @@ const handleSave = async (): Promise<void> => {
               outline
               color="teal-9"
               icon="alarm_on"
-              label="Pianifica"
+              label="Schedule"
               no-caps
               class="text-weight-bold"
               @click="emit('openScheduleModal')"
@@ -777,7 +771,7 @@ const handleSave = async (): Promise<void> => {
         <q-tab-panel name="email" class="q-pa-none">
           <div class="row items-center justify-between q-mb-xs">
             <span class="text-subtitle2 text-weight-bold text-navy">
-              ✍️ Firma Istituzionale per le Bozze Email di questo Task:
+              ✍️ Corporate Signature for Email Drafts in this Task:
             </span>
             <q-btn
               outline
@@ -786,13 +780,13 @@ const handleSave = async (): Promise<void> => {
               size="xs"
               color="primary"
               icon="file_download"
-              label="Carica Firma del Workspace"
+              label="Load Workspace Signature"
               @click="loadWorkspaceSignature"
             />
           </div>
           <p class="text-caption text-grey-7 q-mb-md">
-            Questa firma verrà inserita automaticamente in tutte le bozze Gmail generate dall'IA per
-            questo task. Nessun dato personale è hardcoded nel sistema.
+            This signature will be automatically included in all Gmail drafts generated by the AI
+            for this task. No personal data is hardcoded in the platform.
           </p>
 
           <q-input
@@ -801,29 +795,29 @@ const handleSave = async (): Promise<void> => {
             rows="8"
             outlined
             dense
-            placeholder="Inserisci la tua firma personalizzata, es:&#10;&#10;Cordiali saluti,&#10;Dott. / Studio / Azienda&#10;Tel: +39 ...&#10;Email: ..."
+            placeholder="Enter your custom signature, e.g.:&#10;&#10;Best regards,&#10;Name / Company&#10;Tel: +1 ...&#10;Email: ..."
             class="q-mb-md"
           />
 
           <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
-            Intestazione Opzionale (Header Email):
+            Optional Email Header:
           </div>
           <q-input
             v-model="emailHeader"
             outlined
             dense
-            placeholder="Es. Gentile Paziente / Spettabile Ditta,"
+            placeholder="e.g. Dear Candidate / To whom it may concern,"
           />
         </q-tab-panel>
 
         <!-- TAB 3: MASTER DB & SYNC -->
         <q-tab-panel name="sync" class="q-pa-none">
           <div class="text-subtitle2 text-weight-bold text-navy q-mb-xs">
-            📜 Master Database su Google Drive (Audit & Cronologia Generale)
+            📜 Master Database on Google Drive (Audit &amp; Global History)
           </div>
           <p class="text-caption text-grey-7 q-mb-md">
-            Il Master Database funge da registro centralizzato di tutto il Workspace, tracciando le
-            sessioni, i prompt e gli stati dei task.
+            The Master Database serves as a centralized log for the entire Workspace, tracking
+            sessions, prompts, and task states.
           </p>
 
           <div
@@ -832,20 +826,20 @@ const handleSave = async (): Promise<void> => {
           >
             <div>
               <div class="text-weight-bold text-navy">
-                ⭐ Foglio Master Corrente: {{ masterSheet.name }}
+                ⭐ Current Master Sheet: {{ masterSheet.name }}
               </div>
               <div class="text-caption text-mono text-grey-7">ID: {{ masterSheet.id }}</div>
             </div>
             <q-icon name="verified" color="amber-9" size="24px" />
           </div>
           <div v-else class="text-caption text-grey-6 italic q-mb-md">
-            Nessun foglio Master ancora designato nel Workspace. Vai in AI Attitude per impostarlo.
+            No Master Sheet designated in Workspace yet. Go to AI Attitude to configure it.
           </div>
 
           <q-toggle
             v-model="syncToMasterSheet"
             color="amber-9"
-            label="Registra automaticamente le milestone e i prompt di questo task nel Foglio Master"
+            label="Automatically log milestones and prompts of this task into the Master Sheet"
             class="text-weight-medium"
           />
         </q-tab-panel>
@@ -855,13 +849,13 @@ const handleSave = async (): Promise<void> => {
     <!-- Footer Actions - Fixed at Bottom -->
     <template #footer>
       <div class="row items-center justify-end q-gutter-sm">
-        <q-btn flat label="Annulla" color="grey-8" no-caps @click="isOpen = false" />
+        <q-btn flat label="Cancel" color="grey-8" no-caps @click="isOpen = false" />
         <q-btn
           unelevated
           color="amber-9"
           text-color="dark"
           icon="save"
-          label="Salva Impostazioni Task"
+          label="Save Task Settings"
           no-caps
           class="text-weight-bold q-px-lg"
           :loading="isSaving"

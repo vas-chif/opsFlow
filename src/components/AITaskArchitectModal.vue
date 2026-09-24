@@ -48,6 +48,16 @@ const rawDraft = ref("");
 const refinedDraft = ref<RefinedTaskDraft | null>(null);
 const isSaving = ref(false);
 
+// Step 27 Volume & Anti-Hallucination Controls
+const targetVolume = ref<number>(10);
+const strictGroundTruth = ref<boolean>(true);
+
+const volumeTargetOptions = [
+  { label: "10 Candidates", value: 10, caption: "Sprint Target" },
+  { label: "20 Candidates", value: 20, caption: "Benchmark Target" },
+  { label: "50+ Progressive Harvesting", value: 50, caption: "3 Progressive Tranches" },
+];
+
 // Dual-Mode flag: true if regenerating an already open task
 const isRegenerateMode = computed<boolean>(() => !!props.existingTask);
 
@@ -96,27 +106,27 @@ const editableSubtasks = ref<
   { order: number; title: string; description: string; selected: boolean }[]
 >([]);
 
-// ── Preset Templates ─────────────────────────────────────────────────────────
+// ── Preset Templates (Step 27 Neutral Enterprise Presets) ─────────────────────
 const presetTemplates = [
   {
-    label: "📧 Docente da Email Cliente",
-    text: "Buongiorno, cerchiamo con urgenza un docente senior su Camunda 8 BPMN per una formazione aziendale a Milano (o ibrido). Corso previsto fine ottobre per 3 giornate. Non abbiamo ancora budget definito né tariffa concordata: potete inviarci profili idonei?",
+    label: "☁️ Cloud Architecture & Integration",
+    text: "Sourcing senior Integration & Cloud Architects with hands-on experience in MuleSoft, Azure API Management, and Kubernetes microservices. Verify enterprise references, rate expectations, and immediate availability.",
   },
   {
-    label: "🔍 Sourcing Specialista IT",
-    text: "Ricerca specialisti Oracle RAC / GoldenGate su Milano o da remoto. Seniority almeno 5 anni, esperienza architetture enterprise. Verificare disponibilità immediata e referenze.",
+    label: "📊 Enterprise Data & BI Specialists",
+    text: "Urgent recruitment for Power BI and Snowflake Data Engineers. Multi-regional enterprise reporting, DAX query performance tuning, and automated ETL pipelines. Confirm portfolio and contractor daily rate.",
   },
   {
-    label: "🏥 Home Visit",
-    text: "Patient home visit, vital signs assessment, wound dressing, and clinical diary update.",
+    label: "🤖 Full-Stack AI & Agentic Engineers",
+    text: "Recruiting Full-Stack AI Engineers with production expertise in Python, Genkit/LangChain, Vector DBs (Pinecone/Chroma), and Gemini/OpenAI API integration for operational automation.",
   },
   {
-    label: "📋 Patient Follow-up",
-    text: "Post-discharge patient follow-up call, verify therapy adherence, schedule home visit if needed.",
+    label: "🛡️ Cybersecurity & Compliance Audit",
+    text: "Sourcing certified ISO 27001 and GDPR Lead Auditors for Q4 corporate compliance gap analysis, vendor security posture assessments, and penetration testing coordination.",
   },
   {
-    label: "🧾 Invoicing",
-    text: "Issue invoice for home nursing service, log into accounting software, and send receipt to patient.",
+    label: "📈 Growth & Commercial Sourcing",
+    text: "Identify B2B Enterprise Account Executives with SaaS track record in Southern & Western Europe. Verify enterprise deal sizes, ARR growth achievements, and CRM pipeline methodologies.",
   },
 ];
 
@@ -132,7 +142,7 @@ const categoryLabels: Record<string, string> = {
   research: "Research",
   admin: "Administration",
   dev: "Development",
-  clinical: "🏥 Clinical",
+  clinical: "Clinical",
 };
 
 const categoryLabel = computed(() => {
@@ -169,12 +179,18 @@ function resetModal(): void {
 
 async function handleRefine(): Promise<void> {
   if (!rawDraft.value.trim() || rawDraft.value.trim().length < 5) {
-    $q.notify({ type: "warning", message: "Inserisci almeno 5 caratteri per descrivere il task." });
+    $q.notify({
+      type: "warning",
+      message: "Please enter at least 5 characters to describe the task.",
+    });
     return;
   }
 
   try {
-    const result = await taskStore.refineTaskDraft(props.workspaceId, rawDraft.value.trim());
+    const result = await taskStore.refineTaskDraft(props.workspaceId, rawDraft.value.trim(), {
+      targetVolume: targetVolume.value,
+      strictGroundTruth: strictGroundTruth.value,
+    });
     refinedDraft.value = result;
 
     // Populate editable preview fields
@@ -286,7 +302,7 @@ async function handleUpdateExistingTask(): Promise<void> {
 
     $q.notify({
       type: "positive",
-      message: `Sotto-task del task "${editableTitle.value}" rigenerate con successo!`,
+      message: `Subtasks of task "${editableTitle.value}" successfully regenerated!`,
       icon: "auto_awesome",
     });
 
@@ -300,7 +316,7 @@ async function handleUpdateExistingTask(): Promise<void> {
     emit("update:modelValue", false);
     resetModal();
   } catch {
-    $q.notify({ type: "negative", message: "Errore durante l'aggiornamento del task." });
+    $q.notify({ type: "negative", message: "Error updating task." });
   } finally {
     isSaving.value = false;
   }
@@ -317,11 +333,11 @@ function handleClose(): void {
     :model-value="modelValue"
     window-id="ai-task-architect-modal"
     :title="
-      isRegenerateMode ? '✨ AI Task Architect — Rigenera Sotto-Task' : '✨ AI Task Architect'
+      isRegenerateMode ? '✨ AI Task Architect — Regenerate Subtasks' : '✨ AI Task Architect'
     "
     :subtitle="
       isRegenerateMode
-        ? `Task: ${props.existingTask?.title || 'Attivo'} | Intelligent Decomposition`
+        ? `Task: ${props.existingTask?.title || 'Active'} | Intelligent Decomposition`
         : 'Intelligent Decomposition & Operational Sheet'
     "
     icon="auto_awesome"
@@ -337,15 +353,15 @@ function handleClose(): void {
     <div class="q-pa-md">
       <div class="text-body2 text-grey-8 q-mb-sm">
         <template v-if="isRegenerateMode">
-          Verifica o adatta il prompt/obiettivo per questo task già aperto. AgentePlanner analizzerà
-          la richiesta ed estrarrà la <strong>nuova Checklist di Sotto-Task</strong>
-          operative senza creare task duplicati.
+          Review or adapt the objective for this active task. AgentePlanner will analyze the request
+          and extract a <strong>new checklist of operational subtasks</strong> without creating
+          duplicate tasks.
         </template>
         <template v-else>
-          Incolla l'email o la richiesta grezza ricevuta dal cliente o fornitore (il
-          <strong>COSA CERCARE / ESEGUIRE</strong>). Gemini estrarrà automaticamente il
-          <strong>Titolo</strong>, la <strong>Categoria</strong>, la <strong>Priorità</strong> e la
-          <strong>Checklist di Sotto-Task</strong> operative progressive.
+          Paste a client/vendor email or raw notes (the
+          <strong>WHAT TO SOURCING / EXECUTE</strong>). Gemini will automatically structure the
+          <strong>Title</strong>, <strong>Category</strong>, <strong>Priority</strong>, and
+          progressive <strong>Operational Subtasks</strong>.
         </template>
       </div>
 
@@ -357,21 +373,60 @@ function handleClose(): void {
           <span class="text-weight-bold">
             {{
               isRegenerateMode
-                ? "Rigenerazione Contestuale del Task Aperto"
-                : "Elaborazione Intelligente da Email & Testo Grezzo"
+                ? "Contextual Task Regeneration"
+                : "Intelligent Email & Raw Text Decomposition"
             }}
           </span>
         </div>
         <span class="text-caption text-grey-7"
-          >Zero-Allucinazione: tariffe o disponibilità mancanti vengono catalogate come GAP da
-          verificare.</span
+          >Strict Ground-Truth: Missing rates, budgets, or availability are explicitly logged as GAP
+          TO VERIFY.</span
         >
+      </div>
+
+      <!-- Step 27: Volume Target & Strict Ground-Truth Controls -->
+      <div class="q-mb-md q-pa-sm rounded-borders bg-grey-1 bordered">
+        <div class="row items-center justify-between q-col-gutter-sm">
+          <div class="col-12 col-md-7">
+            <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
+              🎯 Sourcing Target Volume:
+            </div>
+            <div class="row q-gutter-xs">
+              <q-chip
+                v-for="opt in volumeTargetOptions"
+                :key="opt.value"
+                clickable
+                :outline="targetVolume !== opt.value"
+                :color="targetVolume === opt.value ? 'primary' : 'grey-7'"
+                :text-color="targetVolume === opt.value ? 'white' : 'dark'"
+                size="sm"
+                @click="targetVolume = opt.value"
+              >
+                {{ opt.label }}
+              </q-chip>
+            </div>
+          </div>
+          <div class="col-12 col-md-5 row items-center justify-end">
+            <q-toggle
+              v-model="strictGroundTruth"
+              color="primary"
+              dense
+              label="🛡️ Strict Ground-Truth"
+              class="text-caption text-weight-bold text-grey-8"
+            >
+              <q-tooltip class="bg-navy text-white text-caption">
+                Zero-Fake Guarantee: Blocks synthetic names or hallucinated profiles. Unconfirmed
+                rates are logged as GAP TO VERIFY.
+              </q-tooltip>
+            </q-toggle>
+          </div>
+        </div>
       </div>
 
       <!-- Quick Templates (solo per nuovi task) -->
       <div v-if="!isRegenerateMode" class="q-mb-md">
         <div class="text-caption text-weight-bold text-grey-7 q-mb-xs">
-          Oppure seleziona un esempio rapido:
+          Or select an enterprise preset template:
         </div>
         <div class="row q-gutter-xs">
           <q-chip
@@ -397,8 +452,8 @@ function handleClose(): void {
         dense
         :placeholder="
           isRegenerateMode
-            ? 'Rivedi o adatta il prompt del task per guidare AgentePlanner nella decomposizione delle sotto-task...'
-            : 'Incolla qui l\'email del cliente o l\'appunto grezzo (es. \'Buongiorno, cerchiamo con urgenza un docente Camunda a Milano per fine mese. Non abbiamo budget concordato: potete mandarci disponibilità e profili?\')...'
+            ? 'Review or adjust the task prompt to guide AgentePlanner in decomposing operational subtasks...'
+            : 'Paste your email or raw requirements here (e.g. \'Urgent requirement for senior MuleSoft &amp; Azure Integration Architects for a cloud modernization project. Multi-region deployment, Kubernetes, API governance...\')...'
         "
         class="q-mb-md"
       />
@@ -410,7 +465,7 @@ function handleClose(): void {
           rounded
           icon="auto_awesome"
           :label="
-            isRegenerateMode ? 'RIGENERA SOTTO-TASK CON AI' : 'GENERATE TASK STRUCTURE WITH AI'
+            isRegenerateMode ? 'REGENERATE SUBTASKS WITH AI' : 'GENERATE TASK STRUCTURE WITH AI'
           "
           :loading="taskStore.isRefiningTaskDraft"
           :disable="rawDraft.trim().length < 5"
@@ -421,9 +476,34 @@ function handleClose(): void {
       <!-- FASE 2: Anteprima Scheda Task Generata -->
       <template v-if="refinedDraft">
         <q-separator class="q-my-md" />
-        <div class="text-subtitle1 text-weight-bold text-navy q-mb-sm row items-center">
-          <q-icon name="preview" class="q-mr-xs" color="secondary" />
-          Generated Task Preview
+        <div
+          class="text-subtitle1 text-weight-bold text-navy q-mb-sm row items-center justify-between"
+        >
+          <div class="row items-center">
+            <q-icon name="preview" class="q-mr-xs" color="secondary" />
+            Generated Task Preview
+          </div>
+
+          <!-- Step 27: Preview Summary Badges -->
+          <div class="row q-gutter-xs items-center">
+            <q-badge color="primary" text-color="white" class="q-pa-xs">
+              🎯 Target: {{ targetVolume }} Candidates
+            </q-badge>
+            <q-badge v-if="strictGroundTruth" color="positive" text-color="white" class="q-pa-xs">
+              🛡️ Real Ground-Truth
+            </q-badge>
+            <q-badge v-if="targetVolume >= 50" color="secondary" text-color="white" class="q-pa-xs">
+              📅 3 Progressive Tranches
+            </q-badge>
+            <q-badge
+              v-else-if="targetVolume === 20"
+              color="secondary"
+              text-color="white"
+              class="q-pa-xs"
+            >
+              📅 2 Progressive Tranches
+            </q-badge>
+          </div>
         </div>
 
         <!-- Category & Priority -->
@@ -557,7 +637,7 @@ function handleClose(): void {
           unelevated
           rounded
           icon="auto_awesome"
-          label="Aggiorna Sotto-Task del Task Attivo"
+          label="Update Subtasks on Active Task"
           no-caps
           :loading="isSaving"
           :disable="!editableTitle.trim()"

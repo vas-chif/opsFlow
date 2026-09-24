@@ -619,14 +619,24 @@ export const useTaskStore = defineStore("tasks", {
      * @param rawDraft - Raw informal text note from the user.
      * @returns Structured RefinedTaskDraft for human review in AITaskArchitectModal.
      */
-    async refineTaskDraft(workspaceId: string, rawDraft: string): Promise<RefinedTaskDraft> {
+    async refineTaskDraft(
+      workspaceId: string,
+      rawDraft: string,
+      options?: { targetVolume?: number; strictGuardrail?: boolean; strictGroundTruth?: boolean },
+    ): Promise<RefinedTaskDraft> {
       this.isRefiningTaskDraft = true;
       this.error = null;
 
       try {
         const functions = getFunctions(app, "europe-west1");
         const callable = httpsCallable<
-          { workspaceId: string; rawDraft: string; workspaceAttitude?: WorkspaceAttitude },
+          {
+            workspaceId: string;
+            rawDraft: string;
+            workspaceAttitude?: WorkspaceAttitude;
+            targetVolume?: number;
+            strictGroundTruth?: boolean;
+          },
           { success: boolean; refined: RefinedTaskDraft }
         >(functions, "refineTaskDraft");
 
@@ -637,10 +647,14 @@ export const useTaskStore = defineStore("tasks", {
           workspaceId: string;
           rawDraft: string;
           workspaceAttitude?: WorkspaceAttitude;
+          targetVolume?: number;
+          strictGroundTruth?: boolean;
         } = {
           workspaceId,
           rawDraft,
           ...(workspaceAttitude ? { workspaceAttitude } : {}),
+          ...(options?.targetVolume ? { targetVolume: options.targetVolume } : {}),
+          strictGroundTruth: options?.strictGroundTruth ?? options?.strictGuardrail ?? true,
         };
 
         const res = await callable(payload);

@@ -112,24 +112,24 @@ const subtaskStatusOptions: {
   color: string;
   icon: string;
 }[] = [
-  { label: "Da Contattare", value: "new", color: "blue-6", icon: "person_add" },
-  { label: "Contattato", value: "contacted", color: "light-blue-7", icon: "phone_forwarded" },
+  { label: "To Contact", value: "new", color: "blue-6", icon: "person_add" },
+  { label: "Contacted", value: "contacted", color: "light-blue-7", icon: "phone_forwarded" },
   {
-    label: "In Attesa Risposta",
+    label: "Awaiting Response",
     value: "waiting_response",
     color: "amber-8",
     icon: "hourglass_top",
   },
-  { label: "In Trattativa", value: "negotiation", color: "purple-6", icon: "handshake" },
-  { label: "Risposta Positiva", value: "positive_response", color: "teal-6", icon: "thumb_up" },
+  { label: "In Negotiation", value: "negotiation", color: "purple-6", icon: "handshake" },
+  { label: "Positive Response", value: "positive_response", color: "teal-6", icon: "thumb_up" },
   {
-    label: "Risposta Negativa",
+    label: "Negative Response",
     value: "negative_response",
     color: "deep-orange-7",
     icon: "thumb_down",
   },
   { label: "Follow-up", value: "follow_up", color: "indigo-6", icon: "event_repeat" },
-  { label: "Completato", value: "completed", color: "positive", icon: "check_circle" },
+  { label: "Completed", value: "completed", color: "positive", icon: "check_circle" },
 ];
 
 // Initialize local state when subtask changes
@@ -154,42 +154,42 @@ const domainConfig = computed(() => {
     case "recruiting":
       return {
         domainLabel: "Recruiting & Talent",
-        entityLabel: "Candidato",
+        entityLabel: "Candidate",
         entityIcon: "person",
-        primaryAttributeLabel: "Competenze",
-        secondaryAttributeLabel: "Tariffa / Disponibilità",
+        primaryAttributeLabel: "Skills & Experience",
+        secondaryAttributeLabel: "Rate / Availability",
       };
     case "healthcare":
       return {
-        domainLabel: "Sanità & Assistenza",
-        entityLabel: "Paziente",
+        domainLabel: "Healthcare & Clinical",
+        entityLabel: "Patient",
         entityIcon: "medical_services",
-        primaryAttributeLabel: "Prestazione Clinica",
-        secondaryAttributeLabel: "Priorità / Urgenza",
+        primaryAttributeLabel: "Clinical Service",
+        secondaryAttributeLabel: "Priority / Urgency",
       };
     case "procurement":
       return {
-        domainLabel: "Procurement & Fornitori",
-        entityLabel: "Fornitore / Articolo",
+        domainLabel: "Procurement & Suppliers",
+        entityLabel: "Supplier / Item",
         entityIcon: "inventory_2",
-        primaryAttributeLabel: "Articolo / Servizio",
-        secondaryAttributeLabel: "Prezzo / Offerta",
+        primaryAttributeLabel: "Item / Service",
+        secondaryAttributeLabel: "Price / Quotation",
       };
     case "operations":
       return {
-        domainLabel: "Operations & Impianti",
-        entityLabel: "Impianto / Macchinario",
+        domainLabel: "Operations & Equipment",
+        entityLabel: "Equipment / Machinery",
         entityIcon: "precision_manufacturing",
-        primaryAttributeLabel: "Anomalia / Manutenzione",
-        secondaryAttributeLabel: "Tecnico Assegnato",
+        primaryAttributeLabel: "Anomaly / Maintenance",
+        secondaryAttributeLabel: "Assigned Specialist",
       };
     default:
       return {
-        domainLabel: "Operativo",
-        entityLabel: "Risorsa",
+        domainLabel: "Operations",
+        entityLabel: "Resource",
         entityIcon: "assignment_ind",
-        primaryAttributeLabel: "Dettaglio",
-        secondaryAttributeLabel: "Note Aggiuntive",
+        primaryAttributeLabel: "Details",
+        secondaryAttributeLabel: "Additional Notes",
       };
   }
 });
@@ -274,7 +274,7 @@ const updateSubtaskField = async (
     logger.error("SubTaskEntityModal", "Failed to update subtask", err);
     q.notify({
       type: "negative",
-      message: "Errore durante il salvataggio su Firestore",
+      message: "Error saving to Firestore",
       position: "top",
     });
   }
@@ -288,17 +288,17 @@ const handleDeleteSubtask = (): void => {
   const targetTitle = props.subtask.title;
 
   q.dialog({
-    title: "Elimina Sub-Task",
-    message: `Sei sicuro di voler eliminare definitivamente la risorsa "${targetTitle}"? L'elemento verrà rimosso sia da Firebase che dall'elenco locale.`,
+    title: "Delete Sub-Task",
+    message: `Are you sure you want to permanently delete resource "${targetTitle}"? This item will be removed from both Firebase and the local list.`,
     cancel: {
       flat: true,
       color: "grey-7",
-      label: "Annulla",
+      label: "Cancel",
     },
     ok: {
       unelevated: true,
       color: "negative",
-      label: "Elimina Definitivamente",
+      label: "Permanently Delete",
       icon: "delete_forever",
     },
     persistent: true,
@@ -312,7 +312,7 @@ const handleDeleteSubtask = (): void => {
       logger.info("SubTaskEntityModal", `Subtask ${targetId} permanently deleted from Firestore`);
       q.notify({
         type: "positive",
-        message: `Sub-task "${targetTitle}" eliminato con successo.`,
+        message: `Sub-task "${targetTitle}" deleted successfully.`,
         position: "top",
       });
       emit("deleted", targetId);
@@ -321,7 +321,7 @@ const handleDeleteSubtask = (): void => {
       logger.error("SubTaskEntityModal", "Failed to delete subtask from Firestore", err);
       q.notify({
         type: "negative",
-        message: "Errore durante l'eliminazione del sub-task da Firebase.",
+        message: "Error deleting sub-task from Firebase.",
         position: "top",
       });
     } finally {
@@ -340,9 +340,9 @@ const handleStatusChange = async (newStatus: EntitySubTaskStatus): Promise<void>
   const statusEvent: EntityTimelineEvent = {
     id: `evt_status_${Date.now()}`,
     eventType: "status_change",
-    title: `Stato aggiornato: ${sObj?.label || newStatus}`,
+    title: `Status updated: ${sObj?.label || newStatus}`,
     authorId: authStore.user?.uid || "user",
-    authorName: authStore.user?.displayName || "Operatore",
+    authorName: authStore.user?.displayName || "Operator",
     timestamp: nowIso,
   };
 
@@ -352,7 +352,7 @@ const handleStatusChange = async (newStatus: EntitySubTaskStatus): Promise<void>
       status: newStatus,
       timeline: updatedTimeline,
     },
-    `Stato impostato su "${sObj?.label || newStatus}"`,
+    `Status set to "${sObj?.label || newStatus}"`,
   );
 }; /*end handleStatusChange*/
 
@@ -360,7 +360,7 @@ const handleSaveNotes = async (): Promise<void> => {
   if (!props.subtask || isSavingNotes.value) return;
   isSavingNotes.value = true;
   try {
-    await updateSubtaskField({ notes: localNotes.value }, "Note operative salvate con successo");
+    await updateSubtaskField({ notes: localNotes.value }, "Operational notes saved successfully");
     hasUnsavedNotes.value = false;
   } finally {
     isSavingNotes.value = false;
@@ -378,12 +378,12 @@ const handleAddTimelineEvent = async (): Promise<void> => {
       title: newEventTitle.value.trim(),
       description: newEventDesc.value.trim() || undefined,
       authorId: authStore.user?.uid || "user",
-      authorName: authStore.user?.displayName || "Operatore",
+      authorName: authStore.user?.displayName || "Operator",
       timestamp: nowIso,
     };
 
     const updatedTimeline = [event, ...(props.subtask.timeline || [])];
-    await updateSubtaskField({ timeline: updatedTimeline }, "Evento registrato nella timeline");
+    await updateSubtaskField({ timeline: updatedTimeline }, "Event recorded in timeline");
 
     newEventTitle.value = "";
     newEventDesc.value = "";
@@ -398,16 +398,16 @@ const openAddEvent = (type: EntityEventType): void => {
   isAddingEvent.value = true;
   switch (type) {
     case "call":
-      newEventTitle.value = "Chiamata effettuata";
+      newEventTitle.value = "Outbound Call Logged";
       break;
     case "email":
-      newEventTitle.value = "Email di contatto inviata";
+      newEventTitle.value = "Contact Email Sent";
       break;
     case "whatsapp":
-      newEventTitle.value = "Messaggio WhatsApp inviato";
+      newEventTitle.value = "WhatsApp Message Sent";
       break;
     case "note":
-      newEventTitle.value = "Nota di verifica interna";
+      newEventTitle.value = "Internal Review Note";
       break;
     default:
       newEventTitle.value = "";
@@ -425,7 +425,7 @@ const handleAddMiniTask = async (): Promise<void> => {
     };
 
     const updatedTasks = [...(props.subtask.nestedTasks || []), newTask];
-    await updateSubtaskField({ nestedTasks: updatedTasks }, "Mini-task aggiunto");
+    await updateSubtaskField({ nestedTasks: updatedTasks }, "Mini-task added");
     newMiniTaskTitle.value = "";
   } finally {
     isSavingMiniTask.value = false;
@@ -446,17 +446,17 @@ const handleDeleteMiniTask = async (taskIndex: number): Promise<void> => {
   if (!props.subtask || !props.subtask.nestedTasks) return;
   const tasks = [...props.subtask.nestedTasks];
   tasks.splice(taskIndex, 1);
-  await updateSubtaskField({ nestedTasks: tasks }, "Mini-task rimosso");
+  await updateSubtaskField({ nestedTasks: tasks }, "Mini-task removed");
 }; /*end handleDeleteMiniTask*/
 
 // Outcome Actions (Won / Lost / Reopen)
 const handleOutcomeWon = async (): Promise<void> => {
   if (!props.subtask) return;
   q.dialog({
-    title: "⭐ Accetta & Concludi Risorsa",
-    message: `Confermi l'accettazione con esito positivo per "${props.subtask.title}"? La scheda verrà marcata come Conclusa con Successo.`,
-    ok: { label: "Accetta & Concludi", color: "positive", flat: false },
-    cancel: { label: "Annulla", flat: true },
+    title: "⭐ Accept & Finalize Resource",
+    message: `Confirm positive outcome for "${props.subtask.title}"? The record will be marked as Won & Completed.`,
+    ok: { label: "Accept & Complete", color: "positive", flat: false },
+    cancel: { label: "Cancel", flat: true },
     persistent: true,
   }).onOk(async () => {
     localStatus.value = "completed";
@@ -465,10 +465,10 @@ const handleOutcomeWon = async (): Promise<void> => {
     const event: EntityTimelineEvent = {
       id: `evt_won_${Date.now()}`,
       eventType: "status_change",
-      title: "⭐ Risorsa Accettata e Conclusa con Successo",
-      description: "Esito positivo confermato dall'operatore.",
+      title: "⭐ Resource Accepted & Won",
+      description: "Positive outcome confirmed by operator.",
       authorId: authStore.user?.uid || "user",
-      authorName: authStore.user?.displayName || "Operatore",
+      authorName: authStore.user?.displayName || "Operator",
       timestamp: nowIso,
     };
     const updatedTimeline = [event, ...(props.subtask?.timeline || [])];
@@ -478,7 +478,7 @@ const handleOutcomeWon = async (): Promise<void> => {
         outcome: "won",
         timeline: updatedTimeline,
       },
-      "Risorsa accettata con successo!",
+      "Resource accepted successfully!",
     );
   });
 }; /*end handleOutcomeWon*/
@@ -486,10 +486,10 @@ const handleOutcomeWon = async (): Promise<void> => {
 const handleOutcomeLost = async (): Promise<void> => {
   if (!props.subtask) return;
   q.dialog({
-    title: "❌ Rifiuta o Archivia Risorsa",
-    message: `Desideri archiviare con esito negativo "${props.subtask.title}"?`,
-    ok: { label: "Archivia Risorsa", color: "negative", flat: false },
-    cancel: { label: "Annulla", flat: true },
+    title: "❌ Reject or Archive Resource",
+    message: `Do you want to archive "${props.subtask.title}" with a negative outcome?`,
+    ok: { label: "Archive Resource", color: "negative", flat: false },
+    cancel: { label: "Cancel", flat: true },
     persistent: true,
   }).onOk(async () => {
     localStatus.value = "completed";
@@ -498,10 +498,10 @@ const handleOutcomeLost = async (): Promise<void> => {
     const event: EntityTimelineEvent = {
       id: `evt_lost_${Date.now()}`,
       eventType: "status_change",
-      title: "❌ Risorsa Rifiutata / Archiviata",
-      description: "Esito negativo o non idoneo registrato dall'operatore.",
+      title: "❌ Resource Rejected / Archived",
+      description: "Negative or non-eligible outcome recorded by operator.",
       authorId: authStore.user?.uid || "user",
-      authorName: authStore.user?.displayName || "Operatore",
+      authorName: authStore.user?.displayName || "Operator",
       timestamp: nowIso,
     };
     const updatedTimeline = [event, ...(props.subtask?.timeline || [])];
@@ -511,7 +511,7 @@ const handleOutcomeLost = async (): Promise<void> => {
         outcome: "lost",
         timeline: updatedTimeline,
       },
-      "Risorsa archiviata con esito negativo",
+      "Resource archived with negative outcome",
     );
   });
 }; /*end handleOutcomeLost*/
@@ -524,10 +524,10 @@ const handleReopenEntity = async (): Promise<void> => {
   const event: EntityTimelineEvent = {
     id: `evt_reopen_${Date.now()}`,
     eventType: "status_change",
-    title: "🔄 Scheda Risorsa Riaperta",
-    description: "Ripristinato lo stato operativo in corso.",
+    title: "🔄 Resource Record Reopened",
+    description: "Operational in-progress state restored.",
     authorId: authStore.user?.uid || "user",
-    authorName: authStore.user?.displayName || "Operatore",
+    authorName: authStore.user?.displayName || "Operator",
     timestamp: nowIso,
   };
   const updatedTimeline = [event, ...(props.subtask.timeline || [])];
@@ -537,17 +537,17 @@ const handleReopenEntity = async (): Promise<void> => {
       outcome: "in_progress",
       timeline: updatedTimeline,
     },
-    "Scheda risorsa riaperta con successo",
+    "Resource record reopened successfully",
   );
 }; /*end handleReopenEntity*/
 
 const handleCopyText = (text: string, label: string): void => {
   copyToClipboard(text)
     .then(() => {
-      q.notify({ type: "positive", message: `${label} copiato negli appunti`, timeout: 1500 });
+      q.notify({ type: "positive", message: `${label} copied to clipboard`, timeout: 1500 });
     })
     .catch(() => {
-      q.notify({ type: "negative", message: "Errore durante la copia" });
+      q.notify({ type: "negative", message: "Error copying to clipboard" });
     });
 }; /*end handleCopyText*/
 
@@ -557,7 +557,7 @@ const formatEventDate = (isoStr: string): string => {
     const d = new Date(isoStr);
     return isNaN(d.getTime())
       ? isoStr
-      : d.toLocaleDateString("it-IT", {
+      : d.toLocaleDateString("en-US", {
           day: "2-digit",
           month: "short",
           year: "numeric",
@@ -601,14 +601,14 @@ const formatEventDate = (isoStr: string): string => {
           color="positive"
           class="q-pa-xs text-weight-bold shadow-1"
         >
-          ⭐ Concluso (Won)
+          ⭐ Completed (Won)
         </q-badge>
         <q-badge
           v-else-if="localOutcome === 'lost'"
           color="grey-7"
           class="q-pa-xs text-weight-bold shadow-1"
         >
-          ❌ Archiviato (Lost)
+          ❌ Archived (Lost)
         </q-badge>
 
         <!-- Quick Status Dropdown -->
@@ -656,7 +656,7 @@ const formatEventDate = (isoStr: string): string => {
               class="text-caption text-weight-bold text-primary text-uppercase letter-spacing row items-center"
             >
               <q-icon name="info" size="18px" color="primary" class="q-mr-xs" />
-              Dati Ereditati & Profilo Fonte
+              Inherited Data &amp; Source Profile
             </div>
             <q-btn
               v-if="profileUrl"
@@ -665,7 +665,7 @@ const formatEventDate = (isoStr: string): string => {
               size="xs"
               color="primary"
               icon="open_in_new"
-              label="Apri Profilo Fonte"
+              label="Open Source Profile"
               :href="profileUrl"
               target="_blank"
               class="q-px-sm"
@@ -696,9 +696,9 @@ const formatEventDate = (isoStr: string): string => {
                     size="xs"
                     icon="content_copy"
                     color="grey-6"
-                    @click="handleCopyText(cell, `Valore Colonna ${cIdx + 1}`)"
+                    @click="handleCopyText(cell, `Column ${cIdx + 1} Value`)"
                   >
-                    <q-tooltip>Copia Valore</q-tooltip>
+                    <q-tooltip>Copy Value</q-tooltip>
                   </q-btn>
                 </q-item-section>
               </q-item>
@@ -706,7 +706,7 @@ const formatEventDate = (isoStr: string): string => {
           </div>
 
           <div v-else class="text-caption text-grey-6 q-pa-sm text-center">
-            Nessun valore tabellare specifico ereditato.
+            No specific table data inherited.
           </div>
 
           <!-- Meta attributes summary -->
@@ -714,17 +714,17 @@ const formatEventDate = (isoStr: string): string => {
             <div
               class="row justify-between items-center text-caption q-py-2xs border-bottom-dashed"
             >
-              <span class="text-grey-7">Dominio Applicativo:</span>
+              <span class="text-grey-7">Domain:</span>
               <span class="text-weight-bold text-dark">{{ domainConfig.domainLabel }}</span>
             </div>
             <div
               class="row justify-between items-center text-caption q-py-2xs border-bottom-dashed"
             >
-              <span class="text-grey-7">Data Creazione:</span>
+              <span class="text-grey-7">Created At:</span>
               <span class="text-grey-8">{{ formatEventDate(subtask.createdAt) }}</span>
             </div>
             <div class="row justify-between items-center text-caption q-py-2xs">
-              <span class="text-grey-7">Ultimo Aggiornamento:</span>
+              <span class="text-grey-7">Last Updated:</span>
               <span class="text-grey-8">{{ formatEventDate(subtask.updatedAt) }}</span>
             </div>
           </div>
@@ -736,8 +736,8 @@ const formatEventDate = (isoStr: string): string => {
           >
             <q-icon name="sync_disabled" size="16px" class="q-mr-xs text-primary shrink" />
             <span>
-              <strong>Isolamento Garantito:</strong> Gli stati e le note sono memorizzati in OpsFlow
-              senza alterare le celle del Google Sheet originale.
+              <strong>Guaranteed Isolation:</strong> Statuses and notes are stored in OpsFlow
+              without modifying cells in the original Google Sheet.
             </span>
           </div>
         </q-card>
@@ -751,17 +751,17 @@ const formatEventDate = (isoStr: string): string => {
           <div class="row items-center justify-between q-mb-xs">
             <div class="row items-center">
               <q-icon name="sticky_note_2" color="amber-9" size="20px" class="q-mr-xs" />
-              <span class="text-subtitle2 text-weight-bold text-primary">Note Operative</span>
+              <span class="text-subtitle2 text-weight-bold text-primary">Operational Notes</span>
             </div>
 
             <div class="row items-center q-gutter-x-xs">
-              <q-badge v-if="hasUnsavedNotes" outline color="deep-orange" label="Non salvate" />
+              <q-badge v-if="hasUnsavedNotes" outline color="deep-orange" label="Unsaved" />
               <q-btn
                 unelevated
                 size="xs"
                 color="primary"
                 icon="save"
-                label="Salva Note"
+                label="Save Notes"
                 :loading="isSavingNotes"
                 class="text-weight-bold q-px-sm"
                 @click="handleSaveNotes"
@@ -776,7 +776,7 @@ const formatEventDate = (isoStr: string): string => {
             style="font-size: 0.72rem"
           >
             <q-icon name="security" size="16px" class="q-mr-xs" />
-            <span><strong>GDPR Art. 9:</strong> Informazioni sanitarie isolate per tenant.</span>
+            <span><strong>GDPR Art. 9:</strong> Healthcare information isolated per tenant.</span>
           </div>
 
           <q-input
@@ -785,7 +785,7 @@ const formatEventDate = (isoStr: string): string => {
             outlined
             autogrow
             rows="6"
-            placeholder="Inserisci note sulla risorsa, riassunto colloqui, disponibilità, richieste economiche..."
+            placeholder="Enter notes on resource, interview summary, availability, compensation expectations..."
             class="subtask-notes-input full-width q-mt-xs"
             @update:model-value="hasUnsavedNotes = true"
           />
@@ -817,7 +817,7 @@ const formatEventDate = (isoStr: string): string => {
             </div>
             <div class="row items-center q-gutter-x-2xs">
               <span class="text-caption text-grey-6" style="font-size: 0.72rem">
-                {{ isMiniTasksExpanded ? "Nascondi" : "Mostra" }}
+                {{ isMiniTasksExpanded ? "Hide" : "Show" }}
               </span>
               <q-icon
                 :name="isMiniTasksExpanded ? 'expand_less' : 'expand_more'"
@@ -836,7 +836,7 @@ const formatEventDate = (isoStr: string): string => {
                   v-model="newMiniTaskTitle"
                   dense
                   outlined
-                  placeholder="Nuova azione (es. Inviare accordo entro giovedì)..."
+                  placeholder="New action item (e.g. Send agreement by Thursday)..."
                   class="col bg-white"
                   style="font-size: 0.8rem"
                   @keyup.enter="handleAddMiniTask"
@@ -851,7 +851,7 @@ const formatEventDate = (isoStr: string): string => {
                   :loading="isSavingMiniTask"
                   @click="handleAddMiniTask"
                 >
-                  <q-tooltip>Aggiungi Mini-Task</q-tooltip>
+                  <q-tooltip>Add Mini-Task</q-tooltip>
                 </q-btn>
               </div>
 
@@ -894,7 +894,7 @@ const formatEventDate = (isoStr: string): string => {
                     color="negative"
                     @click="handleDeleteMiniTask(mtIdx)"
                   >
-                    <q-tooltip>Elimina mini-task</q-tooltip>
+                    <q-tooltip>Delete mini-task</q-tooltip>
                   </q-btn>
                 </div>
               </div>
@@ -903,7 +903,7 @@ const formatEventDate = (isoStr: string): string => {
                 class="text-caption text-grey-5 text-center q-pa-xs"
                 style="font-size: 0.72rem"
               >
-                Nessuna sotto-azione inserita. Aggiungine una con il campo in alto.
+                No action items added yet. Add one using the field above.
               </div>
             </div>
           </q-slide-transition>
@@ -919,7 +919,7 @@ const formatEventDate = (isoStr: string): string => {
             <div>
               <div class="row items-center q-gutter-x-xs">
                 <q-icon name="history" color="primary" size="20px" />
-                <span class="text-subtitle2 text-weight-bold text-primary">Timeline Privata</span>
+                <span class="text-subtitle2 text-weight-bold text-primary">Private Timeline</span>
                 <q-badge
                   v-if="subtask.timeline && subtask.timeline.length > 0"
                   color="primary"
@@ -929,11 +929,11 @@ const formatEventDate = (isoStr: string): string => {
                 />
               </div>
               <div class="text-caption text-grey-6" style="font-size: 0.72rem">
-                Storico cronologico delle interazioni (chiamate, email, colloqui)
+                Chronological history of interactions (calls, emails, interviews)
               </div>
             </div>
 
-            <!-- Quick Log Action Bar: [📞 Chiamata] [✉️ Email] [💬 WhatsApp] [📝 Nota] -->
+            <!-- Quick Log Action Bar: [📞 Call] [✉️ Email] [💬 WhatsApp] [📝 Note] -->
             <div class="row items-center q-gutter-2xs">
               <q-btn
                 outline
@@ -941,7 +941,7 @@ const formatEventDate = (isoStr: string): string => {
                 size="xs"
                 color="primary"
                 icon="call"
-                label="Chiamata"
+                label="Call"
                 class="q-px-2xs"
                 @click="openAddEvent('call')"
               />
@@ -971,7 +971,7 @@ const formatEventDate = (isoStr: string): string => {
                 size="xs"
                 color="amber-9"
                 icon="edit_note"
-                label="Nota"
+                label="Note"
                 class="q-px-2xs"
                 @click="openAddEvent('note')"
               />
@@ -986,7 +986,7 @@ const formatEventDate = (isoStr: string): string => {
             >
               <div class="row items-center justify-between q-mb-xs">
                 <div class="text-caption text-weight-bold text-primary" style="font-size: 0.78rem">
-                  Registra Nuova Interazione ({{ newEventType.toUpperCase() }})
+                  Log New Interaction ({{ newEventType.toUpperCase() }})
                 </div>
                 <q-btn flat round dense size="2xs" icon="close" @click="isAddingEvent = false" />
               </div>
@@ -995,7 +995,7 @@ const formatEventDate = (isoStr: string): string => {
                   v-model="newEventTitle"
                   dense
                   outlined
-                  placeholder="Titolo evento (es. Chiamata conoscitiva con esito positivo)"
+                  placeholder="Event title (e.g. Introductory call with positive feedback)"
                   class="bg-white"
                   style="font-size: 0.8rem"
                 />
@@ -1005,17 +1005,17 @@ const formatEventDate = (isoStr: string): string => {
                   outlined
                   type="textarea"
                   rows="2"
-                  placeholder="Dettagli / note opzionali..."
+                  placeholder="Optional details / notes..."
                   class="bg-white"
                   style="font-size: 0.8rem"
                 />
                 <div class="row justify-end q-gutter-x-xs">
-                  <q-btn flat size="xs" label="Annulla" @click="isAddingEvent = false" />
+                  <q-btn flat size="xs" label="Cancel" @click="isAddingEvent = false" />
                   <q-btn
                     unelevated
                     size="xs"
                     color="primary"
-                    label="Salva Evento"
+                    label="Save Event"
                     :loading="isSavingEvent"
                     @click="handleAddTimelineEvent"
                   />
@@ -1073,14 +1073,14 @@ const formatEventDate = (isoStr: string): string => {
                   {{ evt.description }}
                 </div>
                 <div class="text-caption text-grey-5 q-mt-xs" style="font-size: 0.68rem">
-                  Registrato da: {{ evt.authorName }}
+                  Logged by: {{ evt.authorName }}
                 </div>
               </q-timeline-entry>
             </q-timeline>
 
             <div v-else class="text-caption text-grey-6 text-center q-pa-md">
-              Nessun evento registrato nella timeline privata. Utilizza i pulsanti rapidi in alto
-              per aggiungere una chiamata o una nota.
+              No events logged in the private timeline yet. Use the quick action buttons above to
+              log a call or note.
             </div>
           </div>
         </q-card>
@@ -1091,7 +1091,7 @@ const formatEventDate = (isoStr: string): string => {
     <template #footer>
       <div class="row items-center justify-between full-width no-wrap">
         <div class="row items-center q-gutter-x-sm">
-          <q-btn flat dense color="grey-7" label="Chiudi" no-caps @click="isOpen = false" />
+          <q-btn flat dense color="grey-7" label="Close" no-caps @click="isOpen = false" />
           <q-btn
             v-if="localOutcome === 'won' || localOutcome === 'lost'"
             outline
@@ -1099,7 +1099,7 @@ const formatEventDate = (isoStr: string): string => {
             size="sm"
             color="primary"
             icon="restart_alt"
-            label="Riapri Scheda Risorsa"
+            label="Reopen Resource"
             no-caps
             class="q-px-sm"
             @click="handleReopenEntity"
@@ -1110,13 +1110,13 @@ const formatEventDate = (isoStr: string): string => {
             size="sm"
             color="negative"
             icon="delete_forever"
-            label="Elimina Sub-Task"
+            label="Delete Sub-Task"
             no-caps
             class="q-px-xs"
             :loading="isDeletingSubtask"
             @click="handleDeleteSubtask"
           >
-            <q-tooltip>Elimina definitivamente la risorsa da Firebase e dallo store</q-tooltip>
+            <q-tooltip>Permanently delete resource from Firebase and state</q-tooltip>
           </q-btn>
         </div>
 
@@ -1127,7 +1127,7 @@ const formatEventDate = (isoStr: string): string => {
             dense
             color="grey-8"
             icon="cancel"
-            label="Rifiuta / Archivia (Lost)"
+            label="Reject / Archive (Lost)"
             no-caps
             class="text-weight-bold"
             :disable="localOutcome === 'lost'"
@@ -1138,7 +1138,7 @@ const formatEventDate = (isoStr: string): string => {
             dense
             color="positive"
             icon="star"
-            label="Accetta & Concludi (Won)"
+            label="Accept &amp; Complete (Won)"
             no-caps
             class="text-weight-bold shadow-2 text-dark bg-amber-5"
             style="background-color: #c5a065 !important; color: #0a2342 !important"

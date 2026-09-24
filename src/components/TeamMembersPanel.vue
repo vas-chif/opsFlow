@@ -96,7 +96,7 @@ const inviteRole = ref<"admin" | "user">("user");
 // ── Options ───────────────────────────────────────────────────────────────────
 const roleOptions: Array<{ label: string; value: "admin" | "user"; color: string }> = [
   { label: "🟡 Admin", value: "admin", color: "warning" },
-  { label: "🟢 User (Collaboratore)", value: "user", color: "positive" },
+  { label: "🟢 User (Collaborator)", value: "user", color: "positive" },
 ];
 
 const allRoleOptions: Array<{ label: string; value: TenantRole; color: string }> = [
@@ -108,29 +108,29 @@ const allRoleOptions: Array<{ label: string; value: TenantRole; color: string }>
 const memberColumns = [
   {
     name: "displayName",
-    label: "Nome",
+    label: "Name",
     field: "displayName",
     sortable: true,
     align: "left" as const,
   },
   { name: "email", label: "Email", field: "email", sortable: true, align: "left" as const },
-  { name: "role", label: "Ruolo", field: "role", sortable: true, align: "center" as const },
-  { name: "isActive", label: "Stato", field: "isActive", align: "center" as const },
-  { name: "actions", label: "Azioni", field: "actions", align: "center" as const },
+  { name: "role", label: "Role", field: "role", sortable: true, align: "center" as const },
+  { name: "isActive", label: "Status", field: "isActive", align: "center" as const },
+  { name: "actions", label: "Actions", field: "actions", align: "center" as const },
 ];
 
 const invitationColumns = [
   {
     name: "email",
-    label: "Email Invitato",
+    label: "Invited Email",
     field: "email",
     sortable: true,
     align: "left" as const,
   },
-  { name: "role", label: "Ruolo", field: "role", align: "center" as const },
-  { name: "status", label: "Stato", field: "status", align: "center" as const },
-  { name: "expiresAt", label: "Scadenza", field: "expiresAt", align: "center" as const },
-  { name: "actions", label: "Azioni", field: "actions", align: "center" as const },
+  { name: "role", label: "Role", field: "role", align: "center" as const },
+  { name: "status", label: "Status", field: "status", align: "center" as const },
+  { name: "expiresAt", label: "Expiration", field: "expiresAt", align: "center" as const },
+  { name: "actions", label: "Actions", field: "actions", align: "center" as const },
 ];
 
 // ── Computed ──────────────────────────────────────────────────────────────────
@@ -167,22 +167,22 @@ const assignedMembersList = computed(() => {
 
 const panelTitle = computed(() => {
   if (props.scope === "workspace") {
-    return `👥 Collaboratori Workspace: ${props.workspaceName || currentWorkspace.value?.name || "Workspace"}`;
+    return `👥 Workspace Collaborators: ${props.workspaceName || currentWorkspace.value?.name || "Workspace"}`;
   }
   if (props.scope === "task") {
-    return `👥 Collaboratori Task: ${props.taskTitle || currentTask.value?.title || "Task"}`;
+    return `👥 Task Collaborators: ${props.taskTitle || currentTask.value?.title || "Task"}`;
   }
-  return "👥 Gestione Membri & Team Aziendale";
+  return "👥 Team & Organization Members";
 }); /*end panelTitle*/
 
 const panelSubtitle = computed(() => {
   if (props.scope === "workspace") {
-    return "I membri assegnati possono visualizzare e operare su tutti i task di questo workspace.";
+    return "Assigned members can view and operate on all tasks within this workspace.";
   }
   if (props.scope === "task") {
-    return "I membri assegnati possono visualizzare e completare SOLO questo singolo task.";
+    return "Assigned members can view and complete ONLY this single task.";
   }
-  return `Tenant: ${authStore.tenantId} · Ruolo: ${authStore.role}`;
+  return `Tenant: ${authStore.tenantId} · Role: ${authStore.role}`;
 }); /*end panelSubtitle*/
 
 // ── Data loaders ──────────────────────────────────────────────────────────────
@@ -216,7 +216,7 @@ async function loadMembers(): Promise<void> {
       return nameA.localeCompare(nameB);
     });
   } catch {
-    $q.notify({ type: "negative", message: "Errore nel caricamento dei membri." });
+    $q.notify({ type: "negative", message: "Error loading members." });
   } finally {
     isLoading.value = false;
   }
@@ -234,7 +234,7 @@ async function loadInvitations(): Promise<void> {
     const snap = await getDocs(q);
     invitations.value = snap.docs.map((d) => d.data() as TenantInvitation);
   } catch {
-    $q.notify({ type: "negative", message: "Errore nel caricamento degli inviti." });
+    $q.notify({ type: "negative", message: "Error loading invitations." });
   } finally {
     isInvLoading.value = false;
   }
@@ -259,16 +259,16 @@ async function assignRole(member: MemberRow, newRole: TenantRole): Promise<void>
     member.role = newRole;
     $q.notify({
       type: "positive",
-      message: `Ruolo aggiornato: ${member.displayName || member.email} → ${newRole}`,
+      message: `Role updated: ${member.displayName || member.email} → ${newRole}`,
       icon: "shield",
     });
   } catch {
-    $q.notify({ type: "negative", message: "Errore nell'aggiornamento del ruolo." });
+    $q.notify({ type: "negative", message: "Error updating role." });
   }
 } /*end assignRole*/
 
 async function toggleActive(member: MemberRow): Promise<void> {
-  // Immunità assoluta per Owner e Superadmin (§7.4)
+  // Absolute immunity for Owner and Superadmin (§7.4)
   if (member.role === "owner" || member.role === "superadmin") {
     return;
   }
@@ -283,21 +283,21 @@ async function toggleActive(member: MemberRow): Promise<void> {
     );
     member.isActive = nextActive;
 
-    // Se sospeso all'interno di un workspace specifico, revoca l'accesso a quel workspace
+    // If suspended inside a specific workspace, revoke access to that workspace
     if (!nextActive && props.scope === "workspace" && props.workspaceId && member.email) {
       try {
         await taskStore.removeMemberFromWorkspace(props.workspaceId, member.email);
       } catch {
-        // Se non era già assegnato, ignora
+        // Ignore if not previously assigned
       }
     }
 
     $q.notify({
       type: "info",
-      message: `Collaborazione ${nextActive ? "riattivata" : "sospesa"} nel tenant: ${member.email}`,
+      message: `Collaboration ${nextActive ? "resumed" : "suspended"} in tenant: ${member.email}`,
     });
   } catch {
-    $q.notify({ type: "negative", message: "Errore nell'aggiornamento dello stato nel tenant." });
+    $q.notify({ type: "negative", message: "Error updating member status in tenant." });
   }
 } /*end toggleActive*/
 
@@ -306,13 +306,13 @@ async function removeAssignedMember(email: string): Promise<void> {
   try {
     if (props.scope === "workspace" && props.workspaceId) {
       await taskStore.removeMemberFromWorkspace(props.workspaceId, email);
-      $q.notify({ type: "info", message: `Accesso al workspace revocato per ${email}.` });
+      $q.notify({ type: "info", message: `Workspace access revoked for ${email}.` });
     } else if (props.scope === "task" && props.workspaceId && props.taskId) {
       await taskStore.removeMemberFromTask(props.workspaceId, props.taskId, email);
-      $q.notify({ type: "info", message: `Accesso al task revocato per ${email}.` });
+      $q.notify({ type: "info", message: `Task access revoked for ${email}.` });
     }
   } catch {
-    $q.notify({ type: "negative", message: "Impossibile revocare l'accesso." });
+    $q.notify({ type: "negative", message: "Failed to revoke access." });
   }
 } /*end removeAssignedMember*/
 
@@ -322,26 +322,26 @@ async function quickAssignMember(email: string): Promise<void> {
       await taskStore.assignMemberToWorkspace(props.workspaceId, email);
       $q.notify({
         type: "positive",
-        message: `✅ ${email} aggiunto al workspace!`,
+        message: `✅ ${email} added to workspace!`,
         icon: "check_circle",
       });
     } else if (props.scope === "task" && props.workspaceId && props.taskId) {
       await taskStore.assignMemberToTask(props.workspaceId, props.taskId, email);
       $q.notify({
         type: "positive",
-        message: `✅ ${email} aggiunto al task!`,
+        message: `✅ ${email} added to task!`,
         icon: "check_circle",
       });
     }
   } catch {
-    $q.notify({ type: "negative", message: "Impossibile assegnare il collaboratore." });
+    $q.notify({ type: "negative", message: "Failed to assign collaborator." });
   }
 } /*end quickAssignMember*/
 
 // ── Invitation actions ───────────────────────────────────────────────────────
 async function sendInvite(): Promise<void> {
   if (!inviteEmail.value) {
-    $q.notify({ type: "warning", message: "Inserisci l'email della persona da invitare." });
+    $q.notify({ type: "warning", message: "Please enter the email address to invite." });
     return;
   }
   isInviting.value = true;
@@ -400,12 +400,12 @@ async function sendInvite(): Promise<void> {
         type: data.emailSent === false ? "warning" : "positive",
         message:
           data.emailSent === false
-            ? `Invito creato per ${inviteEmail.value}!`
-            : `✉️ Invito inviato a ${inviteEmail.value}!`,
+            ? `Invitation created for ${inviteEmail.value}!`
+            : `✉️ Invitation sent to ${inviteEmail.value}!`,
         caption:
           data.emailSent === false
-            ? "Email non recapitata (Resend Sandbox). Usa 'Copia Link' per inviarlo via WhatsApp/chat."
-            : "Puoi anche copiare direttamente il link di invito.",
+            ? "Email not delivered (Resend Sandbox). Use 'Copy Link' to share via chat or WhatsApp."
+            : "You can also copy the invitation link directly.",
         icon: data.emailSent === false ? "content_copy" : "mark_email_read",
         timeout: data.emailSent === false ? 10000 : 6000,
       };
@@ -413,13 +413,13 @@ async function sendInvite(): Promise<void> {
       if (directUrl) {
         notifyOpts.actions = [
           {
-            label: "📋 Copia Link",
+            label: "📋 Copy Link",
             color: "white",
             handler: () => {
               void copyToClipboard(directUrl);
               $q.notify({
                 type: "positive",
-                message: "Link copiato negli appunti!",
+                message: "Link copied to clipboard!",
                 timeout: 3000,
               });
             },
@@ -430,10 +430,10 @@ async function sendInvite(): Promise<void> {
       $q.notify(notifyOpts);
     } catch (cfErr: unknown) {
       // In local or offline dev, if Cloud Function email fails, assignment still stands
-      const msg = cfErr instanceof Error ? cfErr.message : "Servizio email non raggiungibile.";
+      const msg = cfErr instanceof Error ? cfErr.message : "Email service unreachable.";
       $q.notify({
         type: "warning",
-        message: `Collaboratore associato con successo! (Nota email: ${msg})`,
+        message: `Collaborator assigned successfully! (Email note: ${msg})`,
         icon: "person_add",
         timeout: 4500,
       });
@@ -450,7 +450,7 @@ async function sendInvite(): Promise<void> {
       invitations.value = [];
     }
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Errore nell'invio dell'invito.";
+    const msg = err instanceof Error ? err.message : "Error sending invitation.";
     $q.notify({ type: "negative", message: msg });
   } finally {
     isInviting.value = false;
@@ -469,13 +469,13 @@ async function copyInvitationLink(inv: TenantInvitation): Promise<void> {
     await copyToClipboard(inviteUrl);
     $q.notify({
       type: "positive",
-      message: "📋 Link di invito copiato negli appunti!",
-      caption: `Condividilo con ${inv.email} via WhatsApp o chat.`,
+      message: "📋 Invitation link copied to clipboard!",
+      caption: `Share it with ${inv.email} via chat or WhatsApp.`,
       icon: "content_copy",
       timeout: 5000,
     });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Impossibile copiare il link.";
+    const msg = err instanceof Error ? err.message : "Failed to copy invitation link.";
     $q.notify({ type: "warning", message: msg, icon: "warning" });
   }
 } /*end copyInvitationLink*/
@@ -495,9 +495,9 @@ async function revokeInvitation(inv: TenantInvitation): Promise<void> {
     const target = invitations.value.find((i) => i.tokenHash === inv.tokenHash);
     if (target) target.status = "revoked";
 
-    $q.notify({ type: "info", message: `Invito revocato per ${inv.email}.`, icon: "cancel" });
+    $q.notify({ type: "info", message: `Invitation revoked for ${inv.email}.`, icon: "cancel" });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Errore nella revoca.";
+    const msg = err instanceof Error ? err.message : "Error revoking invitation.";
     $q.notify({ type: "negative", message: msg });
   } finally {
     revokingHash.value = null;
@@ -508,7 +508,7 @@ function formatExpiry(expiresAt: string | Date | null): string {
   if (!expiresAt) return "—";
   const d = typeof expiresAt === "string" ? new Date(expiresAt) : expiresAt;
   if (isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("it-IT", { day: "2-digit", month: "short", year: "numeric" });
+  return d.toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" });
 } /*end formatExpiry*/
 
 function invStatusColor(status: string): string {
@@ -521,10 +521,10 @@ function invStatusColor(status: string): string {
 
 function invStatusLabel(status: string): string {
   const map: Record<string, string> = {
-    pending: "⏳ In attesa",
-    accepted: "✅ Accettato",
-    revoked: "🚫 Revocato",
-    expired: "⌛ Scaduto",
+    pending: "⏳ Pending",
+    accepted: "✅ Accepted",
+    revoked: "🚫 Revoked",
+    expired: "⌛ Expired",
   };
   return map[status] ?? status;
 } /*end invStatusLabel*/
@@ -549,7 +549,7 @@ onMounted(() => {
         <div class="row items-center q-gutter-sm">
           <q-btn
             icon="person_add"
-            label="Aggiungi Persona"
+            label="Add Member"
             color="primary"
             unelevated
             rounded
@@ -582,7 +582,7 @@ onMounted(() => {
           v-if="scope !== 'tenant'"
           name="assigned"
           icon="how_to_reg"
-          label="Collaboratori Assegnati"
+          label="Assigned Collaborators"
         >
           <q-badge
             v-if="assignedMembersList.length > 0"
@@ -594,9 +594,9 @@ onMounted(() => {
         <q-tab
           name="members"
           icon="group"
-          :label="scope === 'tenant' ? 'Membri Attivi' : 'Tutti i Membri del Team'"
+          :label="scope === 'tenant' ? 'Active Members' : 'All Team Members'"
         />
-        <q-tab name="invitations" icon="mail" label="Inviti Pendenti">
+        <q-tab name="invitations" icon="mail" label="Pending Invitations">
           <q-badge
             v-if="pendingInvitations.length > 0"
             color="warning"
@@ -608,22 +608,22 @@ onMounted(() => {
 
       <!-- Panels -->
       <q-tab-panels v-model="activeTab" animated style="min-height: 300px">
-        <!-- Tab: Collaboratori Assegnati (scope !== 'tenant') -->
+        <!-- Tab: Assigned Collaborators (scope !== 'tenant') -->
         <q-tab-panel v-if="scope !== 'tenant'" name="assigned" class="q-pa-none">
           <div v-if="assignedMembersList.length === 0" class="text-center q-pa-xl text-grey-6">
             <q-icon name="person_outline" size="56px" class="q-mb-md text-grey-5" />
-            <div class="text-h6 text-weight-medium">Nessun collaboratore specifico assegnato</div>
+            <div class="text-h6 text-weight-medium">No specific collaborators assigned</div>
             <div class="text-caption q-mt-xs text-grey-6">
               {{
                 scope === "workspace"
-                  ? "Tutti gli amministratori hanno accesso. Aggiungi collaboratori per dare accesso mirato a questo workspace."
-                  : "Aggiungi persone per consentire loro di collaborare e visualizzare SOLO questo singolo task."
+                  ? "All administrators have access. Add collaborators to grant targeted access to this workspace."
+                  : "Add team members to allow them to collaborate and view ONLY this specific task."
               }}
             </div>
             <q-btn
               color="primary"
               icon="person_add"
-              label="Aggiungi Persona tramite Email"
+              label="Add Member via Email"
               class="q-mt-lg"
               unelevated
               rounded
@@ -643,9 +643,7 @@ onMounted(() => {
                   <q-badge
                     :color="scope === 'workspace' ? 'secondary' : 'accent'"
                     :label="
-                      scope === 'workspace'
-                        ? 'Accesso Completo Workspace'
-                        : 'Accesso Esclusivo Task'
+                      scope === 'workspace' ? 'Full Workspace Access' : 'Task Exclusive Access'
                     "
                   />
                 </q-item-label>
@@ -660,14 +658,14 @@ onMounted(() => {
                   size="sm"
                   @click="removeAssignedMember(email)"
                 >
-                  <q-tooltip>Revoca accesso</q-tooltip>
+                  <q-tooltip>Revoke access</q-tooltip>
                 </q-btn>
               </q-item-section>
             </q-item>
           </q-list>
         </q-tab-panel>
 
-        <!-- Tab: Membri Attivi -->
+        <!-- Tab: Active Members -->
         <q-tab-panel name="members" class="q-pa-none">
           <q-table
             :rows="members"
@@ -683,7 +681,7 @@ onMounted(() => {
             <template #body-cell-displayName="{ row }">
               <q-td align="left">
                 <div class="row items-center no-wrap">
-                  <span class="text-weight-bold">{{ row.displayName || "Senza Nome" }}</span>
+                  <span class="text-weight-bold">{{ row.displayName || "No Name" }}</span>
                   <q-badge
                     v-if="row.role === 'owner'"
                     color="amber-9"
@@ -722,7 +720,7 @@ onMounted(() => {
                         emit-value
                         map-options
                         dense
-                        label="Cambia ruolo"
+                        label="Change role"
                         @update:model-value="(val: TenantRole) => assignRole(row, val)"
                       />
                     </q-card>
@@ -736,7 +734,7 @@ onMounted(() => {
               <q-td align="center">
                 <q-badge
                   :color="row.isActive ? (row.role === 'owner' ? 'amber-9' : 'positive') : 'grey'"
-                  :label="row.isActive ? 'Attivo' : 'Sospeso'"
+                  :label="row.isActive ? 'Active' : 'Suspended'"
                 />
                 <q-btn
                   v-if="row.role !== 'owner' && row.role !== 'superadmin'"
@@ -751,8 +749,8 @@ onMounted(() => {
                 >
                   <q-tooltip>{{
                     row.isActive
-                      ? "Sospendi collaborazione nel tenant"
-                      : "Riattiva collaborazione nel tenant"
+                      ? "Suspend collaboration in tenant"
+                      : "Resume collaboration in tenant"
                   }}</q-tooltip>
                 </q-btn>
               </q-td>
@@ -766,18 +764,18 @@ onMounted(() => {
                   <q-badge
                     v-if="row.role === 'owner'"
                     color="amber-9"
-                    label="👑 Accesso Globale"
+                    label="👑 Global Access"
                     class="q-mr-xs text-weight-bold"
                   >
                     <q-tooltip
-                      >L'Owner ha accesso completo per definizione a tutti i workspace e
-                      task</q-tooltip
+                      >The Owner has complete access by definition to all workspaces and
+                      tasks</q-tooltip
                     >
                   </q-badge>
                   <q-badge
                     v-else-if="assignedMembersList.includes(row.email)"
                     color="positive"
-                    label="Assegnato"
+                    label="Assigned"
                     class="q-mr-xs"
                   />
                   <q-btn
@@ -787,14 +785,14 @@ onMounted(() => {
                     size="xs"
                     color="primary"
                     icon="add"
-                    label="Assegna"
+                    label="Assign"
                     no-caps
                     class="q-mr-xs"
                     @click="quickAssignMember(row.email)"
                   />
                 </template>
                 <q-btn flat round dense icon="refresh" size="xs" @click="loadMembers">
-                  <q-tooltip>Ricarica</q-tooltip>
+                  <q-tooltip>Refresh</q-tooltip>
                 </q-btn>
                 <q-btn flat round dense icon="info" size="xs" color="grey-6">
                   <q-tooltip>UID: {{ row.uid }}</q-tooltip>
@@ -805,13 +803,13 @@ onMounted(() => {
             <template #no-data>
               <div class="full-width column flex-center q-pa-lg text-grey-6">
                 <q-icon name="people_outline" size="48px" class="q-mb-sm" />
-                <div>Nessun membro trovato nel tenant.</div>
+                <div>No members found in this tenant.</div>
               </div>
             </template>
           </q-table>
         </q-tab-panel>
 
-        <!-- Tab: Inviti Pendenti -->
+        <!-- Tab: Pending Invitations -->
         <q-tab-panel name="invitations" class="q-pa-none">
           <q-table
             :rows="invitations"
@@ -858,7 +856,7 @@ onMounted(() => {
                     size="xs"
                     @click="copyInvitationLink(row)"
                   >
-                    <q-tooltip>📋 Copia Link di Invito</q-tooltip>
+                    <q-tooltip>📋 Copy Invitation Link</q-tooltip>
                   </q-btn>
                   <q-btn
                     v-if="row.status === 'pending'"
@@ -871,7 +869,7 @@ onMounted(() => {
                     :loading="revokingHash === row.tokenHash"
                     @click="revokeInvitation(row)"
                   >
-                    <q-tooltip>🚫 Revoca invito</q-tooltip>
+                    <q-tooltip>🚫 Revoke invitation</q-tooltip>
                   </q-btn>
                   <span v-else class="text-grey-5 text-caption">—</span>
                 </div>
@@ -881,7 +879,7 @@ onMounted(() => {
             <template #no-data>
               <div class="full-width column flex-center q-pa-lg text-grey-6">
                 <q-icon name="mail_outline" size="48px" class="q-mb-sm" />
-                <div>Nessun invito trovato per questo tenant.</div>
+                <div>No invitations found for this tenant.</div>
               </div>
             </template>
           </q-table>
@@ -905,15 +903,15 @@ onMounted(() => {
               </div>
               <div class="col min-width-0">
                 <div class="text-h6 text-weight-bold text-navy text-truncate">
-                  Invita Collaboratore
+                  Invite Collaborator
                 </div>
                 <div class="text-caption text-grey-7 q-mt-xs">
                   {{
                     scope === "task"
-                      ? "Accesso riservato a questo specifico task operativo"
+                      ? "Access restricted to this specific operational task"
                       : scope === "workspace"
-                        ? "Accesso ai task e alle schede di questo workspace"
-                        : "Invito all'organizzazione e al team aziendale"
+                        ? "Access to tasks and sheets in this workspace"
+                        : "Invitation to organization and team"
                   }}
                 </div>
               </div>
@@ -939,14 +937,14 @@ onMounted(() => {
                 class="text-gold q-mr-sm"
               />
               <div class="text-caption text-navy">
-                <span class="text-weight-medium">Destinazione: </span>
+                <span class="text-weight-medium">Destination: </span>
                 <strong class="text-navy">
                   {{
                     scope === "workspace"
-                      ? workspaceName || "Workspace Corrente"
+                      ? workspaceName || "Current Workspace"
                       : scope === "task"
-                        ? taskTitle || "Task Corrente"
-                        : "Tutti i workspace del Tenant"
+                        ? taskTitle || "Current Task"
+                        : "All Tenant Workspaces"
                   }}
                 </strong>
               </div>
@@ -957,14 +955,14 @@ onMounted(() => {
           <q-card-section class="q-px-lg q-py-md q-gutter-y-md">
             <div>
               <div class="text-caption text-weight-bold text-navy q-mb-xs">
-                Indirizzo Email Aziendale
+                Business Email Address
               </div>
               <q-input
                 v-model="inviteEmail"
                 type="email"
                 outlined
                 dense
-                placeholder="collaboratore@azienda.com"
+                placeholder="collaborator@company.com"
                 autocomplete="off"
                 spellcheck="false"
                 bg-color="grey-1"
@@ -988,13 +986,13 @@ onMounted(() => {
                 </template>
               </q-input>
               <div class="text-caption text-grey-6 q-mt-xs" style="font-size: 0.76rem">
-                Verrà generato un link di accesso sicuro e inviata la notifica.
+                A secure access link will be generated and notification dispatched.
               </div>
             </div>
 
             <div v-if="scope === 'tenant'">
               <div class="text-caption text-weight-bold text-navy q-mb-xs">
-                Ruolo &amp; Privilegi
+                Role &amp; Permissions
               </div>
               <q-select
                 v-model="inviteRole"
@@ -1019,7 +1017,7 @@ onMounted(() => {
             <div class="gdpr-security-pill row items-center q-px-sm q-py-xs q-mt-sm">
               <q-icon name="verified_user" size="15px" color="positive" class="q-mr-xs" />
               <span class="text-caption text-grey-8" style="font-size: 0.74rem">
-                Conforme GDPR Art. 32 con token crittografico monouso.
+                GDPR Art. 32 compliant with single-use cryptographic token.
               </span>
             </div>
           </q-card-section>
@@ -1030,7 +1028,7 @@ onMounted(() => {
               flat
               rounded
               no-caps
-              label="Annulla"
+              label="Cancel"
               color="grey-7"
               class="q-px-md q-mr-sm"
               v-close-popup
@@ -1040,7 +1038,7 @@ onMounted(() => {
               unelevated
               rounded
               no-caps
-              label="Invia Invito"
+              label="Send Invitation"
               icon="send"
               class="btn-elite-send q-px-lg"
               :loading="isInviting"
@@ -1058,7 +1056,7 @@ onMounted(() => {
         <template #avatar>
           <q-icon name="lock" />
         </template>
-        Accesso riservato agli amministratori del workspace.
+        Access restricted to workspace administrators.
       </q-banner>
     </template>
   </div>

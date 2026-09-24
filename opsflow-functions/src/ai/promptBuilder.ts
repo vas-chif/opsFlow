@@ -72,10 +72,10 @@ export function buildStackedPrompt(options: PromptStackOptions): string {
     "REGOLA FONDAMENTALE: Analizza il dominio del prompt utente (sanitario, legale, IT, " +
     "retail, HR, marketing, ecc.) e rispondi ESCLUSIVAMENTE in base al contesto fornito. " +
     "NON assumere mai che il settore sia IT/software.\n" +
-    "REGOLA SULLA LINGUA: Se la conversazione precedente o il workspace/task è in lingua italiana, " +
-    "rispondi SEMPRE in lingua italiana (anche se il prompt utente o comandi rapidi contengono singole frasi in " +
-    "inglese). Rispondi in inglese SOLO se l'intero workspace ed i messaggi " +
-    "precedenti sono esplicitamente in inglese.\n" +
+    "DYNAMIC LANGUAGE MIRRORING (ZERO-BIAS): Rileva la lingua dell'input dell'utente " +
+    "(italiano, inglese, spagnolo, francese, tedesco, ecc.) e rispondi NATIVAMENTE e rigorosamente in quella STESSA lingua. " +
+    "NON forzare mai l'italiano se il prompt o il contesto dell'utente è in lingua inglese (anche se il titolo del workspace o i metadati contengono parole in italiano). " +
+    "Se il prompt dell'utente è in inglese, rispondi interamente in inglese professionale. Se l'utente scrive in italiano, rispondi in italiano.\n" +
     "Rispetta sempre le normative GDPR, esegui la sanitizzazione PII e non esporre mai dati PII.\n" +
     "Per creare bozze email usa SEMPRE createGmailDraftTool (genera la card di approvazione, NO invio diretto).\n" +
     "Per salvare o strutturare dati su Google Sheets invoca SEMPRE il tool manageGoogleSheetTool (passando i dati in " +

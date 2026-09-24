@@ -102,22 +102,22 @@ const FREQUENCY_OPTIONS: {
   desc: string;
 }[] = [
   {
-    label: "Giornaliero alle 04:00",
+    label: "Daily at 04:00 AM",
     value: "daily_04am",
     icon: "schedule",
-    desc: "Ogni giorno alle 04:00 (Europe/Rome)",
+    desc: "Every day at 04:00 AM (Europe/Rome)",
   },
   {
-    label: "Settimanale (Lun 04:00)",
+    label: "Weekly (Mon 04:00 AM)",
     value: "weekly_mon_04am",
     icon: "view_week",
-    desc: "Ogni lunedì alle 04:00 (Europe/Rome)",
+    desc: "Every Monday at 04:00 AM (Europe/Rome)",
   },
   {
-    label: "Personalizzato (cron)",
+    label: "Custom (cron)",
     value: "custom_cron",
     icon: "terminal",
-    desc: "Definisci una cron expression personalizzata",
+    desc: "Define a custom cron expression",
   },
 ];
 
@@ -206,7 +206,7 @@ function initializeForm(): void {
     dedupUrlColumnIndex.value = j.targetResource.dedupUrlColumnIndex;
     dedupNameColumnIndex.value = j.targetResource.dedupNameColumnIndex;
   } else {
-    jobTitle.value = props.task.title ? `Monitoraggio: ${props.task.title}` : "";
+    jobTitle.value = props.task.title ? `Monitoring: ${props.task.title}` : "";
     selectedFrequency.value = "daily_04am";
     endDate.value = defaultEndDate.value;
     // Step 21 Strada 3: Pre-populate from task settings or workspace default
@@ -221,10 +221,10 @@ function initializeForm(): void {
     // Pre-populate searchQuery with task title (same as human intent of the task)
     searchQuery.value = props.task.title || "";
     promptTemplate.value =
-      "Cerca professionisti corrispondenti al profilo richiesto. " +
-      "Per ciascun candidato, valuta il match con il profilo ICP, " +
-      "identifica le competenze combacianti e i gap critici. " +
-      "Assegna un Match Score da 0 a 100 basato sull'aderenza al profilo cercato.";
+      "Search for professionals matching the required ICP profile. " +
+      "For each candidate, evaluate the match with the target profile, " +
+      "identify matching skills and critical gaps. " +
+      "Assign a Match Score from 0 to 100 based on adherence to the requested profile.";
     // Pre-populate sheet from task primary sheet (🎯 Primario), fallback to workspace default
     const taskPrimarySheetId =
       props.task.settings?.selectedSheetId || (props.task.settings?.selectedSheetIds?.[0] ?? "");
@@ -233,7 +233,7 @@ function initializeForm(): void {
     selectedSheetId.value = resolvedSheetId;
     const matchedSheet = availableSheets.value.find((s) => s.id === resolvedSheetId);
     selectedSheetName.value = matchedSheet?.name || "";
-    selectedSheetTab.value = "Candidati";
+    selectedSheetTab.value = "Candidates";
     dedupUrlColumnIndex.value = 7;
     dedupNameColumnIndex.value = 1;
     // Lock both read-only on open so user sees pre-filled values clearly before any edit
@@ -250,7 +250,7 @@ async function handleSave(): Promise<void> {
   const taskId = props.task.id;
 
   if (!tenantId) {
-    q.notify({ type: "negative", message: "Sessione scaduta — rieffettua il login." });
+    q.notify({ type: "negative", message: "Session expired — please log in again." });
     return;
   }
 
@@ -283,7 +283,7 @@ async function handleSave(): Promise<void> {
         sheetName: selectedSheetTab.value || selectedSheetName.value,
         dedupUrlColumnIndex: dedupUrlColumnIndex.value,
         dedupNameColumnIndex: dedupNameColumnIndex.value,
-        dedupColumnHeader: "Fonte / Profilo Pubblico",
+        dedupColumnHeader: "Source / Public Profile",
       },
 
       searchConfig: {
@@ -306,8 +306,8 @@ async function handleSave(): Promise<void> {
     q.notify({
       type: "positive",
       icon: "schedule",
-      message: `✅ Ricerca programmata "${jobData.title}" salvata con successo!`,
-      caption: `Frequenza: ${FREQUENCY_OPTIONS.find((f) => f.value === selectedFrequency.value)?.label}`,
+      message: `✅ Scheduled sourcing job "${jobData.title}" saved successfully!`,
+      caption: `Frequency: ${FREQUENCY_OPTIONS.find((f) => f.value === selectedFrequency.value)?.label}`,
       timeout: 4000,
     });
 
@@ -315,7 +315,7 @@ async function handleSave(): Promise<void> {
     isOpen.value = false;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    q.notify({ type: "negative", message: `Errore nel salvataggio: ${msg}` });
+    q.notify({ type: "negative", message: `Error saving job: ${msg}` });
   } finally {
     isSaving.value = false;
   }
@@ -335,8 +335,7 @@ async function handleTogglePause(): Promise<void> {
 
   q.notify({
     type: "info",
-    message:
-      newStatus === "paused" ? "⏸ Monitoraggio messo in pausa." : "▶ Monitoraggio riattivato.",
+    message: newStatus === "paused" ? "⏸ Monitoring paused." : "▶ Monitoring resumed.",
   });
   emit("saved", { ...j, status: newStatus });
   isOpen.value = false;
@@ -346,10 +345,10 @@ async function handleDelete(): Promise<void> {
   if (!props.existingJob || isDeleting.value) return;
 
   q.dialog({
-    title: "🗑 Elimina Monitoraggio",
-    message: `Sei sicuro di voler eliminare il job "${props.existingJob.title}"? L'operazione non può essere annullata.`,
-    ok: { label: "Elimina", color: "negative", flat: false },
-    cancel: { label: "Annulla", flat: true },
+    title: "🗑 Delete Monitoring Job",
+    message: `Are you sure you want to delete the job "${props.existingJob.title}"? This action cannot be undone.`,
+    ok: { label: "Delete", color: "negative", flat: false },
+    cancel: { label: "Cancel", flat: true },
     persistent: true,
   }).onOk(async () => {
     const tenantId = authStore.tenantId;
@@ -363,11 +362,11 @@ async function handleDelete(): Promise<void> {
         `tenants/${tenantId}/workspaces/${j.workspaceId}/scheduledJobs/${j.id}`,
       );
       await deleteDoc(jobRef);
-      q.notify({ type: "positive", message: "Job eliminato con successo." });
+      q.notify({ type: "positive", message: "Job deleted successfully." });
       emit("deleted");
       isOpen.value = false;
     } catch (err) {
-      q.notify({ type: "negative", message: "Errore durante l'eliminazione." });
+      q.notify({ type: "negative", message: "Error deleting job." });
     } finally {
       isDeleting.value = false;
     }
@@ -381,9 +380,9 @@ function getStatusColor(status: string): string {
 } /*end getStatusColor*/
 
 function getStatusLabel(status: string): string {
-  if (status === "active") return "Attivo";
-  if (status === "paused") return "In Pausa";
-  if (status === "completed") return "Terminato";
+  if (status === "active") return "Active";
+  if (status === "paused") return "Paused";
+  if (status === "completed") return "Completed";
   return status;
 } /*end getStatusLabel*/
 </script>
@@ -392,7 +391,7 @@ function getStatusLabel(status: string): string {
   <AppFloatingWindow
     v-model="isOpen"
     window-id="schedule-task-modal"
-    :title="isEditMode ? 'Gestisci Monitoraggio' : '⏰ Pianifica Ricerca Ricorrente'"
+    :title="isEditMode ? 'Manage Monitoring Job' : '⏰ Schedule Recurring Sourcing'"
     :subtitle="`Task: ${task.title}`"
     :badge-label="workspace?.name"
     badge-color="amber-9"
@@ -423,7 +422,7 @@ function getStatusLabel(status: string): string {
         <div class="schedule-section">
           <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs">
             <q-icon name="repeat" size="18px" color="amber-9" class="q-mr-xs" />
-            Frequenza di Esecuzione
+            Execution Frequency
           </div>
 
           <!-- Frequency cards list -->
@@ -457,17 +456,17 @@ function getStatusLabel(status: string): string {
           <!-- End date (GDPR Art. 5 mandatory) -->
           <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs q-mt-md">
             <q-icon name="event" size="18px" color="amber-9" class="q-mr-xs" />
-            Data Limite (GDPR Art. 5)
-            <q-badge color="negative" text-color="white" label="Obbligatoria" class="q-ml-sm" />
+            End Date (GDPR Art. 5)
+            <q-badge color="negative" text-color="white" label="Required" class="q-ml-sm" />
           </div>
           <q-input
             v-model="endDate"
-            label="Data scadenza monitoraggio"
+            label="Monitoring Expiration Date"
             outlined
             dense
             class="bg-white rounded-borders q-mb-sm"
             readonly
-            :hint="endDateFormatted ? `Scade il: ${endDateFormatted}` : 'Seleziona una data limite'"
+            :hint="endDateFormatted ? `Expires on: ${endDateFormatted}` : 'Select an end date'"
           >
             <template #prepend>
               <q-icon name="event" color="amber-9" class="cursor-pointer">
@@ -500,7 +499,7 @@ function getStatusLabel(status: string): string {
           >
             <div class="row items-center">
               <q-icon name="label" size="18px" color="amber-9" class="q-mr-xs" />
-              Nome del Monitoraggio
+              Monitoring Job Title
             </div>
             <q-btn
               v-if="isJobTitleLocked"
@@ -512,7 +511,7 @@ function getStatusLabel(status: string): string {
               color="amber-9"
               @click="isJobTitleLocked = false"
             >
-              <q-tooltip>Modifica nome monitoraggio</q-tooltip>
+              <q-tooltip>Edit job title</q-tooltip>
             </q-btn>
             <q-btn
               v-else
@@ -524,7 +523,7 @@ function getStatusLabel(status: string): string {
               color="positive"
               @click="isJobTitleLocked = true"
             >
-              <q-tooltip>Blocca (Read-Only)</q-tooltip>
+              <q-tooltip>Lock (Read-Only)</q-tooltip>
             </q-btn>
           </div>
           <!-- Locked: expandable read-only display -->
@@ -534,13 +533,13 @@ function getStatusLabel(status: string): string {
             @click="isJobTitleLocked = false"
           >
             <div class="locked-field-display__text">{{ jobTitle || "—" }}</div>
-            <q-tooltip>Clicca per modificare</q-tooltip>
+            <q-tooltip>Click to edit</q-tooltip>
           </div>
           <!-- Unlocked: editable textarea -->
           <q-input
             v-else
             v-model="jobTitle"
-            label="Es. Monitoraggio Trainer Kubernetes Italia"
+            label="e.g. Enterprise Cloud Architect Sourcing"
             outlined
             dense
             type="textarea"
@@ -558,7 +557,7 @@ function getStatusLabel(status: string): string {
           >
             <div class="row items-center">
               <q-icon name="search" size="18px" color="amber-9" class="q-mr-xs" />
-              Query di Ricerca
+              Search Query
             </div>
             <q-btn
               v-if="isSearchQueryLocked"
@@ -570,7 +569,7 @@ function getStatusLabel(status: string): string {
               color="amber-9"
               @click="isSearchQueryLocked = false"
             >
-              <q-tooltip>Modifica query di ricerca</q-tooltip>
+              <q-tooltip>Edit search query</q-tooltip>
             </q-btn>
             <q-btn
               v-else
@@ -582,7 +581,7 @@ function getStatusLabel(status: string): string {
               color="positive"
               @click="isSearchQueryLocked = true"
             >
-              <q-tooltip>Blocca (Read-Only)</q-tooltip>
+              <q-tooltip>Lock (Read-Only)</q-tooltip>
             </q-btn>
           </div>
           <!-- Locked: expandable read-only display -->
@@ -592,46 +591,46 @@ function getStatusLabel(status: string): string {
             @click="isSearchQueryLocked = false"
           >
             <div class="locked-field-display__text">{{ searchQuery || "—" }}</div>
-            <q-tooltip>Clicca per modificare</q-tooltip>
+            <q-tooltip>Click to edit</q-tooltip>
           </div>
           <div v-if="isSearchQueryLocked" class="text-caption text-grey-7 q-mb-md">
-            Query inviata all&apos;AgenteRicerca ad ogni esecuzione
+            Query dispatched to AgenteRicerca on each run
           </div>
           <!-- Unlocked: editable -->
           <q-input
             v-else
             v-model="searchQuery"
-            label="Es. Trainer Kubernetes certificati Italia"
+            label="e.g. Certified Cloud Architects & Lead Engineers"
             outlined
             dense
             type="textarea"
             :rows="2"
             autogrow
             class="bg-white rounded-borders q-mb-md"
-            hint="Query inviata all'AgenteRicerca ad ogni esecuzione"
+            hint="Query dispatched to AgenteRicerca on each run"
             autofocus
           />
 
           <!-- Prompt template -->
           <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs">
             <q-icon name="smart_toy" size="18px" color="amber-9" class="q-mr-xs" />
-            Istruzioni per AgenteRicerca
+            Instructions for AgenteRicerca
           </div>
           <q-input
             v-model="promptTemplate"
-            label="Istruzioni di screening personalizzate..."
+            label="Custom screening instructions..."
             outlined
             dense
             type="textarea"
             :rows="3"
             class="bg-white rounded-borders q-mb-md"
-            hint="Criteri di match, focus competenze, esclusioni, etc."
+            hint="Matching criteria, skill focus, exclusions, etc."
           />
 
           <!-- Sheet selector -->
           <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs">
             <q-icon name="table_chart" size="18px" color="amber-9" class="q-mr-xs" />
-            Foglio Google di Destinazione
+            Destination Google Sheet
           </div>
           <q-select
             v-model="selectedSheetId"
@@ -643,8 +642,8 @@ function getStatusLabel(status: string): string {
             outlined
             dense
             class="bg-white rounded-borders q-mb-md"
-            label="Seleziona il foglio di destinazione"
-            no-options-label="Nessun Google Sheet collegato al workspace"
+            label="Select destination sheet"
+            no-options-label="No Google Sheets linked to this workspace"
           >
             <template #prepend>
               <q-icon name="table_chart" color="amber-9" />
@@ -675,15 +674,15 @@ function getStatusLabel(status: string): string {
           <!-- Tab name -->
           <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs">
             <q-icon name="tab" size="18px" color="amber-9" class="q-mr-xs" />
-            Nome Scheda (tab) Interna del Foglio
+            Destination Sheet Tab Name
           </div>
           <q-input
             v-model="selectedSheetTab"
-            label="Nome scheda (tab)"
+            label="Tab Name"
             outlined
             dense
             class="bg-white rounded-borders q-mb-md"
-            hint="Nome del foglio interno. Verrà creato automaticamente se non esiste."
+            hint="Internal worksheet tab name. Created automatically if not present."
           >
             <template #prepend>
               <q-icon name="tab" color="grey-7" />
@@ -693,33 +692,33 @@ function getStatusLabel(status: string): string {
           <!-- Dedup config (advanced) -->
           <q-expansion-item
             icon="security"
-            label="Configurazione Deduplicazione Avanzata"
+            label="Advanced Deduplication Configuration"
             header-class="text-weight-bold text-navy"
             class="bg-white rounded-borders border-gold-light q-mb-sm"
           >
             <div class="dedup-config q-pa-md bg-grey-1 rounded-borders">
               <div class="row items-center text-caption text-grey-8 q-mb-sm">
                 <q-icon name="info" color="amber-9" size="16px" class="q-mr-xs" />
-                <span>Dual-Key: URL profilo + Nome e Cognome (case-insensitive)</span>
+                <span>Dual-Key: Profile URL + Full Name (case-insensitive)</span>
               </div>
               <div class="row q-gutter-sm">
                 <q-input
                   v-model.number="dedupNameColumnIndex"
-                  label="Indice colonna Nome (0-based)"
+                  label="Full Name Column Index (0-based)"
                   outlined
                   dense
                   type="number"
                   class="col bg-white rounded-borders"
-                  hint="Default: 1 = colonna B"
+                  hint="Default: 1 = Column B"
                 />
                 <q-input
                   v-model.number="dedupUrlColumnIndex"
-                  label="Indice colonna URL (0-based)"
+                  label="Profile URL Column Index (0-based)"
                   outlined
                   dense
                   type="number"
                   class="col bg-white rounded-borders"
-                  hint="Default: 7 = colonna H"
+                  hint="Default: 7 = Column H"
                 />
               </div>
             </div>
@@ -736,7 +735,7 @@ function getStatusLabel(status: string): string {
           <q-btn
             flat
             icon="delete"
-            label="Elimina"
+            label="Delete"
             color="negative"
             no-caps
             :loading="isDeleting"
@@ -746,7 +745,7 @@ function getStatusLabel(status: string): string {
           <q-btn
             flat
             :icon="existingJob.status === 'active' ? 'pause' : 'play_arrow'"
-            :label="existingJob.status === 'active' ? 'Metti in Pausa' : 'Riattiva'"
+            :label="existingJob.status === 'active' ? 'Pause' : 'Resume'"
             color="warning"
             no-caps
             class="q-mr-sm"
@@ -756,13 +755,13 @@ function getStatusLabel(status: string): string {
 
         <q-space />
 
-        <q-btn flat label="Annulla" color="grey-8" no-caps @click="isOpen = false" />
+        <q-btn flat label="Cancel" color="grey-8" no-caps @click="isOpen = false" />
         <q-btn
           unelevated
           color="amber-9"
           text-color="dark"
           icon="schedule"
-          :label="isEditMode ? 'Salva Modifiche' : 'Attiva Monitoraggio'"
+          :label="isEditMode ? 'Save Changes' : 'Activate Monitoring'"
           no-caps
           class="text-weight-bold q-px-lg"
           :loading="isSaving"

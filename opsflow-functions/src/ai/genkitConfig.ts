@@ -144,8 +144,8 @@ export const RefinedTaskDraftSchema = z.object({
       }),
     )
     .min(2)
-    .max(6)
-    .describe("Sotto-task operative in sequenza logica (minimo 2, massimo 6)"),
+    .max(10)
+    .describe("Sotto-task operative in sequenza logica (minimo 2, massimo 10)"),
 });
 
 export type RefinedTaskDraftResult = z.infer<typeof RefinedTaskDraftSchema>;

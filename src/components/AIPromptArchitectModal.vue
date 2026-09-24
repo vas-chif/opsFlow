@@ -40,29 +40,29 @@ const strictGroundTruthMode = ref(true);
 
 const presetPromptExamples = [
   {
-    label: "🏢 IT Consulting & Training",
+    label: "🏢 Enterprise IT Consulting & Architecture",
     prompt:
-      "Sourcing formatori e consulenti IT certificati, verifica competenze e seniority, validazione fonti aperte, standardizzazione contatti e forzatura GDPR Art. 14 (+30gg).",
+      "Sourcing certified enterprise IT specialists and Cloud Architects, verifying competencies and seniority across public sources, standardizing contacts, and enforcing GDPR Art. 14 (+30 days).",
   },
   {
-    label: "💇‍♀️ Hair Salon",
+    label: "📊 Strategic Management & Operations",
     prompt:
-      "Appointment scheduling, hair coloring formulas, client regrowth reminders, styling product sales, and seasonal promotions.",
+      "Operational KPI tracking, process bottlenecks identification, cross-functional project coordination, and executive summary reporting for leadership.",
   },
   {
-    label: "🏗️ Civil Engineering",
+    label: "🏗️ Civil Engineering & Infrastructure",
     prompt:
       "Bill of quantities calculation, tender specification verification, building regulation compliance, and construction site timeline management.",
   },
   {
-    label: "⚖️ Law Firm",
+    label: "⚖️ Corporate Law & Compliance",
     prompt:
       "Defense memo synthesis, court deadlines and filing schedule monitoring, out-of-court appraisal drafts, and formal client correspondence.",
   },
   {
-    label: "💆‍♀️ Wellness Clinic",
+    label: "🏥 Healthcare & Clinical Management",
     prompt:
-      "Face and body treatment records, subscription package management, informed consents, periodic recall visits, and seasonal beauty offers.",
+      "Treatment protocol tracking, patient scheduling, informed consent documentation, periodic recall assessments, and medical administrative compliance.",
   },
 ];
 
@@ -110,7 +110,7 @@ async function handleApply(): Promise<void> {
   } catch {
     $q.notify({
       type: "negative",
-      message: "Errore durante l'applicazione dell'Atteggiamento.",
+      message: "Error applying Attitude to workspace.",
     });
   }
 } /*end handleApply*/
@@ -137,8 +137,8 @@ function handleClose(): void {
   >
     <div class="q-pa-md">
       <div class="text-body2 text-grey-8 q-mb-sm">
-        Descrivi le attività generali del tuo business per generare il
-        <strong>metodo operativo e deontologico</strong> del Workspace (IL 'COME CI SI COMPORTA').
+        Describe your general business activities to generate the
+        <strong>operational and deontological method</strong> for this Workspace (HOW WE OPERATE).
       </div>
       <div
         class="text-caption text-primary q-mb-md bg-blue-1 q-pa-sm rounded-borders row items-center justify-between"
@@ -148,24 +148,24 @@ function handleClose(): void {
           <span class="text-weight-bold"
             >🛡️ Strict Ground-Truth &amp; Anti-Hallucination Mode:</span
           >
-          <q-badge color="positive" text-color="white" label="ATTIVO" />
+          <q-badge color="positive" text-color="white" label="ACTIVE" />
         </div>
         <span class="text-caption text-grey-7"
-          >Solo URL certificati dai motori, forzatura GDPR Art. 14 (+30gg) e zero contatti
-          fittizi.</span
+          >Only verified search engine sources, GDPR Art. 14 (+30d) enforcement, and zero synthetic
+          contacts.</span
         >
       </div>
       <div class="text-caption text-grey-7 q-mb-md">
         <em
-          >💡 Nota: non inserire compiti o clienti specifici contingenti (es. 'corso Oracle del 28
-          settembre per NobleProg'); verranno inseriti direttamente nei singoli Task.</em
+          >💡 Note: do not enter specific contingent tasks or client names (e.g. 'Project kickoff on
+          Friday'); these should be added directly within individual Tasks.</em
         >
       </div>
 
       <!-- Quick Examples -->
       <div class="q-mb-md">
         <div class="text-caption text-weight-bold text-grey-7 q-mb-xs">
-          Oppure seleziona un esempio rapido:
+          Or select an enterprise preset example:
         </div>
         <div class="row q-gutter-xs">
           <q-chip
@@ -189,7 +189,7 @@ function handleClose(): void {
         rows="3"
         outlined
         dense
-        placeholder="es. 'Studio di consulenza e formazione IT aziendale. Gestiamo screening profili specialistici, verifica competenze su fonti pubbliche, contatti professionali e tracciamento GDPR...'"
+        placeholder="e.g. 'Enterprise IT consultancy and technical training firm. We manage specialized talent screening, public source skill verification, corporate outreach, and GDPR compliance tracking...'"
         class="q-mb-md"
       />
 

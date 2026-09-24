@@ -98,11 +98,11 @@ const formContact = ref<string>("");
 const formNotes = ref<string>("");
 
 const domainOptions: { label: string; value: EntityDomain; icon: string }[] = [
-  { label: "Recruiting & Risorse Umane", value: "recruiting", icon: "person" },
-  { label: "Sanità & Assistenza Clinica", value: "healthcare", icon: "medical_services" },
-  { label: "Procurement & Forniture", value: "procurement", icon: "inventory_2" },
-  { label: "Operations & Macchinari", value: "operations", icon: "precision_manufacturing" },
-  { label: "Generico / Altro", value: "generic", icon: "assignment_ind" },
+  { label: "Recruiting & Human Resources", value: "recruiting", icon: "person" },
+  { label: "Healthcare & Clinical Care", value: "healthcare", icon: "medical_services" },
+  { label: "Procurement & Supplies", value: "procurement", icon: "inventory_2" },
+  { label: "Operations & Equipment", value: "operations", icon: "precision_manufacturing" },
+  { label: "General / Other", value: "generic", icon: "assignment_ind" },
 ];
 
 // ── Computed Properties ───────────────────────────────────────────────────────
@@ -118,10 +118,10 @@ const defaultDomain = computed<EntityDomain>(() => {
 const inheritedDomainLabel = computed<string>(() => {
   const cat = (props.task?.aiMetadata?.suggestedCategory || "").toLowerCase();
   if (cat.includes("recruiting") || cat.includes("hr")) return "Recruiting & HR";
-  if (cat.includes("health") || cat.includes("sanit")) return "Sanità & Assistenza Clinica";
-  if (cat.includes("procure") || cat.includes("fornit")) return "Procurement & Forniture";
-  if (cat.includes("operat")) return "Operations & Macchinari";
-  return "Generico";
+  if (cat.includes("health") || cat.includes("sanit")) return "Healthcare & Clinical";
+  if (cat.includes("procure") || cat.includes("fornit")) return "Procurement & Supplies";
+  if (cat.includes("operat")) return "Operations & Equipment";
+  return "General";
 });
 
 const activeSource = computed<DetectedTableSource | undefined>(() => {
@@ -267,7 +267,7 @@ const extractSourcesFromContext = (): void => {
               c,
             ),
           );
-          const headerList = hasHeader ? cells0 : cells0.map((_, idx) => `Colonna ${idx + 1}`);
+          const headerList = hasHeader ? cells0 : cells0.map((_, idx) => `Column ${idx + 1}`);
           const startIdx = hasHeader ? 1 : 0;
 
           const tableRows: DetectedTableRow[] = [];
@@ -281,14 +281,14 @@ const extractSourcesFromContext = (): void => {
             if (cells.every((c) => !c)) continue;
 
             const colValues: DetectedTableColumnValue[] = cells.map((cell, cIdx) => ({
-              header: headerList[cIdx] || `Colonna ${cIdx + 1}`,
+              header: headerList[cIdx] || `Column ${cIdx + 1}`,
               value: cell,
               index: cIdx,
             }));
 
             tableRows.push({
               index: tableRows.length,
-              label: `Riga ${tableRows.length + 1}: ${cells[0] || "Elemento"}${cells[1] ? ` (${cells[1]})` : ""}`,
+              label: `Row ${tableRows.length + 1}: ${cells[0] || "Item"}${cells[1] ? ` (${cells[1]})` : ""}`,
               cells,
               columns: colValues,
             });
@@ -298,8 +298,8 @@ const extractSourcesFromContext = (): void => {
             sources.push({
               id: `src-sheet-${app.id}`,
               label: preview.range
-                ? `📑 Foglio Google (${preview.range} — ${tableRows.length} righe)`
-                : `📑 Foglio Google (${tableRows.length} righe)`,
+                ? `📑 Google Sheet (${preview.range} — ${tableRows.length} rows)`
+                : `📑 Google Sheet (${tableRows.length} rows)`,
               type: "sheets",
               headers: headerList,
               rows: tableRows,
@@ -311,18 +311,18 @@ const extractSourcesFromContext = (): void => {
         if (draft.to) {
           const cells = [draft.to, draft.subject || ""];
           const cols: DetectedTableColumnValue[] = [
-            { header: "Destinatario Email", value: draft.to, index: 0 },
-            { header: "Oggetto Bozza", value: draft.subject || "", index: 1 },
+            { header: "Email Recipient", value: draft.to, index: 0 },
+            { header: "Draft Subject", value: draft.subject || "", index: 1 },
           ];
           sources.push({
             id: `src-email-${app.id}`,
-            label: `✉️ Bozza Email per ${draft.to}`,
+            label: `✉️ Email Draft for ${draft.to}`,
             type: "email",
-            headers: ["Destinatario Email", "Oggetto Bozza"],
+            headers: ["Email Recipient", "Draft Subject"],
             rows: [
               {
                 index: 0,
-                label: `Bozza: ${draft.to}`,
+                label: `Draft: ${draft.to}`,
                 cells,
                 columns: cols,
               },
@@ -366,14 +366,14 @@ const extractSourcesFromContext = (): void => {
           } else {
             if (rawCells.some((c) => c.length > 0)) {
               const colValues: DetectedTableColumnValue[] = rawCells.map((cell, cIdx) => ({
-                header: headerCols[cIdx] || `Colonna ${cIdx + 1}`,
+                header: headerCols[cIdx] || `Column ${cIdx + 1}`,
                 value: cell,
                 index: cIdx,
               }));
 
               currentTableRows.push({
                 index: currentTableRows.length,
-                label: `Riga ${currentTableRows.length + 1}: ${rawCells[0] || "Elemento"}${rawCells[1] ? ` (${rawCells[1]})` : ""}`,
+                label: `Row ${currentTableRows.length + 1}: ${rawCells[0] || "Item"}${rawCells[1] ? ` (${rawCells[1]})` : ""}`,
                 cells: rawCells,
                 columns: colValues,
               });
@@ -383,7 +383,7 @@ const extractSourcesFromContext = (): void => {
           if (inTable && currentTableRows.length > 0) {
             sources.push({
               id: `src-chat-tbl-${msg.id}-${sources.length}`,
-              label: `📊 Tabella Chat (${currentTableRows.length} righe)`,
+              label: `📊 Chat Table (${currentTableRows.length} rows)`,
               type: "chat_table",
               headers: headerCols,
               rows: [...currentTableRows],
@@ -398,7 +398,7 @@ const extractSourcesFromContext = (): void => {
       if (inTable && currentTableRows.length > 0) {
         sources.push({
           id: `src-chat-tbl-${msg.id}-${sources.length}`,
-          label: `📊 Tabella Chat (${currentTableRows.length} righe)`,
+          label: `📊 Chat Table (${currentTableRows.length} rows)`,
           type: "chat_table",
           headers: headerCols,
           rows: [...currentTableRows],
@@ -438,12 +438,12 @@ const extractSourcesFromContext = (): void => {
         const rowLabel = candidateNameCandidate
           ? `${candidateNameCandidate}${roleAttr ? ` — ${roleAttr.value}` : ""}`
           : roleAttr
-            ? `Profilo: ${roleAttr.value}`
-            : `Valutazione Agente (${parsedAttrs.length} attributi)`;
+            ? `Profile: ${roleAttr.value}`
+            : `Agent Evaluation (${parsedAttrs.length} attributes)`;
 
         sources.push({
           id: `src-chat-eval-${msg.id}`,
-          label: `💬 Valutazione AI: ${rowLabel.slice(0, 50)}`,
+          label: `💬 AI Evaluation: ${rowLabel.slice(0, 50)}`,
           type: "chat_response",
           headers: parsedAttrs.map((a) => a.header),
           rows: [
@@ -466,15 +466,15 @@ const extractSourcesFromContext = (): void => {
       id: `src-kp-${kp.id}`,
       label: `💡 KeyPoint: ${kp.title.slice(0, 40)}`,
       type: "keypoint",
-      headers: ["Titolo Lead", "Dettagli"],
+      headers: ["Lead Title", "Details"],
       rows: [
         {
           index: 0,
           label: kp.title,
           cells: [kp.title, kp.detail || ""],
           columns: [
-            { header: "Nome / Titolo Lead", value: kp.title, index: 0 },
-            { header: "Dettagli Operativi", value: kp.detail || "", index: 1 },
+            { header: "Lead Name / Title", value: kp.title, index: 0 },
+            { header: "Operational Details", value: kp.detail || "", index: 1 },
           ],
         },
       ],
@@ -484,7 +484,7 @@ const extractSourcesFromContext = (): void => {
   // Always include Manual Freehand option
   sources.push({
     id: "manual",
-    label: "✍️ Inserimento Manuale Libero (Nessuna sorgente)",
+    label: "✍️ Freehand Manual Entry (No source)",
     type: "manual",
     headers: [],
     rows: [],
@@ -549,7 +549,7 @@ const handleSelectRow = (rowIndex: number | null): void => {
 
 const autoMapFromActiveRow = (): void => {
   if (!activeRow.value) {
-    q.notify({ type: "warning", message: "Seleziona prima una riga o sorgente valida." });
+    q.notify({ type: "warning", message: "Please select a valid row or source first." });
     return;
   }
 
@@ -634,7 +634,7 @@ const autoMapFromActiveRow = (): void => {
 
   q.notify({
     type: "positive",
-    message: `Mappati ${mappedCount} campi dai dati della sorgente!`,
+    message: `Mapped ${mappedCount} fields from source data!`,
     icon: "auto_fix_high",
   });
 }; /*end autoMapFromActiveRow*/
@@ -656,7 +656,7 @@ const applyColumnToField = (
 
   q.notify({
     type: "info",
-    message: `Assegnato "${val.slice(0, 25)}..." al campo ${target.toUpperCase()}`,
+    message: `Assigned "${val.slice(0, 25)}..." to ${target.toUpperCase()}`,
     timeout: 1200,
   });
 }; /*end applyColumnToField*/
@@ -674,12 +674,12 @@ const handleCreateSubtaskFromData = async (payload: {
   const taskId = props.taskId;
 
   if (!tId || !wsId || !taskId) {
-    q.notify({ type: "negative", message: "ID contesto non valido per la creazione." });
+    q.notify({ type: "negative", message: "Invalid context ID for creation." });
     return;
   }
 
   if (!payload.name.trim()) {
-    q.notify({ type: "warning", message: "Inserisci un nome valido per la risorsa." });
+    q.notify({ type: "warning", message: "Please enter a valid name for the resource." });
     return;
   }
 
@@ -709,12 +709,10 @@ const handleCreateSubtaskFromData = async (payload: {
         {
           id: `evt_init_${Date.now()}`,
           eventType: "status_change",
-          title: "Risorsa registrata nel task",
-          description: payload.role
-            ? `Profilo: ${payload.role}`
-            : "Creata tramite procedura Smart Extraction",
+          title: "Resource registered in task",
+          description: payload.role ? `Profile: ${payload.role}` : "Created via Smart Extraction",
           authorId: authStore.user?.uid || "user",
-          authorName: authStore.user?.displayName || "Operatore",
+          authorName: authStore.user?.displayName || "Operator",
           timestamp: nowIso,
         },
       ],
@@ -727,15 +725,15 @@ const handleCreateSubtaskFromData = async (payload: {
 
     q.notify({
       type: "positive",
-      message: `Risorsa "${payload.name}" creata con successo!`,
+      message: `Resource "${payload.name}" created successfully!`,
       icon: "check_circle",
     });
 
     emit("created", newSubtask);
     isOpen.value = false;
   } catch (err) {
-    logger.error("CreateSubtaskModal", "Errore durante la creazione del subtask", err);
-    q.notify({ type: "negative", message: "Errore durante il salvataggio su Firestore." });
+    logger.error("CreateSubtaskModal", "Error creating subtask", err);
+    q.notify({ type: "negative", message: "Error saving to Firestore." });
   } finally {
     isSaving.value = false;
   }
@@ -777,15 +775,15 @@ const handleSubmitManual = async (): Promise<void> => {
           <q-avatar size="36px" color="amber-9" text-color="dark" icon="person_add" />
           <div>
             <div class="text-subtitle1 text-weight-bolder text-white">
-              Nuova Risorsa / Sub-Task Operativo
+              New Resource / Operational Sub-Task
             </div>
             <div class="text-caption text-grey-4">
-              Monitora contatti, esiti e timeline dedicati per questa entità
+              Track dedicated contacts, outcomes, and timeline for this entity
             </div>
           </div>
         </div>
         <q-btn round dense flat color="grey-4" icon="close" @click="isOpen = false">
-          <q-tooltip>Chiudi</q-tooltip>
+          <q-tooltip>Close</q-tooltip>
         </q-btn>
       </div>
 
@@ -798,14 +796,14 @@ const handleSubmitManual = async (): Promise<void> => {
               class="row items-center q-gutter-x-xs text-primary text-weight-bolder text-caption"
             >
               <q-icon name="hub" size="18px" color="primary" />
-              <span>Sorgente Dati (Seleziona da dove importare le informazioni)</span>
+              <span>Data Source (Select where to import information from)</span>
             </div>
             <q-badge
               v-if="detectedSources.length > 1"
               color="primary"
               outline
               size="xs"
-              :label="`${detectedSources.length - 1} sorgenti rilevate`"
+              :label="`${detectedSources.length - 1} sources detected`"
             />
           </div>
 
@@ -826,7 +824,7 @@ const handleSubmitManual = async (): Promise<void> => {
                 fill-input
                 hide-selected
                 bg-color="white"
-                label="Origine Dati / Tabella"
+                label="Data Origin / Table"
                 @filter="filterSources"
                 @update:model-value="handleSelectSource"
               >
@@ -848,7 +846,7 @@ const handleSubmitManual = async (): Promise<void> => {
                 <template #no-option>
                   <q-item dense>
                     <q-item-section class="text-grey-6 text-caption">
-                      Nessuna tabella o sorgente trovata
+                      No tables or sources found
                     </q-item-section>
                   </q-item>
                 </template>
@@ -870,7 +868,7 @@ const handleSubmitManual = async (): Promise<void> => {
                 fill-input
                 hide-selected
                 bg-color="white"
-                label="Cerca e Seleziona Riga / Candidato"
+                label="Search and Select Row / Candidate"
                 @filter="filterRows"
                 @update:model-value="handleSelectRow"
               >
@@ -880,7 +878,7 @@ const handleSubmitManual = async (): Promise<void> => {
                 <template #no-option>
                   <q-item dense>
                     <q-item-section class="text-grey-6 text-caption">
-                      Nessun candidato o riga trovata con questo testo
+                      No candidates or rows found matching query
                     </q-item-section>
                   </q-item>
                 </template>
@@ -900,9 +898,9 @@ const handleSubmitManual = async (): Promise<void> => {
               >
                 <q-icon name="list_alt" size="16px" color="primary" />
                 <span class="text-weight-bold">
-                  {{ activeRow.columns.length }} campi disponibili nella sorgente
+                  {{ activeRow.columns.length }} fields available in source
                 </span>
-                <span class="text-grey-6">(clicca una chip per assegnare il valore)</span>
+                <span class="text-grey-6">(click a chip to assign value)</span>
               </div>
               <q-btn
                 dense
@@ -911,13 +909,13 @@ const handleSubmitManual = async (): Promise<void> => {
                 color="amber-9"
                 text-color="dark"
                 icon="bolt"
-                label="⚡ Mappa Tutti i Campi"
+                label="⚡ Map All Fields"
                 class="text-weight-bold q-px-xs"
                 @click="autoMapFromActiveRow"
               >
                 <q-tooltip
-                  >Assegna automaticamente Nome, Ruolo, Email, LinkedIn e aggiunge i dettagli alle
-                  note</q-tooltip
+                  >Automatically assign Name, Role, Email, LinkedIn and append details to
+                  notes</q-tooltip
                 >
               </q-btn>
             </div>
@@ -942,37 +940,37 @@ const handleSubmitManual = async (): Promise<void> => {
                 <q-menu auto-close>
                   <q-list dense style="min-width: 200px">
                     <q-item-label header class="text-caption text-weight-bold"
-                      >Assegna "{{ col.value.slice(0, 30) }}..." a:</q-item-label
+                      >Assign "{{ col.value.slice(0, 30) }}..." to:</q-item-label
                     >
                     <q-item clickable @click="applyColumnToField('name', col.value, col.header)">
                       <q-item-section avatar
                         ><q-icon name="person" size="16px" color="primary"
                       /></q-item-section>
-                      <q-item-section class="text-caption">Nome e Cognome</q-item-section>
+                      <q-item-section class="text-caption">Full Name</q-item-section>
                     </q-item>
                     <q-item clickable @click="applyColumnToField('role', col.value, col.header)">
                       <q-item-section avatar
                         ><q-icon name="badge" size="16px" color="primary"
                       /></q-item-section>
-                      <q-item-section class="text-caption">Ruolo / Sottotitolo</q-item-section>
+                      <q-item-section class="text-caption">Role / Subtitle</q-item-section>
                     </q-item>
                     <q-item clickable @click="applyColumnToField('email', col.value, col.header)">
                       <q-item-section avatar
                         ><q-icon name="email" size="16px" color="primary"
                       /></q-item-section>
-                      <q-item-section class="text-caption">Email Dedicata</q-item-section>
+                      <q-item-section class="text-caption">Dedicated Email</q-item-section>
                     </q-item>
                     <q-item clickable @click="applyColumnToField('profile', col.value, col.header)">
                       <q-item-section avatar
                         ><q-icon name="link" size="16px" color="primary"
                       /></q-item-section>
-                      <q-item-section class="text-caption">LinkedIn / Profilo Web</q-item-section>
+                      <q-item-section class="text-caption">LinkedIn / Web Profile</q-item-section>
                     </q-item>
                     <q-item clickable @click="applyColumnToField('contact', col.value, col.header)">
                       <q-item-section avatar
                         ><q-icon name="phone" size="16px" color="primary"
                       /></q-item-section>
-                      <q-item-section class="text-caption">Altro Contatto</q-item-section>
+                      <q-item-section class="text-caption">Other Contact</q-item-section>
                     </q-item>
                     <q-separator />
                     <q-item clickable @click="applyColumnToField('notes', col.value, col.header)">
@@ -980,7 +978,7 @@ const handleSubmitManual = async (): Promise<void> => {
                         ><q-icon name="note_add" size="16px" color="amber-9"
                       /></q-item-section>
                       <q-item-section class="text-caption"
-                        >Aggiungi a Note Operative</q-item-section
+                        >Append to Operational Notes</q-item-section
                       >
                     </q-item>
                   </q-list>
@@ -998,11 +996,11 @@ const handleSubmitManual = async (): Promise<void> => {
               v-model="formName"
               outlined
               dense
-              label="Nome e Cognome / Titolo Entità *"
-              placeholder="es. Davide Benvenuti"
+              label="Full Name / Entity Title *"
+              placeholder="e.g. John Doe"
               class="bg-white"
               autofocus
-              :rules="[(val) => !!val.trim() || 'Il nome è obbligatorio']"
+              :rules="[(val) => !!val.trim() || 'Name is required']"
             >
               <template #prepend>
                 <q-icon name="person" size="20px" color="primary" />
@@ -1016,8 +1014,8 @@ const handleSubmitManual = async (): Promise<void> => {
                 v-model="formRole"
                 outlined
                 dense
-                label="Ruolo / Specializzazione"
-                placeholder="es. Senior Oracle DBA"
+                label="Role / Specialization"
+                placeholder="e.g. Senior Cloud Architect"
                 class="bg-white"
               >
                 <template #prepend>
@@ -1031,8 +1029,8 @@ const handleSubmitManual = async (): Promise<void> => {
                 outlined
                 dense
                 type="email"
-                label="Email Dedicata"
-                placeholder="es. davide.b@example.com"
+                label="Dedicated Email"
+                placeholder="e.g. john.doe@example.com"
                 class="bg-white"
               >
                 <template #prepend>
@@ -1048,8 +1046,8 @@ const handleSubmitManual = async (): Promise<void> => {
                 v-model="formProfileUrl"
                 outlined
                 dense
-                label="LinkedIn / Profilo Web"
-                placeholder="es. https://linkedin.com/in/..."
+                label="LinkedIn / Web Profile"
+                placeholder="e.g. https://linkedin.com/in/..."
                 class="bg-white"
               >
                 <template #prepend>
@@ -1062,8 +1060,8 @@ const handleSubmitManual = async (): Promise<void> => {
                 v-model="formContact"
                 outlined
                 dense
-                label="Telefono / Altro Contatto"
-                placeholder="es. +39 340 1234567"
+                label="Phone / Other Contact"
+                placeholder="e.g. +1 555 123 4567"
                 class="bg-white"
               >
                 <template #prepend>
@@ -1076,20 +1074,22 @@ const handleSubmitManual = async (): Promise<void> => {
           <!-- Subtle Inherited Domain Indicator with Optional Override -->
           <div class="row items-center justify-between text-caption text-grey-7 q-px-xs">
             <div class="row items-center q-gutter-x-xs">
-              <span>Dominio:</span>
+              <span>Domain:</span>
               <q-badge
                 color="primary"
                 outline
-                :label="domainOptions.find((d) => d.value === formDomain)?.label || 'Recruiting'"
+                :label="
+                  domainOptions.find((d) => d.value === formDomain)?.label || 'Recruiting & HR'
+                "
               />
-              <span class="text-grey-5">(ereditato da {{ inheritedDomainLabel }})</span>
+              <span class="text-grey-5">(inherited from {{ inheritedDomainLabel }})</span>
             </div>
             <q-btn
               flat
               dense
               size="xs"
               color="grey-6"
-              :label="showDomainSelect ? 'Nascondi selettore' : 'Modifica dominio'"
+              :label="showDomainSelect ? 'Hide selector' : 'Change domain'"
               @click="showDomainSelect = !showDomainSelect"
             />
           </div>
@@ -1102,7 +1102,7 @@ const handleSubmitManual = async (): Promise<void> => {
               map-options
               outlined
               dense
-              label="Dominio Personalizzato"
+              label="Custom Domain"
               class="bg-white"
             />
           </div>
@@ -1114,8 +1114,8 @@ const handleSubmitManual = async (): Promise<void> => {
             outlined
             autogrow
             rows="3"
-            label="Note Operative / Appunti Manuali"
-            placeholder="Scrivi qui osservazioni libere, disponibilità, esito del contatto o dettagli della trattativa..."
+            label="Operational Notes / Manual Notes"
+            placeholder="Write freehand observations, availability, contact outcome, or negotiation details here..."
             class="bg-white"
           >
             <template #prepend>
@@ -1127,12 +1127,12 @@ const handleSubmitManual = async (): Promise<void> => {
 
       <!-- Footer Actions -->
       <div class="q-pa-md bg-white border-top-light row items-center justify-end q-gutter-x-sm">
-        <q-btn flat label="Annulla" color="grey-7" @click="isOpen = false" />
+        <q-btn flat label="Cancel" color="grey-7" @click="isOpen = false" />
         <q-btn
           unelevated
           color="primary"
           icon="add_task"
-          label="Crea Scheda Risorsa"
+          label="Create Resource Record"
           class="text-weight-bold q-px-md"
           :loading="isSaving"
           :disabled="!formName.trim()"
