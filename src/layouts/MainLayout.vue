@@ -38,6 +38,8 @@ import type { ChatMsg } from "@/types/chat";
 // ── Components ───────────────────────────────────────────────────────────────
 import DeleteAccountDialog from "@/components/DeleteAccountDialog.vue";
 import TeamMembersPanel from "@/components/TeamMembersPanel.vue";
+import AppWindowDock from "@/components/AppWindowDock.vue";
+import AppFloatingWindow from "@/components/AppFloatingWindow.vue";
 
 // ── Composables ──────────────────────────────────────────────────────────────
 const route = useRoute();
@@ -1179,8 +1181,20 @@ const confirmDeleteWorkspace = async (): Promise<void> => {
     </q-dialog>
 
     <!-- Step 26: Team Member Invitation & Assignment Modal (Workspace Scoped) -->
-    <q-dialog v-model="inviteModalOpen" persistent>
-      <q-card style="min-width: 650px; max-width: 960px; width: 92vw" class="rounded-borders">
+    <AppFloatingWindow
+      v-model="inviteModalOpen"
+      window-id="team-members-modal"
+      title="Gestione Team & Inviti"
+      :subtitle="inviteModalWorkspace ? `Workspace: ${inviteModalWorkspace.name}` : ''"
+      icon="group"
+      icon-color="amber-5"
+      :initial-width="860"
+      :initial-height="620"
+      :min-width="500"
+      :min-height="400"
+      @close="inviteModalOpen = false"
+    >
+      <div class="q-pa-sm">
         <TeamMembersPanel
           v-if="inviteModalWorkspace"
           scope="workspace"
@@ -1189,11 +1203,14 @@ const confirmDeleteWorkspace = async (): Promise<void> => {
           is-dialog
           @close="inviteModalOpen = false"
         />
-      </q-card>
-    </q-dialog>
+      </div>
+    </AppFloatingWindow>
 
     <!-- Security Account Deletion & Tenant Teardown Dialog (GDPR Art. 17 & RBAC) -->
     <delete-account-dialog v-model="showDeleteAccountDialog" />
+
+    <!-- OS-Style Dockbar for Minimized & Active Multi-Windows -->
+    <AppWindowDock />
   </q-layout>
 </template>
 

@@ -15,6 +15,9 @@ import { useQuasar } from "quasar";
 // ── Types ────────────────────────────────────────────────────────────────────
 import type { WorkspaceAttitude } from "@/types/models";
 
+// ── Components ───────────────────────────────────────────────────────────────
+import AppFloatingWindow from "./AppFloatingWindow.vue";
+
 // ── Stores ───────────────────────────────────────────────────────────────────
 import { useTaskStore } from "@/stores/taskStore";
 
@@ -118,186 +121,178 @@ function handleClose(): void {
 </script>
 
 <template>
-  <q-dialog
+  <AppFloatingWindow
     :model-value="modelValue"
-    persistent
-    maximized-mobile
-    transition-show="scale"
-    transition-hide="scale"
+    window-id="ai-prompt-architect-modal"
+    title="AI Prompt Architect"
+    subtitle="No-Code Attitude & Skill Matrix Configurator (DBS Framework)"
+    icon="auto_awesome"
+    icon-color="amber-5"
+    :initial-width="780"
+    :initial-height="650"
+    :min-width="480"
+    :min-height="380"
     @update:model-value="emit('update:modelValue', $event)"
+    @close="handleClose"
   >
-    <q-card class="dbs-modal-card" style="width: 720px; max-width: 95vw">
-      <!-- Header -->
-      <q-card-section class="bg-navy text-white row items-center justify-between">
-        <div class="row items-center q-gutter-sm">
-          <q-icon name="auto_awesome" color="gold" size="28px" />
-          <div>
-            <div class="text-h6 text-weight-bold">✨ AI Prompt Architect</div>
-            <div class="text-caption text-gold-light">
-              No-Code Attitude &amp; Skill Matrix Configurator (DBS Framework)
-            </div>
-          </div>
+    <div class="q-pa-md">
+      <div class="text-body2 text-grey-8 q-mb-sm">
+        Descrivi le attività generali del tuo business per generare il
+        <strong>metodo operativo e deontologico</strong> del Workspace (IL 'COME CI SI COMPORTA').
+      </div>
+      <div
+        class="text-caption text-primary q-mb-md bg-blue-1 q-pa-sm rounded-borders row items-center justify-between"
+      >
+        <div class="row items-center q-gutter-xs">
+          <q-icon name="verified_user" color="primary" size="20px" />
+          <span class="text-weight-bold"
+            >🛡️ Strict Ground-Truth &amp; Anti-Hallucination Mode:</span
+          >
+          <q-badge color="positive" text-color="white" label="ATTIVO" />
         </div>
-        <q-btn flat round dense icon="close" color="white" @click="handleClose" />
-      </q-card-section>
-
-      <q-card-section class="q-pa-md">
-        <div class="text-body2 text-grey-8 q-mb-sm">
-          Descrivi le attività generali del tuo business per generare il
-          <strong>metodo operativo e deontologico</strong> del Workspace (IL 'COME CI SI COMPORTA').
-        </div>
-        <div
-          class="text-caption text-primary q-mb-md bg-blue-1 q-pa-sm rounded-borders row items-center justify-between"
+        <span class="text-caption text-grey-7"
+          >Solo URL certificati dai motori, forzatura GDPR Art. 14 (+30gg) e zero contatti
+          fittizi.</span
         >
-          <div class="row items-center q-gutter-xs">
-            <q-icon name="verified_user" color="primary" size="20px" />
-            <span class="text-weight-bold"
-              >🛡️ Strict Ground-Truth &amp; Anti-Hallucination Mode:</span
-            >
-            <q-badge color="positive" text-color="white" label="ATTIVO" />
-          </div>
-          <span class="text-caption text-grey-7"
-            >Solo URL certificati dai motori, forzatura GDPR Art. 14 (+30gg) e zero contatti
-            fittizi.</span
-          >
+      </div>
+      <div class="text-caption text-grey-7 q-mb-md">
+        <em
+          >💡 Nota: non inserire compiti o clienti specifici contingenti (es. 'corso Oracle del 28
+          settembre per NobleProg'); verranno inseriti direttamente nei singoli Task.</em
+        >
+      </div>
+
+      <!-- Quick Examples -->
+      <div class="q-mb-md">
+        <div class="text-caption text-weight-bold text-grey-7 q-mb-xs">
+          Oppure seleziona un esempio rapido:
         </div>
-        <div class="text-caption text-grey-7 q-mb-md">
-          <em
-            >💡 Nota: non inserire compiti o clienti specifici contingenti (es. 'corso Oracle del 28
-            settembre per NobleProg'); verranno inseriti direttamente nei singoli Task.</em
+        <div class="row q-gutter-xs">
+          <q-chip
+            v-for="example in presetPromptExamples"
+            :key="example.label"
+            clickable
+            outline
+            color="primary"
+            size="sm"
+            @click="selectPresetPrompt(example.prompt)"
           >
+            {{ example.label }}
+          </q-chip>
+        </div>
+      </div>
+
+      <!-- Textarea input -->
+      <q-input
+        v-model="userPrompt"
+        type="textarea"
+        rows="3"
+        outlined
+        dense
+        placeholder="es. 'Studio di consulenza e formazione IT aziendale. Gestiamo screening profili specialistici, verifica competenze su fonti pubbliche, contatti professionali e tracciamento GDPR...'"
+        class="q-mb-md"
+      />
+
+      <div class="row justify-end q-mb-lg">
+        <q-btn
+          color="primary"
+          unelevated
+          rounded
+          icon="auto_awesome"
+          label="Generate DBS Attitude"
+          :loading="taskStore.isGeneratingAttitude"
+          @click="handleGenerate"
+        />
+      </div>
+
+      <!-- Generated Preview Section -->
+      <template v-if="generatedAttitude">
+        <q-separator class="q-my-md" />
+        <div class="text-subtitle1 text-weight-bold text-navy q-mb-sm row items-center">
+          <q-icon name="preview" class="q-mr-xs" color="secondary" />
+          Generated Constitution Preview
         </div>
 
-        <!-- Quick Examples -->
+        <div class="row q-col-gutter-md q-mb-md">
+          <!-- Sector & Tone -->
+          <div class="col-12 col-md-6">
+            <q-card flat bordered class="q-pa-sm bg-grey-1">
+              <div class="text-caption text-grey-6 text-uppercase text-weight-bold">
+                Domain / Sector
+              </div>
+              <div class="text-body1 text-weight-bold text-navy">
+                {{ generatedAttitude.industryScope }}
+              </div>
+            </q-card>
+          </div>
+          <div class="col-12 col-md-6">
+            <q-card flat bordered class="q-pa-sm bg-grey-1">
+              <div class="text-caption text-grey-6 text-uppercase text-weight-bold">
+                Recommended Tone
+              </div>
+              <div class="text-body1 text-weight-bold text-secondary">
+                {{ generatedAttitude.tone }}
+              </div>
+            </q-card>
+          </div>
+        </div>
+
+        <!-- Skill Matrix -->
         <div class="q-mb-md">
-          <div class="text-caption text-weight-bold text-grey-7 q-mb-xs">
-            Oppure seleziona un esempio rapido:
+          <div class="text-caption text-grey-7 text-weight-bold q-mb-xs">
+            🧠 Extracted Skill Matrix:
           </div>
           <div class="row q-gutter-xs">
             <q-chip
-              v-for="example in presetPromptExamples"
-              :key="example.label"
-              clickable
-              outline
-              color="primary"
+              v-for="skill in generatedAttitude.skills"
+              :key="skill"
+              color="secondary"
+              text-color="white"
               size="sm"
-              @click="selectPresetPrompt(example.prompt)"
+              icon="psychology"
             >
-              {{ example.label }}
+              {{ skill }}
             </q-chip>
           </div>
         </div>
 
-        <!-- Textarea input -->
-        <q-input
-          v-model="userPrompt"
-          type="textarea"
-          rows="3"
-          outlined
-          dense
-          placeholder="es. 'Studio di consulenza e formazione IT aziendale. Gestiamo screening profili specialistici, verifica competenze su fonti pubbliche, contatti professionali e tracciamento GDPR...'"
-          class="q-mb-md"
-        />
+        <!-- DO & DON'T Rules -->
+        <div class="row q-col-gutter-md q-mb-md">
+          <div class="col-12 col-md-6">
+            <div class="text-caption text-positive text-weight-bold q-mb-xs">
+              ✅ Binding Rules (DO):
+            </div>
+            <q-list bordered dense separator class="rounded-borders bg-green-1">
+              <q-item v-for="item in generatedAttitude.rules.doList" :key="item">
+                <q-item-section avatar min-width="24px">
+                  <q-icon name="check_circle" color="positive" size="xs" />
+                </q-item-section>
+                <q-item-section class="text-caption">{{ item }}</q-item-section>
+              </q-item>
+            </q-list>
+          </div>
 
-        <div class="row justify-end q-mb-lg">
-          <q-btn
-            color="primary"
-            unelevated
-            rounded
-            icon="auto_awesome"
-            label="Generate DBS Attitude"
-            :loading="taskStore.isGeneratingAttitude"
-            @click="handleGenerate"
-          />
+          <div class="col-12 col-md-6">
+            <div class="text-caption text-negative text-weight-bold q-mb-xs">
+              🚫 Strict Restrictions (DON'T):
+            </div>
+            <q-list bordered dense separator class="rounded-borders bg-red-1">
+              <q-item v-for="item in generatedAttitude.rules.dontList" :key="item">
+                <q-item-section avatar min-width="24px">
+                  <q-icon name="cancel" color="negative" size="xs" />
+                </q-item-section>
+                <q-item-section class="text-caption">{{ item }}</q-item-section>
+              </q-item>
+            </q-list>
+          </div>
         </div>
+      </template>
+    </div>
 
-        <!-- Generated Preview Section -->
-        <template v-if="generatedAttitude">
-          <q-separator class="q-my-md" />
-          <div class="text-subtitle1 text-weight-bold text-navy q-mb-sm row items-center">
-            <q-icon name="preview" class="q-mr-xs" color="secondary" />
-            Generated Constitution Preview
-          </div>
-
-          <div class="row q-col-gutter-md q-mb-md">
-            <!-- Sector & Tone -->
-            <div class="col-12 col-md-6">
-              <q-card flat bordered class="q-pa-sm bg-grey-1">
-                <div class="text-caption text-grey-6 text-uppercase text-weight-bold">
-                  Domain / Sector
-                </div>
-                <div class="text-body1 text-weight-bold text-navy">
-                  {{ generatedAttitude.industryScope }}
-                </div>
-              </q-card>
-            </div>
-            <div class="col-12 col-md-6">
-              <q-card flat bordered class="q-pa-sm bg-grey-1">
-                <div class="text-caption text-grey-6 text-uppercase text-weight-bold">
-                  Recommended Tone
-                </div>
-                <div class="text-body1 text-weight-bold text-secondary">
-                  {{ generatedAttitude.tone }}
-                </div>
-              </q-card>
-            </div>
-          </div>
-
-          <!-- Skill Matrix -->
-          <div class="q-mb-md">
-            <div class="text-caption text-grey-7 text-weight-bold q-mb-xs">
-              🧠 Extracted Skill Matrix:
-            </div>
-            <div class="row q-gutter-xs">
-              <q-chip
-                v-for="skill in generatedAttitude.skills"
-                :key="skill"
-                color="secondary"
-                text-color="white"
-                size="sm"
-                icon="psychology"
-              >
-                {{ skill }}
-              </q-chip>
-            </div>
-          </div>
-
-          <!-- DO & DON'T Rules -->
-          <div class="row q-col-gutter-md q-mb-md">
-            <div class="col-12 col-md-6">
-              <div class="text-caption text-positive text-weight-bold q-mb-xs">
-                ✅ Binding Rules (DO):
-              </div>
-              <q-list bordered dense separator class="rounded-borders bg-green-1">
-                <q-item v-for="item in generatedAttitude.rules.doList" :key="item">
-                  <q-item-section avatar min-width="24px">
-                    <q-icon name="check_circle" color="positive" size="xs" />
-                  </q-item-section>
-                  <q-item-section class="text-caption">{{ item }}</q-item-section>
-                </q-item>
-              </q-list>
-            </div>
-
-            <div class="col-12 col-md-6">
-              <div class="text-caption text-negative text-weight-bold q-mb-xs">
-                🚫 Strict Restrictions (DON'T):
-              </div>
-              <q-list bordered dense separator class="rounded-borders bg-red-1">
-                <q-item v-for="item in generatedAttitude.rules.dontList" :key="item">
-                  <q-item-section avatar min-width="24px">
-                    <q-icon name="cancel" color="negative" size="xs" />
-                  </q-item-section>
-                  <q-item-section class="text-caption">{{ item }}</q-item-section>
-                </q-item>
-              </q-list>
-            </div>
-          </div>
-        </template>
-      </q-card-section>
-
-      <!-- Actions -->
-      <q-card-actions align="right" class="bg-grey-2 q-pa-md">
-        <q-btn flat label="Cancel" color="grey-8" @click="handleClose" />
+    <!-- Actions -->
+    <template #footer>
+      <div class="row items-center justify-end full-width q-gutter-sm">
+        <q-btn flat label="Cancel" color="grey-8" no-caps @click="handleClose" />
         <q-btn
           v-if="generatedAttitude"
           color="positive"
@@ -305,12 +300,13 @@ function handleClose(): void {
           rounded
           icon="rocket_launch"
           label="Apply to AI Attitude"
+          no-caps
           :loading="taskStore.isLoading"
           @click="handleApply"
         />
-      </q-card-actions>
-    </q-card>
-  </q-dialog>
+      </div>
+    </template>
+  </AppFloatingWindow>
 </template>
 
 <style scoped lang="scss">

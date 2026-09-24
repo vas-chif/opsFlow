@@ -20,10 +20,13 @@ import type {
   TaskTimelineEvent,
 } from "../types/models";
 import type { ChatSession, FloatingWindow } from "../types/chat";
+import { useFloatingWindowManager } from "../composables/useFloatingWindowManager";
 
 export type { ChatSession, FloatingWindow };
 
 export const useTaskChatStore = defineStore("taskChat", () => {
+  const windowManager = useFloatingWindowManager();
+
   // Map of active chat sessions keyed by taskId
   const sessions = ref<Map<string, ChatSession>>(new Map());
 
@@ -35,7 +38,7 @@ export const useTaskChatStore = defineStore("taskChat", () => {
 
   // Array of open draggable/resizable floating windows
   const floatingWindows = ref<FloatingWindow[]>([]);
-  const highestZIndex = ref(1000);
+  const highestZIndex = windowManager.globalHighestZ;
 
   // Map of key points per taskId (UI Working Memory — Rolling Summary)
   const keyPointsMap = ref<Map<string, TaskKeyPoint[]>>(new Map());
@@ -195,9 +198,9 @@ export const useTaskChatStore = defineStore("taskChat", () => {
 
     const existing = floatingWindows.value.find((w) => w.taskId === task.id);
     if (existing) {
-      highestZIndex.value += 1;
-      existing.zIndex = highestZIndex.value;
+      existing.zIndex = windowManager.bringToFront(`chat-${task.id}`);
       existing.isMinimized = false;
+      windowManager.updateWindowState(`chat-${task.id}`, { isMinimized: false });
       const idx = floatingWindows.value.indexOf(existing);
       if (idx > -1 && idx !== floatingWindows.value.length - 1) {
         floatingWindows.value.splice(idx, 1);
@@ -206,13 +209,13 @@ export const useTaskChatStore = defineStore("taskChat", () => {
       return existing;
     }
 
-    highestZIndex.value += 1;
     const count = floatingWindows.value.length;
     const targetWidth = Math.min(920, Math.max(760, window.innerWidth - 60));
     const targetHeight = Math.min(580, Math.max(460, window.innerHeight - 80));
     const initialX = Math.min(window.innerWidth - targetWidth - 20, 80 + (count % 4) * 35);
     const initialY = Math.min(window.innerHeight - targetHeight - 20, 60 + (count % 4) * 30);
 
+    const winZ = windowManager.bringToFront(`chat-${task.id}`);
     const newWin: FloatingWindow = {
       id: `win-${task.id}`,
       taskId: task.id,
@@ -220,23 +223,42 @@ export const useTaskChatStore = defineStore("taskChat", () => {
       task,
       position: { x: Math.max(15, initialX), y: Math.max(15, initialY) },
       size: { width: targetWidth, height: targetHeight },
-      zIndex: highestZIndex.value,
+      zIndex: winZ,
       isMinimized: false,
     };
 
     floatingWindows.value.push(newWin);
+
+    windowManager.registerWindow({
+      id: `chat-${task.id}`,
+      title: `Assistente IA: ${task.title}`,
+      icon: "smart_toy",
+      iconColor: "amber-5",
+      isMinimized: false,
+      focus: () => {
+        newWin.isMinimized = false;
+        bringToFront(task.id);
+      },
+      toggleMinimize: () => {
+        toggleMinimizeWindow(task.id);
+      },
+      close: () => {
+        closeFloatingWindow(task.id);
+      },
+    });
+
     return newWin;
   } /*end openFloatingWindow*/
 
   function closeFloatingWindow(taskId: string): void {
     floatingWindows.value = floatingWindows.value.filter((w) => w.taskId !== taskId);
+    windowManager.unregisterWindow(`chat-${taskId}`);
   } /*end closeFloatingWindow*/
 
   function bringToFront(taskId: string): void {
     const win = floatingWindows.value.find((w) => w.taskId === taskId);
     if (win) {
-      highestZIndex.value += 1;
-      win.zIndex = highestZIndex.value;
+      win.zIndex = windowManager.bringToFront(`chat-${taskId}`);
       const idx = floatingWindows.value.indexOf(win);
       if (idx > -1 && idx !== floatingWindows.value.length - 1) {
         floatingWindows.value.splice(idx, 1);
@@ -263,6 +285,7 @@ export const useTaskChatStore = defineStore("taskChat", () => {
     const win = floatingWindows.value.find((w) => w.taskId === taskId);
     if (win) {
       win.isMinimized = !win.isMinimized;
+      windowManager.updateWindowState(`chat-${taskId}`, { isMinimized: win.isMinimized });
     }
   } /*end toggleMinimizeWindow*/
 
@@ -271,8 +294,7 @@ export const useTaskChatStore = defineStore("taskChat", () => {
     if (win) {
       win.isFullscreen = !win.isFullscreen;
       if (win.isFullscreen) {
-        highestZIndex.value += 1;
-        win.zIndex = highestZIndex.value;
+        win.zIndex = windowManager.bringToFront(`chat-${taskId}`);
         const idx = floatingWindows.value.indexOf(win);
         if (idx > -1 && idx !== floatingWindows.value.length - 1) {
           floatingWindows.value.splice(idx, 1);
@@ -285,18 +307,11 @@ export const useTaskChatStore = defineStore("taskChat", () => {
   function sendToBack(taskId: string): void {
     const win = floatingWindows.value.find((w) => w.taskId === taskId);
     if (win) {
-      const lowestZ = Math.min(...floatingWindows.value.map((w) => w.zIndex));
-      win.zIndex = Math.max(10, lowestZ - 1);
+      win.zIndex = windowManager.sendToBack(`chat-${taskId}`);
       const idx = floatingWindows.value.indexOf(win);
       if (idx > 0) {
         floatingWindows.value.splice(idx, 1);
         floatingWindows.value.unshift(win);
-      }
-      const otherWins = floatingWindows.value.filter((w) => w.taskId !== taskId);
-      if (otherWins.length > 0) {
-        const topOther = otherWins[otherWins.length - 1]!;
-        highestZIndex.value += 1;
-        topOther.zIndex = highestZIndex.value;
       }
     }
   } /*end sendToBack*/

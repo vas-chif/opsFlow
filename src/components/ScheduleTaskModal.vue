@@ -44,6 +44,7 @@ import type {
 } from "../types/models";
 
 // ── Components ───────────────────────────────────────────────────────────────
+import AppFloatingWindow from "./AppFloatingWindow.vue";
 import SheetIntegrationConfigCard from "./SheetIntegrationConfigCard.vue";
 
 // ── Stores ───────────────────────────────────────────────────────────────────
@@ -388,360 +389,348 @@ function getStatusLabel(status: string): string {
 </script>
 
 <template>
-  <q-dialog v-model="isOpen" persistent transition-show="scale" transition-hide="scale">
-    <q-card
-      class="schedule-modal-card"
-      style="width: 860px; max-width: 95vw; max-height: 92vh; display: flex; flex-direction: column"
-    >
-      <!-- ── Header (Elite Navy & Gold - identical to TaskSettingsModal) ────────── -->
-      <q-card-section class="schedule-modal-card__header row items-center q-py-md q-px-lg">
-        <q-icon name="schedule" size="22px" color="amber-5" class="q-mr-sm" />
-        <div>
-          <div class="text-subtitle1 text-weight-bold text-white">
-            {{ isEditMode ? "Gestisci Monitoraggio" : "⏰ Pianifica Ricerca Ricorrente" }}
+  <AppFloatingWindow
+    v-model="isOpen"
+    window-id="schedule-task-modal"
+    :title="isEditMode ? 'Gestisci Monitoraggio' : '⏰ Pianifica Ricerca Ricorrente'"
+    :subtitle="`Task: ${task.title}`"
+    :badge-label="workspace?.name"
+    badge-color="amber-9"
+    icon="schedule"
+    icon-color="amber-5"
+    :initial-width="880"
+    :initial-height="680"
+    :min-width="480"
+    :min-height="380"
+    @close="isOpen = false"
+  >
+    <template #header-middle v-if="isEditMode && existingJob">
+      <q-chip
+        :color="getStatusColor(existingJob.status)"
+        text-color="white"
+        dense
+        :icon="existingJob.status === 'active' ? 'radio_button_checked' : 'pause_circle'"
+        class="text-weight-bold"
+      >
+        {{ getStatusLabel(existingJob.status) }}
+      </q-chip>
+    </template>
+
+    <!-- ── Body (Off-White #f9f7f2) ──────────────────────────────────── -->
+    <div class="schedule-modal-body q-pa-lg">
+      <div class="schedule-grid">
+        <!-- ── LEFT COLUMN: Frequency & Lifecycle ────────────────── -->
+        <div class="schedule-section">
+          <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs">
+            <q-icon name="repeat" size="18px" color="amber-9" class="q-mr-xs" />
+            Frequenza di Esecuzione
           </div>
-          <div class="text-caption text-amber-2">
-            Task: {{ task.title }} | Workspace: {{ workspace?.name }}
+
+          <!-- Frequency cards list -->
+          <q-list bordered separator class="rounded-borders bg-white q-mb-md">
+            <q-item
+              v-for="opt in FREQUENCY_OPTIONS"
+              :key="opt.value"
+              clickable
+              :active="selectedFrequency === opt.value"
+              active-class="bg-amber-1"
+              @click="selectedFrequency = opt.value"
+              class="frequency-item"
+            >
+              <q-item-section avatar style="min-width: 36px">
+                <q-radio v-model="selectedFrequency" :val="opt.value" color="amber-9" />
+              </q-item-section>
+              <q-item-section>
+                <q-item-label
+                  class="text-subtitle2"
+                  :class="{ 'text-weight-bold': selectedFrequency === opt.value }"
+                >
+                  {{ opt.label }}
+                </q-item-label>
+                <q-item-label caption class="text-grey-7">
+                  {{ opt.desc }}
+                </q-item-label>
+              </q-item-section>
+            </q-item>
+          </q-list>
+
+          <!-- End date (GDPR Art. 5 mandatory) -->
+          <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs q-mt-md">
+            <q-icon name="event" size="18px" color="amber-9" class="q-mr-xs" />
+            Data Limite (GDPR Art. 5)
+            <q-badge color="negative" text-color="white" label="Obbligatoria" class="q-ml-sm" />
           </div>
+          <q-input
+            v-model="endDate"
+            label="Data scadenza monitoraggio"
+            outlined
+            dense
+            class="bg-white rounded-borders q-mb-sm"
+            readonly
+            :hint="endDateFormatted ? `Scade il: ${endDateFormatted}` : 'Seleziona una data limite'"
+          >
+            <template #prepend>
+              <q-icon name="event" color="amber-9" class="cursor-pointer">
+                <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                  <q-date
+                    v-model="endDate"
+                    mask="YYYY/MM/DD"
+                    :options="(d: string) => d >= minEndDate"
+                    today-btn
+                    color="amber-9"
+                    class="schedule-datepicker"
+                  />
+                </q-popup-proxy>
+              </q-icon>
+            </template>
+          </q-input>
+
+          <!-- Step 21 Strada 3: Update mode & Auto-style (DRY Reusable Component) -->
+          <SheetIntegrationConfigCard
+            v-model:update-mode="updateMode"
+            v-model:auto-style-sheet="autoStyleSheet"
+          />
         </div>
-        <q-space />
 
-        <!-- Status chip (edit mode) -->
-        <q-chip
-          v-if="isEditMode && existingJob"
-          :color="getStatusColor(existingJob.status)"
-          text-color="white"
-          dense
-          :icon="existingJob.status === 'active' ? 'radio_button_checked' : 'pause_circle'"
-          class="q-mr-sm text-weight-bold"
-        >
-          {{ getStatusLabel(existingJob.status) }}
-        </q-chip>
-
-        <q-btn flat round dense icon="close" color="white" v-close-popup />
-      </q-card-section>
-
-      <!-- ── Body (Off-White #f9f7f2) ──────────────────────────────────── -->
-      <q-card-section class="schedule-modal-body q-pa-lg">
-        <div class="schedule-grid">
-          <!-- ── LEFT COLUMN: Frequency & Lifecycle ────────────────── -->
-          <div class="schedule-section">
-            <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs">
-              <q-icon name="repeat" size="18px" color="amber-9" class="q-mr-xs" />
-              Frequenza di Esecuzione
+        <!-- ── RIGHT COLUMN: Search config & Sheet target ────────── -->
+        <div class="schedule-section">
+          <!-- Job title — read-only by default, unlock with edit button -->
+          <div
+            class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs row items-center justify-between"
+          >
+            <div class="row items-center">
+              <q-icon name="label" size="18px" color="amber-9" class="q-mr-xs" />
+              Nome del Monitoraggio
             </div>
-
-            <!-- Frequency cards list -->
-            <q-list bordered separator class="rounded-borders bg-white q-mb-md">
-              <q-item
-                v-for="opt in FREQUENCY_OPTIONS"
-                :key="opt.value"
-                clickable
-                :active="selectedFrequency === opt.value"
-                active-class="bg-amber-1"
-                @click="selectedFrequency = opt.value"
-                class="frequency-item"
-              >
-                <q-item-section avatar style="min-width: 36px">
-                  <q-radio v-model="selectedFrequency" :val="opt.value" color="amber-9" />
-                </q-item-section>
-                <q-item-section>
-                  <q-item-label
-                    class="text-subtitle2"
-                    :class="{ 'text-weight-bold': selectedFrequency === opt.value }"
-                  >
-                    {{ opt.label }}
-                  </q-item-label>
-                  <q-item-label caption class="text-grey-7">
-                    {{ opt.desc }}
-                  </q-item-label>
-                </q-item-section>
-              </q-item>
-            </q-list>
-
-            <!-- End date (GDPR Art. 5 mandatory) -->
-            <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs q-mt-md">
-              <q-icon name="event" size="18px" color="amber-9" class="q-mr-xs" />
-              Data Limite (GDPR Art. 5)
-              <q-badge color="negative" text-color="white" label="Obbligatoria" class="q-ml-sm" />
-            </div>
-            <q-input
-              v-model="endDate"
-              label="Data scadenza monitoraggio"
-              outlined
-              dense
-              class="bg-white rounded-borders q-mb-sm"
-              readonly
-              :hint="
-                endDateFormatted ? `Scade il: ${endDateFormatted}` : 'Seleziona una data limite'
-              "
-            >
-              <template #prepend>
-                <q-icon name="event" color="amber-9" class="cursor-pointer">
-                  <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                    <q-date
-                      v-model="endDate"
-                      mask="YYYY/MM/DD"
-                      :options="(d: string) => d >= minEndDate"
-                      today-btn
-                      color="amber-9"
-                      class="schedule-datepicker"
-                    />
-                  </q-popup-proxy>
-                </q-icon>
-              </template>
-            </q-input>
-
-            <!-- Step 21 Strada 3: Update mode & Auto-style (DRY Reusable Component) -->
-            <SheetIntegrationConfigCard
-              v-model:update-mode="updateMode"
-              v-model:auto-style-sheet="autoStyleSheet"
-            />
-          </div>
-
-          <!-- ── RIGHT COLUMN: Search config & Sheet target ────────── -->
-          <div class="schedule-section">
-            <!-- Job title — read-only by default, unlock with edit button -->
-            <div
-              class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs row items-center justify-between"
-            >
-              <div class="row items-center">
-                <q-icon name="label" size="18px" color="amber-9" class="q-mr-xs" />
-                Nome del Monitoraggio
-              </div>
-              <q-btn
-                v-if="isJobTitleLocked"
-                flat
-                dense
-                round
-                size="sm"
-                icon="edit"
-                color="amber-9"
-                @click="isJobTitleLocked = false"
-              >
-                <q-tooltip>Modifica nome monitoraggio</q-tooltip>
-              </q-btn>
-              <q-btn
-                v-else
-                flat
-                dense
-                round
-                size="sm"
-                icon="lock"
-                color="positive"
-                @click="isJobTitleLocked = true"
-              >
-                <q-tooltip>Blocca (Read-Only)</q-tooltip>
-              </q-btn>
-            </div>
-            <!-- Locked: expandable read-only display -->
-            <div
+            <q-btn
               v-if="isJobTitleLocked"
-              class="locked-field-display q-mb-md"
+              flat
+              dense
+              round
+              size="sm"
+              icon="edit"
+              color="amber-9"
               @click="isJobTitleLocked = false"
             >
-              <div class="locked-field-display__text">{{ jobTitle || "—" }}</div>
-              <q-tooltip>Clicca per modificare</q-tooltip>
-            </div>
-            <!-- Unlocked: editable textarea -->
-            <q-input
+              <q-tooltip>Modifica nome monitoraggio</q-tooltip>
+            </q-btn>
+            <q-btn
               v-else
-              v-model="jobTitle"
-              label="Es. Monitoraggio Trainer Kubernetes Italia"
-              outlined
+              flat
               dense
-              type="textarea"
-              :rows="2"
-              autogrow
-              class="bg-white rounded-borders q-mb-md"
-              maxlength="120"
-              counter
-              autofocus
-            />
-
-            <!-- Search query — read-only by default, unlock with edit button -->
-            <div
-              class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs row items-center justify-between"
+              round
+              size="sm"
+              icon="lock"
+              color="positive"
+              @click="isJobTitleLocked = true"
             >
-              <div class="row items-center">
-                <q-icon name="search" size="18px" color="amber-9" class="q-mr-xs" />
-                Query di Ricerca
-              </div>
-              <q-btn
-                v-if="isSearchQueryLocked"
-                flat
-                dense
-                round
-                size="sm"
-                icon="edit"
-                color="amber-9"
-                @click="isSearchQueryLocked = false"
-              >
-                <q-tooltip>Modifica query di ricerca</q-tooltip>
-              </q-btn>
-              <q-btn
-                v-else
-                flat
-                dense
-                round
-                size="sm"
-                icon="lock"
-                color="positive"
-                @click="isSearchQueryLocked = true"
-              >
-                <q-tooltip>Blocca (Read-Only)</q-tooltip>
-              </q-btn>
+              <q-tooltip>Blocca (Read-Only)</q-tooltip>
+            </q-btn>
+          </div>
+          <!-- Locked: expandable read-only display -->
+          <div
+            v-if="isJobTitleLocked"
+            class="locked-field-display q-mb-md"
+            @click="isJobTitleLocked = false"
+          >
+            <div class="locked-field-display__text">{{ jobTitle || "—" }}</div>
+            <q-tooltip>Clicca per modificare</q-tooltip>
+          </div>
+          <!-- Unlocked: editable textarea -->
+          <q-input
+            v-else
+            v-model="jobTitle"
+            label="Es. Monitoraggio Trainer Kubernetes Italia"
+            outlined
+            dense
+            type="textarea"
+            :rows="2"
+            autogrow
+            class="bg-white rounded-borders q-mb-md"
+            maxlength="120"
+            counter
+            autofocus
+          />
+
+          <!-- Search query — read-only by default, unlock with edit button -->
+          <div
+            class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs row items-center justify-between"
+          >
+            <div class="row items-center">
+              <q-icon name="search" size="18px" color="amber-9" class="q-mr-xs" />
+              Query di Ricerca
             </div>
-            <!-- Locked: expandable read-only display -->
-            <div
+            <q-btn
               v-if="isSearchQueryLocked"
-              class="locked-field-display q-mb-sm"
+              flat
+              dense
+              round
+              size="sm"
+              icon="edit"
+              color="amber-9"
               @click="isSearchQueryLocked = false"
             >
-              <div class="locked-field-display__text">{{ searchQuery || "—" }}</div>
-              <q-tooltip>Clicca per modificare</q-tooltip>
-            </div>
-            <div v-if="isSearchQueryLocked" class="text-caption text-grey-7 q-mb-md">
-              Query inviata all&apos;AgenteRicerca ad ogni esecuzione
-            </div>
-            <!-- Unlocked: editable -->
-            <q-input
+              <q-tooltip>Modifica query di ricerca</q-tooltip>
+            </q-btn>
+            <q-btn
               v-else
-              v-model="searchQuery"
-              label="Es. Trainer Kubernetes certificati Italia"
-              outlined
+              flat
               dense
-              type="textarea"
-              :rows="2"
-              autogrow
-              class="bg-white rounded-borders q-mb-md"
-              hint="Query inviata all'AgenteRicerca ad ogni esecuzione"
-              autofocus
-            />
-
-            <!-- Prompt template -->
-            <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs">
-              <q-icon name="smart_toy" size="18px" color="amber-9" class="q-mr-xs" />
-              Istruzioni per AgenteRicerca
-            </div>
-            <q-input
-              v-model="promptTemplate"
-              label="Istruzioni di screening personalizzate..."
-              outlined
-              dense
-              type="textarea"
-              :rows="3"
-              class="bg-white rounded-borders q-mb-md"
-              hint="Criteri di match, focus competenze, esclusioni, etc."
-            />
-
-            <!-- Sheet selector -->
-            <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs">
-              <q-icon name="table_chart" size="18px" color="amber-9" class="q-mr-xs" />
-              Foglio Google di Destinazione
-            </div>
-            <q-select
-              v-model="selectedSheetId"
-              :options="availableSheets"
-              option-value="id"
-              option-label="name"
-              emit-value
-              map-options
-              outlined
-              dense
-              class="bg-white rounded-borders q-mb-md"
-              label="Seleziona il foglio di destinazione"
-              no-options-label="Nessun Google Sheet collegato al workspace"
+              round
+              size="sm"
+              icon="lock"
+              color="positive"
+              @click="isSearchQueryLocked = true"
             >
-              <template #prepend>
-                <q-icon name="table_chart" color="amber-9" />
-              </template>
-              <template #option="scope">
-                <q-item v-bind="scope.itemProps">
-                  <q-item-section avatar>
-                    <q-icon
-                      name="table_chart"
-                      :color="scope.opt.isMaster ? 'amber-9' : 'primary'"
-                    />
-                  </q-item-section>
-                  <q-item-section>
-                    <q-item-label class="text-weight-medium">{{ scope.opt.name }}</q-item-label>
-                    <q-item-label caption class="text-grey-6"
-                      >{{ scope.opt.id?.slice(0, 24) }}...</q-item-label
-                    >
-                  </q-item-section>
-                  <q-item-section side>
-                    <q-badge
-                      v-if="scope.opt.isMaster"
-                      color="amber-9"
-                      text-color="dark"
-                      label="⭐ Master"
-                    />
-                  </q-item-section>
-                </q-item>
-              </template>
-            </q-select>
-
-            <!-- Tab name -->
-            <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs">
-              <q-icon name="tab" size="18px" color="amber-9" class="q-mr-xs" />
-              Nome Scheda (tab) Interna del Foglio
-            </div>
-            <q-input
-              v-model="selectedSheetTab"
-              label="Nome scheda (tab)"
-              outlined
-              dense
-              class="bg-white rounded-borders q-mb-md"
-              hint="Nome del foglio interno. Verrà creato automaticamente se non esiste."
-            >
-              <template #prepend>
-                <q-icon name="tab" color="grey-7" />
-              </template>
-            </q-input>
-
-            <!-- Dedup config (advanced) -->
-            <q-expansion-item
-              icon="security"
-              label="Configurazione Deduplicazione Avanzata"
-              header-class="text-weight-bold text-navy"
-              class="bg-white rounded-borders border-gold-light q-mb-sm"
-            >
-              <div class="dedup-config q-pa-md bg-grey-1 rounded-borders">
-                <div class="row items-center text-caption text-grey-8 q-mb-sm">
-                  <q-icon name="info" color="amber-9" size="16px" class="q-mr-xs" />
-                  <span>Dual-Key: URL profilo + Nome e Cognome (case-insensitive)</span>
-                </div>
-                <div class="row q-gutter-sm">
-                  <q-input
-                    v-model.number="dedupNameColumnIndex"
-                    label="Indice colonna Nome (0-based)"
-                    outlined
-                    dense
-                    type="number"
-                    class="col bg-white rounded-borders"
-                    hint="Default: 1 = colonna B"
-                  />
-                  <q-input
-                    v-model.number="dedupUrlColumnIndex"
-                    label="Indice colonna URL (0-based)"
-                    outlined
-                    dense
-                    type="number"
-                    class="col bg-white rounded-borders"
-                    hint="Default: 7 = colonna H"
-                  />
-                </div>
-              </div>
-            </q-expansion-item>
+              <q-tooltip>Blocca (Read-Only)</q-tooltip>
+            </q-btn>
           </div>
+          <!-- Locked: expandable read-only display -->
+          <div
+            v-if="isSearchQueryLocked"
+            class="locked-field-display q-mb-sm"
+            @click="isSearchQueryLocked = false"
+          >
+            <div class="locked-field-display__text">{{ searchQuery || "—" }}</div>
+            <q-tooltip>Clicca per modificare</q-tooltip>
+          </div>
+          <div v-if="isSearchQueryLocked" class="text-caption text-grey-7 q-mb-md">
+            Query inviata all&apos;AgenteRicerca ad ogni esecuzione
+          </div>
+          <!-- Unlocked: editable -->
+          <q-input
+            v-else
+            v-model="searchQuery"
+            label="Es. Trainer Kubernetes certificati Italia"
+            outlined
+            dense
+            type="textarea"
+            :rows="2"
+            autogrow
+            class="bg-white rounded-borders q-mb-md"
+            hint="Query inviata all'AgenteRicerca ad ogni esecuzione"
+            autofocus
+          />
+
+          <!-- Prompt template -->
+          <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs">
+            <q-icon name="smart_toy" size="18px" color="amber-9" class="q-mr-xs" />
+            Istruzioni per AgenteRicerca
+          </div>
+          <q-input
+            v-model="promptTemplate"
+            label="Istruzioni di screening personalizzate..."
+            outlined
+            dense
+            type="textarea"
+            :rows="3"
+            class="bg-white rounded-borders q-mb-md"
+            hint="Criteri di match, focus competenze, esclusioni, etc."
+          />
+
+          <!-- Sheet selector -->
+          <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs">
+            <q-icon name="table_chart" size="18px" color="amber-9" class="q-mr-xs" />
+            Foglio Google di Destinazione
+          </div>
+          <q-select
+            v-model="selectedSheetId"
+            :options="availableSheets"
+            option-value="id"
+            option-label="name"
+            emit-value
+            map-options
+            outlined
+            dense
+            class="bg-white rounded-borders q-mb-md"
+            label="Seleziona il foglio di destinazione"
+            no-options-label="Nessun Google Sheet collegato al workspace"
+          >
+            <template #prepend>
+              <q-icon name="table_chart" color="amber-9" />
+            </template>
+            <template #option="scope">
+              <q-item v-bind="scope.itemProps">
+                <q-item-section avatar>
+                  <q-icon name="table_chart" :color="scope.opt.isMaster ? 'amber-9' : 'primary'" />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label class="text-weight-medium">{{ scope.opt.name }}</q-item-label>
+                  <q-item-label caption class="text-grey-6"
+                    >{{ scope.opt.id?.slice(0, 24) }}...</q-item-label
+                  >
+                </q-item-section>
+                <q-item-section side>
+                  <q-badge
+                    v-if="scope.opt.isMaster"
+                    color="amber-9"
+                    text-color="dark"
+                    label="⭐ Master"
+                  />
+                </q-item-section>
+              </q-item>
+            </template>
+          </q-select>
+
+          <!-- Tab name -->
+          <div class="section-label text-subtitle2 text-weight-bold text-navy q-mb-xs">
+            <q-icon name="tab" size="18px" color="amber-9" class="q-mr-xs" />
+            Nome Scheda (tab) Interna del Foglio
+          </div>
+          <q-input
+            v-model="selectedSheetTab"
+            label="Nome scheda (tab)"
+            outlined
+            dense
+            class="bg-white rounded-borders q-mb-md"
+            hint="Nome del foglio interno. Verrà creato automaticamente se non esiste."
+          >
+            <template #prepend>
+              <q-icon name="tab" color="grey-7" />
+            </template>
+          </q-input>
+
+          <!-- Dedup config (advanced) -->
+          <q-expansion-item
+            icon="security"
+            label="Configurazione Deduplicazione Avanzata"
+            header-class="text-weight-bold text-navy"
+            class="bg-white rounded-borders border-gold-light q-mb-sm"
+          >
+            <div class="dedup-config q-pa-md bg-grey-1 rounded-borders">
+              <div class="row items-center text-caption text-grey-8 q-mb-sm">
+                <q-icon name="info" color="amber-9" size="16px" class="q-mr-xs" />
+                <span>Dual-Key: URL profilo + Nome e Cognome (case-insensitive)</span>
+              </div>
+              <div class="row q-gutter-sm">
+                <q-input
+                  v-model.number="dedupNameColumnIndex"
+                  label="Indice colonna Nome (0-based)"
+                  outlined
+                  dense
+                  type="number"
+                  class="col bg-white rounded-borders"
+                  hint="Default: 1 = colonna B"
+                />
+                <q-input
+                  v-model.number="dedupUrlColumnIndex"
+                  label="Indice colonna URL (0-based)"
+                  outlined
+                  dense
+                  type="number"
+                  class="col bg-white rounded-borders"
+                  hint="Default: 7 = colonna H"
+                />
+              </div>
+            </div>
+          </q-expansion-item>
         </div>
-      </q-card-section>
+      </div>
+    </div>
 
-      <q-separator />
-
-      <!-- ── Footer Actions (Clean White & Amber-9) ───────────────────────── -->
-      <q-card-actions align="right" class="q-pa-md bg-white">
+    <!-- ── Footer Actions (Clean White & Amber-9) ───────────────────────── -->
+    <template #footer>
+      <div class="row items-center justify-end full-width q-gutter-sm">
         <!-- Delete / Pause (edit mode only) -->
         <template v-if="isEditMode && existingJob">
           <q-btn
@@ -767,7 +756,7 @@ function getStatusLabel(status: string): string {
 
         <q-space />
 
-        <q-btn flat label="Annulla" color="grey-8" no-caps v-close-popup />
+        <q-btn flat label="Annulla" color="grey-8" no-caps @click="isOpen = false" />
         <q-btn
           unelevated
           color="amber-9"
@@ -780,9 +769,9 @@ function getStatusLabel(status: string): string {
           :disable="!canSave"
           @click="handleSave"
         />
-      </q-card-actions>
-    </q-card>
-  </q-dialog>
+      </div>
+    </template>
+  </AppFloatingWindow>
 </template>
 
 <style scoped lang="scss">

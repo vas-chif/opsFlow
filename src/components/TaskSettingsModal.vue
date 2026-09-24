@@ -29,6 +29,7 @@ import type {
 } from "../types/models";
 
 // ── Components ───────────────────────────────────────────────────────────────
+import AppFloatingWindow from "./AppFloatingWindow.vue";
 import SheetIntegrationConfigCard from "./SheetIntegrationConfigCard.vue";
 
 // ── Stores ───────────────────────────────────────────────────────────────────
@@ -393,472 +394,468 @@ const handleSave = async (): Promise<void> => {
 </script>
 
 <template>
-  <q-dialog v-model="isOpen" persistent transition-show="scale" transition-hide="scale">
-    <q-card class="task-settings-card column no-wrap">
-      <!-- Header (Elite Navy & Gold) - Fixed -->
-      <q-card-section class="task-settings-card__header row items-center q-py-md q-px-lg shrink-0">
-        <q-icon name="tune" size="22px" color="amber-5" class="q-mr-sm" />
-        <div>
-          <div class="text-subtitle1 text-weight-bold text-white">Impostazioni Operative Task</div>
-          <div class="text-caption text-amber-2">
-            Task: {{ task.title }} | Workspace: {{ workspace?.name }}
-          </div>
-        </div>
-        <q-space />
-        <q-btn flat round dense icon="close" color="white" v-close-popup />
-      </q-card-section>
+  <AppFloatingWindow
+    v-model="isOpen"
+    :window-id="`task-settings-${task.id}`"
+    title="Impostazioni Operative Task"
+    :subtitle="`Task: ${task.title}`"
+    :badge-label="workspace?.name"
+    badge-color="amber-9"
+    icon="tune"
+    icon-color="amber-5"
+    :initial-width="840"
+    :initial-height="660"
+    :min-width="480"
+    :min-height="380"
+    @close="isOpen = false"
+  >
+    <!-- Navigation Tabs - Fixed -->
+    <q-tabs
+      v-model="activeTab"
+      dense
+      active-color="amber-9"
+      indicator-color="amber-9"
+      align="left"
+      class="task-settings-card__tabs text-grey-7 bg-grey-2 shrink-0"
+    >
+      <!-- Step 21: Tab 1 — Obiettivo & Prompt IA (NEW, prioritario) -->
+      <q-tab name="prompt" icon="psychology" label="1. Obiettivo &amp; Prompt IA" no-caps />
+      <q-tab name="sheet" icon="table_chart" label="2. Fogli Google &amp; Schede" no-caps />
+      <q-tab name="email" icon="mail" label="3. Firma &amp; Intestazione Email" no-caps />
+      <q-tab name="sync" icon="cloud_sync" label="4. Master DB &amp; Cronologia" no-caps />
+    </q-tabs>
 
-      <!-- Navigation Tabs - Fixed -->
-      <q-tabs
+    <q-separator class="shrink-0" />
+
+    <!-- Tab Content - Scrollable Body -->
+    <div class="col task-settings-card__body q-pa-none">
+      <q-tab-panels
         v-model="activeTab"
-        dense
-        active-color="amber-9"
-        indicator-color="amber-9"
-        align="left"
-        class="task-settings-card__tabs text-grey-7 bg-grey-2 shrink-0"
+        animated
+        class="full-height task-settings-scroll-area custom-scrollbar q-pa-lg bg-transparent"
       >
-        <!-- Step 21: Tab 1 — Obiettivo & Prompt IA (NEW, prioritario) -->
-        <q-tab name="prompt" icon="psychology" label="1. Obiettivo &amp; Prompt IA" no-caps />
-        <q-tab name="sheet" icon="table_chart" label="2. Fogli Google &amp; Schede" no-caps />
-        <q-tab name="email" icon="mail" label="3. Firma &amp; Intestazione Email" no-caps />
-        <q-tab name="sync" icon="cloud_sync" label="4. Master DB &amp; Cronologia" no-caps />
-      </q-tabs>
+        <!-- TAB 0: OBIETTIVO & PROMPT IA (Step 21) -->
+        <q-tab-panel name="prompt" class="q-pa-none">
+          <div class="text-subtitle2 text-weight-bold text-navy q-mb-xs">
+            🎯 Obiettivo &amp; Prompt IA per questo Task
+          </div>
+          <p class="text-caption text-grey-7 q-mb-md">
+            Modifica il titolo, la categoria operativa e il prompt/obiettivo dell'Agente IA per
+            questo task attivo. Le modifiche sono immediate e senza perdita di contesto.
+          </p>
 
-      <q-separator class="shrink-0" />
+          <!-- Titolo Task -->
+          <div class="q-mb-md">
+            <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">📝 Titolo Task:</div>
+            <q-input
+              v-model="editTitle"
+              outlined
+              dense
+              placeholder="Es. Docente Oracle/RAC Milano | NobleProg"
+              :rules="[(v: string) => v.trim().length > 0 || 'Il titolo è obbligatorio']"
+            >
+              <template #prepend>
+                <q-icon name="title" color="amber-9" />
+              </template>
+            </q-input>
+          </div>
 
-      <!-- Tab Content - Scrollable Body -->
-      <q-card-section class="col task-settings-card__body q-pa-none">
-        <q-tab-panels
-          v-model="activeTab"
-          animated
-          class="full-height task-settings-scroll-area custom-scrollbar q-pa-lg bg-transparent"
-        >
-          <!-- TAB 0: OBIETTIVO & PROMPT IA (Step 21) -->
-          <q-tab-panel name="prompt" class="q-pa-none">
-            <div class="text-subtitle2 text-weight-bold text-navy q-mb-xs">
-              🎯 Obiettivo &amp; Prompt IA per questo Task
+          <!-- Categoria Operativa -->
+          <div class="q-mb-md">
+            <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
+              🏷️ Categoria Operativa:
             </div>
-            <p class="text-caption text-grey-7 q-mb-md">
-              Modifica il titolo, la categoria operativa e il prompt/obiettivo dell'Agente IA per
-              questo task attivo. Le modifiche sono immediate e senza perdita di contesto.
-            </p>
+            <q-select
+              v-model="editCategory"
+              outlined
+              dense
+              :options="[
+                { label: '⚙️ Generale / Operativo', value: 'general' },
+                { label: '🔍 Ricerca &amp; Screening', value: 'web_search' },
+                { label: '📊 Sincronizzazione Sheets', value: 'sheet_sync' },
+                { label: '✉️ Bozze Gmail', value: 'gmail_draft' },
+                { label: '📄 Analisi PDF', value: 'pdf_analysis' },
+              ]"
+              emit-value
+              map-options
+              option-value="value"
+              option-label="label"
+            >
+              <template #prepend>
+                <q-icon name="category" color="amber-9" />
+              </template>
+            </q-select>
+          </div>
 
-            <!-- Titolo Task -->
-            <div class="q-mb-md">
-              <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">📝 Titolo Task:</div>
-              <q-input
-                v-model="editTitle"
-                outlined
-                dense
-                placeholder="Es. Docente Oracle/RAC Milano | NobleProg"
-                :rules="[(v: string) => v.trim().length > 0 || 'Il titolo è obbligatorio']"
-              >
-                <template #prepend>
-                  <q-icon name="title" color="amber-9" />
-                </template>
-              </q-input>
+          <!-- Prompt / Obiettivo Agente IA -->
+          <div class="q-mb-md">
+            <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
+              🤖 Prompt / Obiettivo dell'Agente IA:
             </div>
+            <q-input
+              v-model="editPrompt"
+              type="textarea"
+              rows="7"
+              outlined
+              dense
+              placeholder="Es. Trova candidati docenti Oracle/RAC su LinkedIn e Malt in Lombardia, genera bozze email personalizzate e compila il foglio di monitoraggio..."
+              hint="Questo è l'obiettivo che l'Agente IA utilizzerà ad ogni esecuzione del task."
+              class="q-mb-sm"
+            >
+              <template #prepend>
+                <q-icon name="smart_toy" color="amber-9" />
+              </template>
+            </q-input>
+          </div>
 
-            <!-- Categoria Operativa -->
-            <div class="q-mb-md">
-              <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
-                🏷️ Categoria Operativa:
-              </div>
-              <q-select
-                v-model="editCategory"
-                outlined
-                dense
-                :options="[
-                  { label: '⚙️ Generale / Operativo', value: 'general' },
-                  { label: '🔍 Ricerca &amp; Screening', value: 'web_search' },
-                  { label: '📊 Sincronizzazione Sheets', value: 'sheet_sync' },
-                  { label: '✉️ Bozze Gmail', value: 'gmail_draft' },
-                  { label: '📄 Analisi PDF', value: 'pdf_analysis' },
-                ]"
-                emit-value
-                map-options
-                option-value="value"
-                option-label="label"
-              >
-                <template #prepend>
-                  <q-icon name="category" color="amber-9" />
-                </template>
-              </q-select>
-            </div>
-
-            <!-- Prompt / Obiettivo Agente IA -->
-            <div class="q-mb-md">
-              <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
-                🤖 Prompt / Obiettivo dell'Agente IA:
-              </div>
-              <q-input
-                v-model="editPrompt"
-                type="textarea"
-                rows="7"
-                outlined
-                dense
-                placeholder="Es. Trova candidati docenti Oracle/RAC su LinkedIn e Malt in Lombardia, genera bozze email personalizzate e compila il foglio di monitoraggio..."
-                hint="Questo è l'obiettivo che l'Agente IA utilizzerà ad ogni esecuzione del task."
-                class="q-mb-sm"
-              >
-                <template #prepend>
-                  <q-icon name="smart_toy" color="amber-9" />
-                </template>
-              </q-input>
-            </div>
-
-            <!-- Step 21 §1.5: Rigenera Sotto-Task con AgentePlanner -->
-            <div class="q-pa-sm bg-blue-1 rounded-borders border-primary-light q-mb-xs">
-              <div class="row items-center justify-between no-wrap">
-                <div class="col">
-                  <div class="text-caption text-weight-bold text-primary">
-                    ✨ Rigenera Sotto-Task
-                  </div>
-                  <div class="text-caption text-grey-7">
-                    Usa AgentePlanner per scomporre automaticamente il nuovo prompt in sotto-task
-                    operative.
-                  </div>
-                </div>
-                <q-btn
-                  outline
-                  dense
-                  no-caps
-                  size="sm"
-                  color="primary"
-                  icon="auto_awesome"
-                  label="Rigenera"
-                  :loading="isReplanningSubtasks"
-                  class="q-ml-md"
-                  @click="handleTriggerRegenerate"
-                >
-                  <q-tooltip>Ri-decompone il task aggiornato con AgentePlanner</q-tooltip>
-                </q-btn>
-              </div>
-            </div>
-          </q-tab-panel>
-
-          <!-- TAB 1: GOOGLE SHEETS (MULTI-SELECT) -->
-          <q-tab-panel name="sheet" class="q-pa-none">
-            <div class="text-subtitle2 text-weight-bold text-navy q-mb-xs">
-              📊 Fogli Google di Lavoro per questo Task (Multi-selezione):
-            </div>
-            <p class="text-caption text-grey-7 q-mb-md">
-              Seleziona uno o più fogli Google da collegare a questo task. L'Agente IA conoscerà
-              tutti i fogli selezionati e potrà leggere o salvare dati su ciascuno di essi in base
-              alle tue istruzioni.
-            </p>
-
-            <!-- Available Sheets Multi-Select List -->
-            <div v-if="availableWorkspaceSheets.length > 0" class="q-mb-md">
-              <div class="row items-center justify-between q-mb-xs">
-                <div class="text-caption text-weight-bold text-grey-8">
-                  Seleziona dalla libreria del Workspace:
-                </div>
-                <div class="row q-gutter-xs">
-                  <q-btn
-                    flat
-                    dense
-                    no-caps
-                    size="xs"
-                    color="primary"
-                    label="Seleziona tutti"
-                    @click="selectAllSheets"
-                  />
-                  <span class="text-grey-4">|</span>
-                  <q-btn
-                    flat
-                    dense
-                    no-caps
-                    size="xs"
-                    color="grey-7"
-                    label="Deseleziona tutti"
-                    @click="clearSelectedSheets"
-                  />
+          <!-- Step 21 §1.5: Rigenera Sotto-Task con AgentePlanner -->
+          <div class="q-pa-sm bg-blue-1 rounded-borders border-primary-light q-mb-xs">
+            <div class="row items-center justify-between no-wrap">
+              <div class="col">
+                <div class="text-caption text-weight-bold text-primary">✨ Rigenera Sotto-Task</div>
+                <div class="text-caption text-grey-7">
+                  Usa AgentePlanner per scomporre automaticamente il nuovo prompt in sotto-task
+                  operative.
                 </div>
               </div>
-
-              <q-list bordered separator class="rounded-borders bg-white">
-                <q-item
-                  v-for="sheet in availableWorkspaceSheets"
-                  :key="sheet.id"
-                  clickable
-                  :active="isSheetSelected(sheet.id)"
-                  active-class="bg-amber-1"
-                  @click="toggleSheet(sheet)"
-                >
-                  <q-item-section avatar style="min-width: 40px">
-                    <q-checkbox
-                      :model-value="isSheetSelected(sheet.id)"
-                      color="amber-9"
-                      @update:model-value="toggleSheet(sheet)"
-                      @click.stop
-                    />
-                  </q-item-section>
-
-                  <q-item-section>
-                    <q-item-label class="text-subtitle2 row items-center no-wrap">
-                      <span :class="{ 'text-weight-bold': isSheetSelected(sheet.id) }">
-                        {{ sheet.name }}
-                      </span>
-                      <q-badge
-                        v-if="primarySheetId === sheet.id"
-                        color="positive"
-                        text-color="white"
-                        label="🎯 Primario"
-                        class="q-ml-sm"
-                      >
-                        <q-tooltip>Foglio target per la scrittura automatica predefinita</q-tooltip>
-                      </q-badge>
-                      <q-badge
-                        v-else-if="sheet.isMaster"
-                        color="amber-9"
-                        text-color="dark"
-                        label="⭐ Master DB"
-                        class="q-ml-sm"
-                      />
-                    </q-item-label>
-                    <q-item-label caption class="text-mono text-grey-6">
-                      ID: {{ sheet.id }}
-                    </q-item-label>
-                  </q-item-section>
-
-                  <q-item-section side class="row no-wrap items-center q-gutter-xs">
-                    <!-- Button to make this sheet primary -->
-                    <q-btn
-                      v-if="isSheetSelected(sheet.id) && primarySheetId !== sheet.id"
-                      flat
-                      dense
-                      no-caps
-                      size="xs"
-                      color="positive"
-                      icon="check_circle_outline"
-                      label="Rendi Primario"
-                      @click.stop="setPrimarySheet(sheet.id, $event)"
-                    >
-                      <q-tooltip>Imposta questo foglio come target primario di scrittura</q-tooltip>
-                    </q-btn>
-
-                    <q-btn
-                      v-if="sheet.url"
-                      flat
-                      round
-                      dense
-                      icon="open_in_new"
-                      size="sm"
-                      color="grey-7"
-                      :href="sheet.url"
-                      target="_blank"
-                    >
-                      <q-tooltip>Apri in Google Sheets</q-tooltip>
-                    </q-btn>
-                  </q-item-section>
-                </q-item>
-              </q-list>
-            </div>
-            <div v-else class="text-caption text-grey-6 italic q-mb-md">
-              Nessun foglio Google ancora collegato a questo Workspace. Aggiungine uno qui sotto.
-            </div>
-
-            <!-- Tab / Sub-Sheet Specification -->
-            <div class="q-mb-md">
-              <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
-                🏷️ Nome Scheda / Tab Interna del Foglio:
-              </div>
-              <q-input
-                v-model="selectedSheetTab"
-                outlined
-                dense
-                placeholder="Es: Lead_2026, Servizi_Pazienti, Risultati_Task"
-                hint="Se la scheda non esiste ancora, verrà creata automaticamente all'interno dello stesso file durante la prima approvazione!"
-              >
-                <template #prepend>
-                  <q-icon name="tab" color="primary" />
-                </template>
-              </q-input>
-            </div>
-
-            <q-separator class="q-my-md" />
-
-            <!-- Add New Sheet on the fly -->
-            <div>
               <q-btn
-                flat
+                outline
                 dense
                 no-caps
                 size="sm"
                 color="primary"
-                :icon="isAddingNewSheet ? 'expand_less' : 'add_circle'"
-                :label="
-                  isAddingNewSheet
-                    ? 'Chiudi Form Aggiunta'
-                    : '➕ Collega un Nuovo Foglio Google al volo'
-                "
-                @click="isAddingNewSheet = !isAddingNewSheet"
-              />
-
-              <div
-                v-if="isAddingNewSheet"
-                class="q-pa-md q-mt-sm bg-grey-1 rounded-borders border-gold-light"
+                icon="auto_awesome"
+                label="Rigenera"
+                :loading="isReplanningSubtasks"
+                class="q-ml-md"
+                @click="handleTriggerRegenerate"
               >
-                <div class="text-caption text-weight-bold text-navy q-mb-sm">
-                  Aggiungi Nuovo Foglio Google (sarà visibile anche a tutti gli altri task del
-                  Workspace):
-                </div>
-                <div class="row q-col-gutter-sm">
-                  <div class="col-12 col-md-5">
-                    <q-input
-                      v-model="newSheetNameInput"
-                      outlined
-                      dense
-                      placeholder="Nome Riconoscibile (es. Pazienti Domiciliari)"
-                    />
-                  </div>
-                  <div class="col-12 col-md-7">
-                    <q-input
-                      v-model="newSheetUrlInput"
-                      outlined
-                      dense
-                      placeholder="URL o ID Google Sheets"
-                    >
-                      <template #after>
-                        <q-btn
-                          unelevated
-                          color="positive"
-                          label="Collega e Salva"
-                          no-caps
-                          dense
-                          class="q-px-md"
-                          :disabled="!newSheetUrlInput.trim()"
-                          @click="handleAddNewSheetOnTheFly"
-                        />
-                      </template>
-                    </q-input>
-                  </div>
-                </div>
-              </div>
+                <q-tooltip>Ri-decompone il task aggiornato con AgentePlanner</q-tooltip>
+              </q-btn>
             </div>
+          </div>
+        </q-tab-panel>
 
-            <!-- Step 21 Strada 3: Modalità Integrazione Dati & Auto-Styling Elite -->
-            <SheetIntegrationConfigCard
-              v-model:update-mode="taskSheetUpdateMode"
-              v-model:auto-style-sheet="taskAutoStyleSheet"
-              :is-task-level="true"
-              :is-inherited="isSheetConfigInherited"
-            />
+        <!-- TAB 1: GOOGLE SHEETS (MULTI-SELECT) -->
+        <q-tab-panel name="sheet" class="q-pa-none">
+          <div class="text-subtitle2 text-weight-bold text-navy q-mb-xs">
+            📊 Fogli Google di Lavoro per questo Task (Multi-selezione):
+          </div>
+          <p class="text-caption text-grey-7 q-mb-md">
+            Seleziona uno o più fogli Google da collegare a questo task. L'Agente IA conoscerà tutti
+            i fogli selezionati e potrà leggere o salvare dati su ciascuno di essi in base alle tue
+            istruzioni.
+          </p>
 
-            <!-- Step 19 §5.2: Scheduled Sourcing Card in Settings -->
-            <div
-              class="scheduled-sourcing-banner q-mt-lg q-pa-md rounded-borders row items-center justify-between"
-            >
-              <div class="row items-center no-wrap col-grow q-pr-md">
-                <q-icon name="schedule" size="26px" color="teal-8" class="q-mr-md" />
-                <div>
-                  <div class="text-subtitle2 text-weight-bold text-teal-10">
-                    ⏰ Ricerca Programmata & Monitoraggio Notturno (04:00 AM)
-                  </div>
-                  <div class="text-caption text-grey-8">
-                    Automatizza l'AgenteRicerca: diffing a doppia chiave preventivo e aggiunta dei
-                    soli profili nuovi.
-                  </div>
-                </div>
-              </div>
-              <q-btn
-                outline
-                color="teal-9"
-                icon="alarm_on"
-                label="Pianifica"
-                no-caps
-                class="text-weight-bold"
-                @click="emit('openScheduleModal')"
-              />
-            </div>
-          </q-tab-panel>
-
-          <!-- TAB 2: EMAIL SIGNATURE -->
-          <q-tab-panel name="email" class="q-pa-none">
+          <!-- Available Sheets Multi-Select List -->
+          <div v-if="availableWorkspaceSheets.length > 0" class="q-mb-md">
             <div class="row items-center justify-between q-mb-xs">
-              <span class="text-subtitle2 text-weight-bold text-navy">
-                ✍️ Firma Istituzionale per le Bozze Email di questo Task:
-              </span>
-              <q-btn
-                outline
-                dense
-                no-caps
-                size="xs"
-                color="primary"
-                icon="file_download"
-                label="Carica Firma del Workspace"
-                @click="loadWorkspaceSignature"
-              />
+              <div class="text-caption text-weight-bold text-grey-8">
+                Seleziona dalla libreria del Workspace:
+              </div>
+              <div class="row q-gutter-xs">
+                <q-btn
+                  flat
+                  dense
+                  no-caps
+                  size="xs"
+                  color="primary"
+                  label="Seleziona tutti"
+                  @click="selectAllSheets"
+                />
+                <span class="text-grey-4">|</span>
+                <q-btn
+                  flat
+                  dense
+                  no-caps
+                  size="xs"
+                  color="grey-7"
+                  label="Deseleziona tutti"
+                  @click="clearSelectedSheets"
+                />
+              </div>
             </div>
-            <p class="text-caption text-grey-7 q-mb-md">
-              Questa firma verrà inserita automaticamente in tutte le bozze Gmail generate dall'IA
-              per questo task. Nessun dato personale è hardcoded nel sistema.
-            </p>
 
-            <q-input
-              v-model="emailSignature"
-              type="textarea"
-              rows="8"
-              outlined
-              dense
-              placeholder="Inserisci la tua firma personalizzata, es:&#10;&#10;Cordiali saluti,&#10;Dott. / Studio / Azienda&#10;Tel: +39 ...&#10;Email: ..."
-              class="q-mb-md"
-            />
+            <q-list bordered separator class="rounded-borders bg-white">
+              <q-item
+                v-for="sheet in availableWorkspaceSheets"
+                :key="sheet.id"
+                clickable
+                :active="isSheetSelected(sheet.id)"
+                active-class="bg-amber-1"
+                @click="toggleSheet(sheet)"
+              >
+                <q-item-section avatar style="min-width: 40px">
+                  <q-checkbox
+                    :model-value="isSheetSelected(sheet.id)"
+                    color="amber-9"
+                    @update:model-value="toggleSheet(sheet)"
+                    @click.stop
+                  />
+                </q-item-section>
 
+                <q-item-section>
+                  <q-item-label class="text-subtitle2 row items-center no-wrap">
+                    <span :class="{ 'text-weight-bold': isSheetSelected(sheet.id) }">
+                      {{ sheet.name }}
+                    </span>
+                    <q-badge
+                      v-if="primarySheetId === sheet.id"
+                      color="positive"
+                      text-color="white"
+                      label="🎯 Primario"
+                      class="q-ml-sm"
+                    >
+                      <q-tooltip>Foglio target per la scrittura automatica predefinita</q-tooltip>
+                    </q-badge>
+                    <q-badge
+                      v-else-if="sheet.isMaster"
+                      color="amber-9"
+                      text-color="dark"
+                      label="⭐ Master DB"
+                      class="q-ml-sm"
+                    />
+                  </q-item-label>
+                  <q-item-label caption class="text-mono text-grey-6">
+                    ID: {{ sheet.id }}
+                  </q-item-label>
+                </q-item-section>
+
+                <q-item-section side class="row no-wrap items-center q-gutter-xs">
+                  <!-- Button to make this sheet primary -->
+                  <q-btn
+                    v-if="isSheetSelected(sheet.id) && primarySheetId !== sheet.id"
+                    flat
+                    dense
+                    no-caps
+                    size="xs"
+                    color="positive"
+                    icon="check_circle_outline"
+                    label="Rendi Primario"
+                    @click.stop="setPrimarySheet(sheet.id, $event)"
+                  >
+                    <q-tooltip>Imposta questo foglio come target primario di scrittura</q-tooltip>
+                  </q-btn>
+
+                  <q-btn
+                    v-if="sheet.url"
+                    flat
+                    round
+                    dense
+                    icon="open_in_new"
+                    size="sm"
+                    color="grey-7"
+                    :href="sheet.url"
+                    target="_blank"
+                  >
+                    <q-tooltip>Apri in Google Sheets</q-tooltip>
+                  </q-btn>
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </div>
+          <div v-else class="text-caption text-grey-6 italic q-mb-md">
+            Nessun foglio Google ancora collegato a questo Workspace. Aggiungine uno qui sotto.
+          </div>
+
+          <!-- Tab / Sub-Sheet Specification -->
+          <div class="q-mb-md">
             <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
-              Intestazione Opzionale (Header Email):
+              🏷️ Nome Scheda / Tab Interna del Foglio:
             </div>
             <q-input
-              v-model="emailHeader"
+              v-model="selectedSheetTab"
               outlined
               dense
-              placeholder="Es. Gentile Paziente / Spettabile Ditta,"
-            />
-          </q-tab-panel>
+              placeholder="Es: Lead_2026, Servizi_Pazienti, Risultati_Task"
+              hint="Se la scheda non esiste ancora, verrà creata automaticamente all'interno dello stesso file durante la prima approvazione!"
+            >
+              <template #prepend>
+                <q-icon name="tab" color="primary" />
+              </template>
+            </q-input>
+          </div>
 
-          <!-- TAB 3: MASTER DB & SYNC -->
-          <q-tab-panel name="sync" class="q-pa-none">
-            <div class="text-subtitle2 text-weight-bold text-navy q-mb-xs">
-              📜 Master Database su Google Drive (Audit & Cronologia Generale)
-            </div>
-            <p class="text-caption text-grey-7 q-mb-md">
-              Il Master Database funge da registro centralizzato di tutto il Workspace, tracciando
-              le sessioni, i prompt e gli stati dei task.
-            </p>
+          <q-separator class="q-my-md" />
+
+          <!-- Add New Sheet on the fly -->
+          <div>
+            <q-btn
+              flat
+              dense
+              no-caps
+              size="sm"
+              color="primary"
+              :icon="isAddingNewSheet ? 'expand_less' : 'add_circle'"
+              :label="
+                isAddingNewSheet
+                  ? 'Chiudi Form Aggiunta'
+                  : '➕ Collega un Nuovo Foglio Google al volo'
+              "
+              @click="isAddingNewSheet = !isAddingNewSheet"
+            />
 
             <div
-              v-if="masterSheet"
-              class="q-pa-md bg-amber-1 rounded-borders q-mb-md row items-center justify-between"
+              v-if="isAddingNewSheet"
+              class="q-pa-md q-mt-sm bg-grey-1 rounded-borders border-gold-light"
             >
-              <div>
-                <div class="text-weight-bold text-navy">
-                  ⭐ Foglio Master Corrente: {{ masterSheet.name }}
-                </div>
-                <div class="text-caption text-mono text-grey-7">ID: {{ masterSheet.id }}</div>
+              <div class="text-caption text-weight-bold text-navy q-mb-sm">
+                Aggiungi Nuovo Foglio Google (sarà visibile anche a tutti gli altri task del
+                Workspace):
               </div>
-              <q-icon name="verified" color="amber-9" size="24px" />
+              <div class="row q-col-gutter-sm">
+                <div class="col-12 col-md-5">
+                  <q-input
+                    v-model="newSheetNameInput"
+                    outlined
+                    dense
+                    placeholder="Nome Riconoscibile (es. Pazienti Domiciliari)"
+                  />
+                </div>
+                <div class="col-12 col-md-7">
+                  <q-input
+                    v-model="newSheetUrlInput"
+                    outlined
+                    dense
+                    placeholder="URL o ID Google Sheets"
+                  >
+                    <template #after>
+                      <q-btn
+                        unelevated
+                        color="positive"
+                        label="Collega e Salva"
+                        no-caps
+                        dense
+                        class="q-px-md"
+                        :disabled="!newSheetUrlInput.trim()"
+                        @click="handleAddNewSheetOnTheFly"
+                      />
+                    </template>
+                  </q-input>
+                </div>
+              </div>
             </div>
-            <div v-else class="text-caption text-grey-6 italic q-mb-md">
-              Nessun foglio Master ancora designato nel Workspace. Vai in AI Attitude per
-              impostarlo.
-            </div>
+          </div>
 
-            <q-toggle
-              v-model="syncToMasterSheet"
-              color="amber-9"
-              label="Registra automaticamente le milestone e i prompt di questo task nel Foglio Master"
-              class="text-weight-medium"
+          <!-- Step 21 Strada 3: Modalità Integrazione Dati & Auto-Styling Elite -->
+          <SheetIntegrationConfigCard
+            v-model:update-mode="taskSheetUpdateMode"
+            v-model:auto-style-sheet="taskAutoStyleSheet"
+            :is-task-level="true"
+            :is-inherited="isSheetConfigInherited"
+          />
+
+          <!-- Step 19 §5.2: Scheduled Sourcing Card in Settings -->
+          <div
+            class="scheduled-sourcing-banner q-mt-lg q-pa-md rounded-borders row items-center justify-between"
+          >
+            <div class="row items-center no-wrap col-grow q-pr-md">
+              <q-icon name="schedule" size="26px" color="teal-8" class="q-mr-md" />
+              <div>
+                <div class="text-subtitle2 text-weight-bold text-teal-10">
+                  ⏰ Ricerca Programmata & Monitoraggio Notturno (04:00 AM)
+                </div>
+                <div class="text-caption text-grey-8">
+                  Automatizza l'AgenteRicerca: diffing a doppia chiave preventivo e aggiunta dei
+                  soli profili nuovi.
+                </div>
+              </div>
+            </div>
+            <q-btn
+              outline
+              color="teal-9"
+              icon="alarm_on"
+              label="Pianifica"
+              no-caps
+              class="text-weight-bold"
+              @click="emit('openScheduleModal')"
             />
-          </q-tab-panel>
-        </q-tab-panels>
-      </q-card-section>
+          </div>
+        </q-tab-panel>
 
-      <q-separator class="shrink-0" />
+        <!-- TAB 2: EMAIL SIGNATURE -->
+        <q-tab-panel name="email" class="q-pa-none">
+          <div class="row items-center justify-between q-mb-xs">
+            <span class="text-subtitle2 text-weight-bold text-navy">
+              ✍️ Firma Istituzionale per le Bozze Email di questo Task:
+            </span>
+            <q-btn
+              outline
+              dense
+              no-caps
+              size="xs"
+              color="primary"
+              icon="file_download"
+              label="Carica Firma del Workspace"
+              @click="loadWorkspaceSignature"
+            />
+          </div>
+          <p class="text-caption text-grey-7 q-mb-md">
+            Questa firma verrà inserita automaticamente in tutte le bozze Gmail generate dall'IA per
+            questo task. Nessun dato personale è hardcoded nel sistema.
+          </p>
 
-      <!-- Footer Actions - Fixed at Bottom -->
-      <q-card-actions align="right" class="task-settings-card__footer shrink-0 q-pa-md bg-white">
-        <q-btn flat label="Annulla" color="grey-8" no-caps v-close-popup />
+          <q-input
+            v-model="emailSignature"
+            type="textarea"
+            rows="8"
+            outlined
+            dense
+            placeholder="Inserisci la tua firma personalizzata, es:&#10;&#10;Cordiali saluti,&#10;Dott. / Studio / Azienda&#10;Tel: +39 ...&#10;Email: ..."
+            class="q-mb-md"
+          />
+
+          <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
+            Intestazione Opzionale (Header Email):
+          </div>
+          <q-input
+            v-model="emailHeader"
+            outlined
+            dense
+            placeholder="Es. Gentile Paziente / Spettabile Ditta,"
+          />
+        </q-tab-panel>
+
+        <!-- TAB 3: MASTER DB & SYNC -->
+        <q-tab-panel name="sync" class="q-pa-none">
+          <div class="text-subtitle2 text-weight-bold text-navy q-mb-xs">
+            📜 Master Database su Google Drive (Audit & Cronologia Generale)
+          </div>
+          <p class="text-caption text-grey-7 q-mb-md">
+            Il Master Database funge da registro centralizzato di tutto il Workspace, tracciando le
+            sessioni, i prompt e gli stati dei task.
+          </p>
+
+          <div
+            v-if="masterSheet"
+            class="q-pa-md bg-amber-1 rounded-borders q-mb-md row items-center justify-between"
+          >
+            <div>
+              <div class="text-weight-bold text-navy">
+                ⭐ Foglio Master Corrente: {{ masterSheet.name }}
+              </div>
+              <div class="text-caption text-mono text-grey-7">ID: {{ masterSheet.id }}</div>
+            </div>
+            <q-icon name="verified" color="amber-9" size="24px" />
+          </div>
+          <div v-else class="text-caption text-grey-6 italic q-mb-md">
+            Nessun foglio Master ancora designato nel Workspace. Vai in AI Attitude per impostarlo.
+          </div>
+
+          <q-toggle
+            v-model="syncToMasterSheet"
+            color="amber-9"
+            label="Registra automaticamente le milestone e i prompt di questo task nel Foglio Master"
+            class="text-weight-medium"
+          />
+        </q-tab-panel>
+      </q-tab-panels>
+    </div>
+
+    <!-- Footer Actions - Fixed at Bottom -->
+    <template #footer>
+      <div class="row items-center justify-end q-gutter-sm">
+        <q-btn flat label="Annulla" color="grey-8" no-caps @click="isOpen = false" />
         <q-btn
           unelevated
           color="amber-9"
@@ -870,9 +867,9 @@ const handleSave = async (): Promise<void> => {
           :loading="isSaving"
           @click="handleSave"
         />
-      </q-card-actions>
-    </q-card>
-  </q-dialog>
+      </div>
+    </template>
+  </AppFloatingWindow>
 </template>
 
 <style scoped lang="scss">

@@ -27,6 +27,7 @@ import type {
 } from "../types/models";
 
 // ── Components ───────────────────────────────────────────────────────────────
+import AppFloatingWindow from "./AppFloatingWindow.vue";
 import SheetIntegrationConfigCard from "./SheetIntegrationConfigCard.vue";
 
 const props = defineProps<{
@@ -743,594 +744,586 @@ const handleSave = async (): Promise<void> => {
 </script>
 
 <template>
-  <q-dialog v-model="isOpen" persistent backdrop-filter="blur(14px)">
-    <q-card class="attitude-modal-card column no-wrap">
-      <!-- ── Fixed Header ──────────────────────────────────────────────── -->
-      <q-card-section
-        class="attitude-modal-card__header row items-center justify-between q-py-md q-px-lg shrink-0"
+  <AppFloatingWindow
+    v-model="isOpen"
+    window-id="workspace-attitude-modal"
+    title="AI Attitude & Linked Resources"
+    :subtitle="workspace ? `Workspace: ${workspace.name}` : undefined"
+    icon="psychology"
+    icon-color="amber-5"
+    :badge-label="workspace?.name"
+    badge-color="amber-9"
+    :initial-width="840"
+    :initial-height="660"
+    :min-width="500"
+    :min-height="380"
+    @close="isOpen = false"
+  >
+    <!-- ── Fixed Tabs Bar ────────────────────────────────────────────── -->
+    <div class="attitude-modal-card__tabs shrink-0 q-px-md">
+      <q-tabs
+        v-model="activeTab"
+        dense
+        class="text-grey-7"
+        active-color="primary"
+        indicator-color="primary"
+        align="justify"
+        narrow-indicator
       >
-        <div class="row items-center q-gutter-sm">
-          <q-avatar icon="psychology" color="amber-8" text-color="white" size="38px" />
-          <div>
-            <div class="text-h6 text-weight-bold text-navy">AI Attitude &amp; Linked Resources</div>
-            <div class="text-caption text-grey-7">Workspace: {{ workspace?.name }}</div>
-          </div>
-        </div>
-        <q-btn flat round dense icon="close" color="grey-7" v-close-popup />
-      </q-card-section>
+        <q-tab name="behavior" icon="tune" label="1. Behavior" no-caps />
+        <q-tab name="resources" icon="cloud_sync" label="2. Google Resources" no-caps />
+        <q-tab name="agents" icon="smart_toy" label="3. AI Agents" no-caps />
+        <q-tab name="sandbox" icon="science" label="4. Sandbox Test" no-caps />
+      </q-tabs>
+    </div>
 
-      <!-- ── Fixed Tabs Bar ────────────────────────────────────────────── -->
-      <div class="attitude-modal-card__tabs shrink-0 q-px-md">
-        <q-tabs
-          v-model="activeTab"
-          dense
-          class="text-grey-7"
-          active-color="primary"
-          indicator-color="primary"
-          align="justify"
-          narrow-indicator
-        >
-          <q-tab name="behavior" icon="tune" label="1. Behavior" no-caps />
-          <q-tab name="resources" icon="cloud_sync" label="2. Google Resources" no-caps />
-          <q-tab name="agents" icon="smart_toy" label="3. AI Agents" no-caps />
-          <q-tab name="sandbox" icon="science" label="4. Sandbox Test" no-caps />
-        </q-tabs>
-      </div>
+    <q-separator />
 
-      <q-separator />
-
-      <!-- ── Scrollable Tab Panels Body ────────────────────────────────── -->
-      <q-card-section class="col attitude-modal-card__body q-pa-none">
-        <q-tab-panels
-          v-model="activeTab"
-          animated
-          class="full-height attitude-scroll-area custom-scrollbar q-px-lg q-py-md"
-        >
-          <!-- TAB 1: Behavior & Prompt -->
-          <q-tab-panel name="behavior" class="q-pa-none">
-            <!-- Preset Buttons -->
-            <div class="q-mb-md">
-              <div class="text-caption text-weight-bold text-grey-7 q-mb-xs">
-                Ready-to-use Quick Templates:
-              </div>
-              <div class="row q-gutter-xs">
-                <q-btn
-                  v-for="tpl in presetTemplates"
-                  :key="tpl.title"
-                  dense
-                  outline
-                  size="sm"
-                  color="primary"
-                  :label="tpl.title"
-                  @click="applyPreset(tpl)"
-                />
-              </div>
+    <!-- ── Scrollable Tab Panels Body ────────────────────────────────── -->
+    <div class="col attitude-modal-card__body q-pa-none">
+      <q-tab-panels
+        v-model="activeTab"
+        animated
+        class="full-height attitude-scroll-area custom-scrollbar q-px-lg q-py-md"
+      >
+        <!-- TAB 1: Behavior & Prompt -->
+        <q-tab-panel name="behavior" class="q-pa-none">
+          <!-- Preset Buttons -->
+          <div class="q-mb-md">
+            <div class="text-caption text-weight-bold text-grey-7 q-mb-xs">
+              Ready-to-use Quick Templates:
             </div>
-
-            <div class="row q-col-gutter-md q-mb-md">
-              <div class="col-12 col-md-6">
-                <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
-                  Domain / Professional Sector:
-                </div>
-                <q-input
-                  v-model="industryScope"
-                  outlined
-                  dense
-                  placeholder="e.g. Healthcare, Engineering, Legal, Consulting..."
-                />
-              </div>
-              <div class="col-12 col-md-6">
-                <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
-                  Tone of Voice &amp; Style:
-                </div>
-                <q-input
-                  v-model="tone"
-                  outlined
-                  dense
-                  placeholder="e.g. concise &amp; operational, clinical, creative, formal..."
-                />
-              </div>
-            </div>
-
-            <div class="q-mb-md">
-              <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
-                🧠 Skill Matrix (Active AI Skills):
-              </div>
-              <q-select
-                v-model="skills"
-                use-input
-                use-chips
-                multiple
-                hide-dropdown-icon
-                new-value-mode="add-unique"
-                outlined
+            <div class="row q-gutter-xs">
+              <q-btn
+                v-for="tpl in presetTemplates"
+                :key="tpl.title"
                 dense
-                placeholder="Press Enter to add new skills..."
+                outline
+                size="sm"
+                color="primary"
+                :label="tpl.title"
+                @click="applyPreset(tpl)"
               />
             </div>
+          </div>
 
-            <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
-              System Prompt (Additional Instructions):
+          <div class="row q-col-gutter-md q-mb-md">
+            <div class="col-12 col-md-6">
+              <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
+                Domain / Professional Sector:
+              </div>
+              <q-input
+                v-model="industryScope"
+                outlined
+                dense
+                placeholder="e.g. Healthcare, Engineering, Legal, Consulting..."
+              />
             </div>
-            <q-input
-              v-model="systemPrompt"
-              type="textarea"
-              rows="3"
+            <div class="col-12 col-md-6">
+              <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
+                Tone of Voice &amp; Style:
+              </div>
+              <q-input
+                v-model="tone"
+                outlined
+                dense
+                placeholder="e.g. concise &amp; operational, clinical, creative, formal..."
+              />
+            </div>
+          </div>
+
+          <div class="q-mb-md">
+            <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
+              🧠 Skill Matrix (Active AI Skills):
+            </div>
+            <q-select
+              v-model="skills"
+              use-input
+              use-chips
+              multiple
+              hide-dropdown-icon
+              new-value-mode="add-unique"
               outlined
               dense
-              class="q-mb-md"
-              placeholder="e.g. Your role is to search for IT clients, profile prospects on LinkedIn, and prepare email drafts on Gmail..."
+              placeholder="Press Enter to add new skills..."
             />
+          </div>
 
-            <div class="row q-col-gutter-md q-mb-md">
-              <div class="col-12 col-md-6">
-                <div class="text-caption text-weight-bold text-positive q-mb-xs">
-                  ✅ Binding Rules (Do List):
-                </div>
-                <q-input
-                  v-model="doListInput"
-                  type="textarea"
-                  rows="3"
-                  outlined
-                  dense
-                  placeholder="One rule per line (e.g. Always cite links)"
-                />
+          <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
+            System Prompt (Additional Instructions):
+          </div>
+          <q-input
+            v-model="systemPrompt"
+            type="textarea"
+            rows="3"
+            outlined
+            dense
+            class="q-mb-md"
+            placeholder="e.g. Your role is to search for IT clients, profile prospects on LinkedIn, and prepare email drafts on Gmail..."
+          />
+
+          <div class="row q-col-gutter-md q-mb-md">
+            <div class="col-12 col-md-6">
+              <div class="text-caption text-weight-bold text-positive q-mb-xs">
+                ✅ Binding Rules (Do List):
               </div>
-              <div class="col-12 col-md-6">
-                <div class="text-caption text-weight-bold text-negative q-mb-xs">
-                  🚫 Strict Restrictions (Don't List):
-                </div>
-                <q-input
-                  v-model="dontListInput"
-                  type="textarea"
-                  rows="3"
-                  outlined
-                  dense
-                  placeholder="One rule per line (e.g. Never send direct emails)"
-                />
-              </div>
+              <q-input
+                v-model="doListInput"
+                type="textarea"
+                rows="3"
+                outlined
+                dense
+                placeholder="One rule per line (e.g. Always cite links)"
+              />
             </div>
-          </q-tab-panel>
+            <div class="col-12 col-md-6">
+              <div class="text-caption text-weight-bold text-negative q-mb-xs">
+                🚫 Strict Restrictions (Don't List):
+              </div>
+              <q-input
+                v-model="dontListInput"
+                type="textarea"
+                rows="3"
+                outlined
+                dense
+                placeholder="One rule per line (e.g. Never send direct emails)"
+              />
+            </div>
+          </div>
+        </q-tab-panel>
 
-          <!-- TAB 2: Google Linked Resources -->
-          <q-tab-panel name="resources" class="q-pa-none">
-            <!-- OAuth Main Banner -->
-            <div class="q-pa-sm bg-blue-1 rounded-borders q-mb-md">
-              <div class="row items-center justify-between">
-                <div class="row items-center q-gutter-sm">
-                  <q-icon
-                    :name="isOAuthConnected ? 'check_circle' : 'warning'"
-                    :color="isOAuthConnected ? 'positive' : 'warning'"
-                    size="sm"
-                  />
-                  <div>
-                    <div class="text-subtitle2 text-weight-bold text-navy">
-                      {{
-                        isOAuthConnected
-                          ? "Google OAuth2 Connection Status: ACTIVE"
-                          : "Google Account Not Authorized"
-                      }}
-                    </div>
-                    <div class="text-caption text-grey-8">
-                      Allows AI to interact with your Gmail, Google Sheets, and Google Drive.
-                    </div>
-                    <!-- Connected Account Badge / Card -->
-                    <div
-                      v-if="
-                        isOAuthConnected &&
-                        (googleEmail || (linkedEmails && linkedEmails.length > 0))
-                      "
-                      class="row items-center q-gutter-xs q-mt-xs bg-white q-px-sm q-py-2xs rounded-borders"
-                      style="border: 1px solid rgba(10, 35, 66, 0.15); display: inline-flex"
-                    >
-                      <q-icon name="mark_email_read" size="14px" color="positive" />
-                      <span class="text-caption text-weight-bold text-navy"
-                        >Account collegato:</span
-                      >
-                      <span class="text-caption text-weight-bold text-primary">
-                        {{ googleEmail || linkedEmails[0] }}
-                      </span>
-                    </div>
+        <!-- TAB 2: Google Linked Resources -->
+        <q-tab-panel name="resources" class="q-pa-none">
+          <!-- OAuth Main Banner -->
+          <div class="q-pa-sm bg-blue-1 rounded-borders q-mb-md">
+            <div class="row items-center justify-between">
+              <div class="row items-center q-gutter-sm">
+                <q-icon
+                  :name="isOAuthConnected ? 'check_circle' : 'warning'"
+                  :color="isOAuthConnected ? 'positive' : 'warning'"
+                  size="sm"
+                />
+                <div>
+                  <div class="text-subtitle2 text-weight-bold text-navy">
+                    {{
+                      isOAuthConnected
+                        ? "Google OAuth2 Connection Status: ACTIVE"
+                        : "Google Account Not Authorized"
+                    }}
+                  </div>
+                  <div class="text-caption text-grey-8">
+                    Allows AI to interact with your Gmail, Google Sheets, and Google Drive.
+                  </div>
+                  <!-- Connected Account Badge / Card -->
+                  <div
+                    v-if="
+                      isOAuthConnected && (googleEmail || (linkedEmails && linkedEmails.length > 0))
+                    "
+                    class="row items-center q-gutter-xs q-mt-xs bg-white q-px-sm q-py-2xs rounded-borders"
+                    style="border: 1px solid rgba(10, 35, 66, 0.15); display: inline-flex"
+                  >
+                    <q-icon name="mark_email_read" size="14px" color="positive" />
+                    <span class="text-caption text-weight-bold text-navy">Account collegato:</span>
+                    <span class="text-caption text-weight-bold text-primary">
+                      {{ googleEmail || linkedEmails[0] }}
+                    </span>
                   </div>
                 </div>
-                <q-btn
-                  :color="isOAuthConnected ? 'positive' : 'primary'"
-                  :icon="isOAuthConnected ? 'verified' : 'login'"
-                  :label="isOAuthConnected ? 'OAuth2 Authorized' : 'Connect Google OAuth2'"
-                  no-caps
-                  dense
-                  class="q-px-sm"
-                  :loading="isConnectingGoogle"
-                  @click="handleConnectGoogle"
-                />
               </div>
-            </div>
-
-            <!-- Multi-Email Connection Section -->
-            <div class="q-mb-md">
-              <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
-                ✉️ Indirizzi Email Autorizzati (Puoi aggiungere più account):
-              </div>
-              <div class="row q-gutter-sm q-mb-xs">
-                <q-input
-                  v-model="newEmailInput"
-                  outlined
-                  dense
-                  class="col"
-                  placeholder="Es: studio.opsflow@gmail.com o admin@opsflow.it"
-                  @keyup.enter="addEmail"
-                >
-                  <template #prepend>
-                    <q-icon name="email" color="primary" />
-                  </template>
-                </q-input>
-                <q-btn
-                  color="primary"
-                  icon="add"
-                  label="Aggiungi Email"
-                  no-caps
-                  dense
-                  class="q-px-sm"
-                  :disabled="!newEmailInput.trim()"
-                  @click="addEmail"
-                />
-              </div>
-
-              <div v-if="linkedEmails.length > 0" class="row q-gutter-xs q-mt-xs">
-                <q-chip
-                  v-for="email in linkedEmails"
-                  :key="email"
-                  removable
-                  color="primary"
-                  text-color="white"
-                  icon="mark_email_read"
-                  size="sm"
-                  @remove="removeEmail(email)"
-                >
-                  {{ email }}
-                </q-chip>
-              </div>
-              <div v-else class="text-caption text-grey-6 italic">
-                Nessuna email secondaria aggiunta. L'IA usera l'email principale di login.
-              </div>
-            </div>
-
-            <q-separator class="q-my-md" />
-
-            <!-- Google Sheets Section (Multiple Sheets with Names) -->
-            <div class="q-mb-lg">
-              <div class="row items-center justify-between q-mb-xs">
-                <div class="text-subtitle2 text-weight-bold text-navy">
-                  📊 Fogli Google Sheets Collegati (riconoscibili per Nome):
-                </div>
-              </div>
-              <p class="text-caption text-grey-7 q-mb-sm">
-                Seleziona quale foglio funge da
-                <strong>⭐ Foglio Principale (Master Database)</strong> per la cronologia generale e
-                quali fogli sono dedicati ai singoli task.
-              </p>
-
-              <!-- Sheets List -->
-              <q-list
-                v-if="linkedSheets.length > 0"
-                bordered
-                separator
-                class="rounded-borders bg-white q-mb-sm"
-              >
-                <q-item v-for="sheet in linkedSheets" :key="sheet.id" class="q-py-sm">
-                  <q-item-section avatar style="min-width: 36px">
-                    <q-icon name="table_chart" color="positive" size="22px" />
-                  </q-item-section>
-                  <q-item-section>
-                    <q-item-label class="text-subtitle2 text-weight-bold">
-                      {{ sheet.name }}
-                      <q-chip
-                        v-if="sheet.isMaster"
-                        color="amber-9"
-                        text-color="dark"
-                        size="xs"
-                        icon="star"
-                        class="text-weight-bold q-ml-xs"
-                      >
-                        Foglio Master (Database)
-                      </q-chip>
-                    </q-item-label>
-                    <q-item-label
-                      caption
-                      class="text-mono text-grey-6 text-ellipsis"
-                      style="max-width: 320px"
-                    >
-                      ID: {{ sheet.id }}
-                    </q-item-label>
-                  </q-item-section>
-                  <q-item-section side class="row no-wrap items-center q-gutter-xs">
-                    <q-btn
-                      v-if="!sheet.isMaster"
-                      flat
-                      dense
-                      no-caps
-                      size="xs"
-                      color="amber-9"
-                      icon="star_border"
-                      label="Imposta come Master"
-                      @click="setMasterSheet(sheet.id)"
-                    />
-                    <q-btn
-                      v-if="sheet.url"
-                      flat
-                      round
-                      dense
-                      icon="open_in_new"
-                      size="xs"
-                      color="grey-7"
-                      :href="sheet.url"
-                      target="_blank"
-                    />
-                    <q-btn
-                      flat
-                      round
-                      dense
-                      icon="delete"
-                      size="xs"
-                      color="negative"
-                      @click="removeSheetResource(sheet.id)"
-                    />
-                  </q-item-section>
-                </q-item>
-              </q-list>
-              <div v-else class="text-caption text-grey-6 italic q-mb-sm">
-                Nessun Foglio Google ancora registrato. Aggiungine uno qui sotto:
-              </div>
-
-              <!-- Add Sheet Form -->
-              <div
-                class="row q-col-gutter-sm items-center bg-grey-1 q-pa-sm rounded-borders"
-                style="margin-left: 0; margin-right: 0"
-              >
-                <div class="col-12 col-sm-4">
-                  <q-input
-                    v-model="newSheetNameInput"
-                    outlined
-                    dense
-                    placeholder="Nome Foglio (es. Listino)"
-                    bg-color="white"
-                  />
-                </div>
-                <div class="col-12 col-sm-5">
-                  <q-input
-                    v-model="newSheetUrlInput"
-                    outlined
-                    dense
-                    placeholder="URL o ID Foglio Google"
-                    bg-color="white"
-                  />
-                </div>
-                <div class="col-12 col-sm-3">
-                  <q-btn
-                    unelevated
-                    color="positive"
-                    icon="add"
-                    label="Aggiungi"
-                    no-caps
-                    dense
-                    class="full-width text-weight-bold"
-                    :disabled="!newSheetUrlInput.trim()"
-                    @click="addSheetResource"
-                  />
-                </div>
-              </div>
-
-              <!-- Step 21 Strada 3: Policy Predefinita Integrazione Fogli nel Workspace -->
-              <SheetIntegrationConfigCard
-                v-model:update-mode="workspaceSheetUpdateMode"
-                v-model:auto-style-sheet="workspaceAutoStyleSheet"
-                title="Policy Predefinita Integrazione Fogli (Tutti i Task del Workspace)"
+              <q-btn
+                :color="isOAuthConnected ? 'positive' : 'primary'"
+                :icon="isOAuthConnected ? 'verified' : 'login'"
+                :label="isOAuthConnected ? 'OAuth2 Authorized' : 'Connect Google OAuth2'"
+                no-caps
+                dense
+                class="q-px-sm"
+                :loading="isConnectingGoogle"
+                @click="handleConnectGoogle"
               />
             </div>
+          </div>
 
-            <q-separator class="q-my-md" />
-
-            <!-- Google Drive Folders Section -->
-            <div class="q-mb-lg">
-              <div class="text-subtitle2 text-weight-bold text-navy q-mb-xs">
-                📁 Cartelle Google Drive Collegate:
-              </div>
-              <p class="text-caption text-grey-7 q-mb-sm">
-                Spazi Drive per l'indicizzazione e l'estrazione documentale da parte dell'Agente.
-              </p>
-
-              <q-list
-                v-if="linkedFolders.length > 0"
-                bordered
-                separator
-                class="rounded-borders bg-white q-mb-sm"
-              >
-                <q-item v-for="folder in linkedFolders" :key="folder.id" class="q-py-sm">
-                  <q-item-section avatar style="min-width: 36px">
-                    <q-icon name="folder_special" color="amber-9" size="22px" />
-                  </q-item-section>
-                  <q-item-section>
-                    <q-item-label class="text-subtitle2 text-weight-bold">
-                      {{ folder.name }}
-                    </q-item-label>
-                    <q-item-label
-                      caption
-                      class="text-mono text-grey-6 text-ellipsis"
-                      style="max-width: 320px"
-                    >
-                      ID: {{ folder.id }}
-                    </q-item-label>
-                  </q-item-section>
-                  <q-item-section side class="row no-wrap items-center q-gutter-xs">
-                    <q-btn
-                      v-if="folder.url"
-                      flat
-                      round
-                      dense
-                      icon="open_in_new"
-                      size="xs"
-                      color="grey-7"
-                      :href="folder.url"
-                      target="_blank"
-                    />
-                    <q-btn
-                      flat
-                      round
-                      dense
-                      icon="delete"
-                      size="xs"
-                      color="negative"
-                      @click="removeFolderResource(folder.id)"
-                    />
-                  </q-item-section>
-                </q-item>
-              </q-list>
-
-              <!-- Add Folder Form -->
-              <div
-                class="row q-col-gutter-sm items-center bg-grey-1 q-pa-sm rounded-borders"
-                style="margin-left: 0; margin-right: 0"
-              >
-                <div class="col-12 col-sm-4">
-                  <q-input
-                    v-model="newFolderNameInput"
-                    outlined
-                    dense
-                    placeholder="Nome Cartella (es. Documenti)"
-                    bg-color="white"
-                  />
-                </div>
-                <div class="col-12 col-sm-5">
-                  <q-input
-                    v-model="newFolderUrlInput"
-                    outlined
-                    dense
-                    placeholder="URL o ID Cartella Drive"
-                    bg-color="white"
-                  />
-                </div>
-                <div class="col-12 col-sm-3">
-                  <q-btn
-                    unelevated
-                    color="amber-9"
-                    text-color="dark"
-                    icon="add"
-                    label="Aggiungi"
-                    no-caps
-                    dense
-                    class="full-width text-weight-bold"
-                    :disabled="!newFolderUrlInput.trim()"
-                    @click="addFolderResource"
-                  />
-                </div>
-              </div>
+          <!-- Multi-Email Connection Section -->
+          <div class="q-mb-md">
+            <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">
+              ✉️ Indirizzi Email Autorizzati (Puoi aggiungere più account):
             </div>
-
-            <q-separator class="q-my-md" />
-
-            <!-- Master Sheet Workspace-Level Toggle -->
-            <div
-              class="master-sheet-toggle-card q-pa-md q-mb-md rounded-borders row items-center justify-between no-wrap"
-            >
-              <div class="col">
-                <div class="row items-center q-gutter-xs q-mb-xs">
-                  <q-icon name="table_chart" color="amber-8" size="18px" />
-                  <span class="text-subtitle2 text-weight-bold text-navy"
-                    >Scrittura Automatica sul Foglio Master</span
-                  >
-                </div>
-                <p class="text-caption text-grey-7 q-mb-none">
-                  Quando attivo, tutti i task di questo Workspace scrivono automaticamente i
-                  risultati sul Foglio Master Google. Puoi disattivarlo per ogni singolo task.
-                </p>
-              </div>
-              <q-toggle
-                v-model="autoSyncToMasterSheet"
-                color="amber-8"
-                size="lg"
-                class="q-ml-md"
-                :label="autoSyncToMasterSheet ? 'Attivo' : 'Disattivo'"
-              />
-            </div>
-
-            <q-separator class="q-my-md" />
-
-            <!-- Default Email Signature for the Workspace -->
-            <div class="q-mb-md">
-              <div class="text-subtitle2 text-weight-bold text-navy q-mb-xs">
-                ✍️ Firma Email Predefinita del Workspace:
-              </div>
-              <p class="text-caption text-grey-7 q-mb-sm">
-                Questa firma viene ereditata automaticamente da tutti i task del Workspace (può
-                essere personalizzata nel singolo task).
-              </p>
+            <div class="row q-gutter-sm q-mb-xs">
               <q-input
-                v-model="defaultEmailSignature"
-                type="textarea"
-                rows="4"
+                v-model="newEmailInput"
                 outlined
                 dense
-                placeholder="Inserisci la firma predefinita (es. Cordiali saluti, Team OpsFlow...)"
+                class="col"
+                placeholder="Es: studio.opsflow@gmail.com o admin@opsflow.it"
+                @keyup.enter="addEmail"
+              >
+                <template #prepend>
+                  <q-icon name="email" color="primary" />
+                </template>
+              </q-input>
+              <q-btn
+                color="primary"
+                icon="add"
+                label="Aggiungi Email"
+                no-caps
+                dense
+                class="q-px-sm"
+                :disabled="!newEmailInput.trim()"
+                @click="addEmail"
               />
             </div>
-          </q-tab-panel>
 
-          <!-- TAB 3: Assigned Agents -->
-          <q-tab-panel name="agents" class="q-pa-none">
-            <div class="text-body2 text-grey-8 q-mb-md">
-              Seleziona quali agenti IA coordinati sono abilitati ad operare su questo Workspace:
+            <div v-if="linkedEmails.length > 0" class="row q-gutter-xs q-mt-xs">
+              <q-chip
+                v-for="email in linkedEmails"
+                :key="email"
+                removable
+                color="primary"
+                text-color="white"
+                icon="mark_email_read"
+                size="sm"
+                @remove="removeEmail(email)"
+              >
+                {{ email }}
+              </q-chip>
+            </div>
+            <div v-else class="text-caption text-grey-6 italic">
+              Nessuna email secondaria aggiunta. L'IA usera l'email principale di login.
+            </div>
+          </div>
+
+          <q-separator class="q-my-md" />
+
+          <!-- Google Sheets Section (Multiple Sheets with Names) -->
+          <div class="q-mb-lg">
+            <div class="row items-center justify-between q-mb-xs">
+              <div class="text-subtitle2 text-weight-bold text-navy">
+                📊 Fogli Google Sheets Collegati (riconoscibili per Nome):
+              </div>
+            </div>
+            <p class="text-caption text-grey-7 q-mb-sm">
+              Seleziona quale foglio funge da
+              <strong>⭐ Foglio Principale (Master Database)</strong> per la cronologia generale e
+              quali fogli sono dedicati ai singoli task.
+            </p>
+
+            <!-- Sheets List -->
+            <q-list
+              v-if="linkedSheets.length > 0"
+              bordered
+              separator
+              class="rounded-borders bg-white q-mb-sm"
+            >
+              <q-item v-for="sheet in linkedSheets" :key="sheet.id" class="q-py-sm">
+                <q-item-section avatar style="min-width: 36px">
+                  <q-icon name="table_chart" color="positive" size="22px" />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label class="text-subtitle2 text-weight-bold">
+                    {{ sheet.name }}
+                    <q-chip
+                      v-if="sheet.isMaster"
+                      color="amber-9"
+                      text-color="dark"
+                      size="xs"
+                      icon="star"
+                      class="text-weight-bold q-ml-xs"
+                    >
+                      Foglio Master (Database)
+                    </q-chip>
+                  </q-item-label>
+                  <q-item-label
+                    caption
+                    class="text-mono text-grey-6 text-ellipsis"
+                    style="max-width: 320px"
+                  >
+                    ID: {{ sheet.id }}
+                  </q-item-label>
+                </q-item-section>
+                <q-item-section side class="row no-wrap items-center q-gutter-xs">
+                  <q-btn
+                    v-if="!sheet.isMaster"
+                    flat
+                    dense
+                    no-caps
+                    size="xs"
+                    color="amber-9"
+                    icon="star_border"
+                    label="Imposta come Master"
+                    @click="setMasterSheet(sheet.id)"
+                  />
+                  <q-btn
+                    v-if="sheet.url"
+                    flat
+                    round
+                    dense
+                    icon="open_in_new"
+                    size="xs"
+                    color="grey-7"
+                    :href="sheet.url"
+                    target="_blank"
+                  />
+                  <q-btn
+                    flat
+                    round
+                    dense
+                    icon="delete"
+                    size="xs"
+                    color="negative"
+                    @click="removeSheetResource(sheet.id)"
+                  />
+                </q-item-section>
+              </q-item>
+            </q-list>
+            <div v-else class="text-caption text-grey-6 italic q-mb-sm">
+              Nessun Foglio Google ancora registrato. Aggiungine uno qui sotto:
             </div>
 
-            <q-option-group
-              v-model="assignedAgents"
-              :options="agentOptions"
-              type="checkbox"
-              color="primary"
-              class="q-mb-md"
+            <!-- Add Sheet Form -->
+            <div
+              class="row q-col-gutter-sm items-center bg-grey-1 q-pa-sm rounded-borders"
+              style="margin-left: 0; margin-right: 0"
+            >
+              <div class="col-12 col-sm-4">
+                <q-input
+                  v-model="newSheetNameInput"
+                  outlined
+                  dense
+                  placeholder="Nome Foglio (es. Listino)"
+                  bg-color="white"
+                />
+              </div>
+              <div class="col-12 col-sm-5">
+                <q-input
+                  v-model="newSheetUrlInput"
+                  outlined
+                  dense
+                  placeholder="URL o ID Foglio Google"
+                  bg-color="white"
+                />
+              </div>
+              <div class="col-12 col-sm-3">
+                <q-btn
+                  unelevated
+                  color="positive"
+                  icon="add"
+                  label="Aggiungi"
+                  no-caps
+                  dense
+                  class="full-width text-weight-bold"
+                  :disabled="!newSheetUrlInput.trim()"
+                  @click="addSheetResource"
+                />
+              </div>
+            </div>
+
+            <!-- Step 21 Strada 3: Policy Predefinita Integrazione Fogli nel Workspace -->
+            <SheetIntegrationConfigCard
+              v-model:update-mode="workspaceSheetUpdateMode"
+              v-model:auto-style-sheet="workspaceAutoStyleSheet"
+              title="Policy Predefinita Integrazione Fogli (Tutti i Task del Workspace)"
             />
-          </q-tab-panel>
+          </div>
 
-          <!-- TAB 4: Sandbox Test -->
-          <q-tab-panel name="sandbox" class="q-pa-none">
-            <div class="text-body2 text-grey-8 q-mb-sm">
-              Test the AI response with the attitude and linked resources before saving:
+          <q-separator class="q-my-md" />
+
+          <!-- Google Drive Folders Section -->
+          <div class="q-mb-lg">
+            <div class="text-subtitle2 text-weight-bold text-navy q-mb-xs">
+              📁 Cartelle Google Drive Collegate:
             </div>
+            <p class="text-caption text-grey-7 q-mb-sm">
+              Spazi Drive per l'indicizzazione e l'estrazione documentale da parte dell'Agente.
+            </p>
 
+            <q-list
+              v-if="linkedFolders.length > 0"
+              bordered
+              separator
+              class="rounded-borders bg-white q-mb-sm"
+            >
+              <q-item v-for="folder in linkedFolders" :key="folder.id" class="q-py-sm">
+                <q-item-section avatar style="min-width: 36px">
+                  <q-icon name="folder_special" color="amber-9" size="22px" />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label class="text-subtitle2 text-weight-bold">
+                    {{ folder.name }}
+                  </q-item-label>
+                  <q-item-label
+                    caption
+                    class="text-mono text-grey-6 text-ellipsis"
+                    style="max-width: 320px"
+                  >
+                    ID: {{ folder.id }}
+                  </q-item-label>
+                </q-item-section>
+                <q-item-section side class="row no-wrap items-center q-gutter-xs">
+                  <q-btn
+                    v-if="folder.url"
+                    flat
+                    round
+                    dense
+                    icon="open_in_new"
+                    size="xs"
+                    color="grey-7"
+                    :href="folder.url"
+                    target="_blank"
+                  />
+                  <q-btn
+                    flat
+                    round
+                    dense
+                    icon="delete"
+                    size="xs"
+                    color="negative"
+                    @click="removeFolderResource(folder.id)"
+                  />
+                </q-item-section>
+              </q-item>
+            </q-list>
+
+            <!-- Add Folder Form -->
+            <div
+              class="row q-col-gutter-sm items-center bg-grey-1 q-pa-sm rounded-borders"
+              style="margin-left: 0; margin-right: 0"
+            >
+              <div class="col-12 col-sm-4">
+                <q-input
+                  v-model="newFolderNameInput"
+                  outlined
+                  dense
+                  placeholder="Nome Cartella (es. Documenti)"
+                  bg-color="white"
+                />
+              </div>
+              <div class="col-12 col-sm-5">
+                <q-input
+                  v-model="newFolderUrlInput"
+                  outlined
+                  dense
+                  placeholder="URL o ID Cartella Drive"
+                  bg-color="white"
+                />
+              </div>
+              <div class="col-12 col-sm-3">
+                <q-btn
+                  unelevated
+                  color="amber-9"
+                  text-color="dark"
+                  icon="add"
+                  label="Aggiungi"
+                  no-caps
+                  dense
+                  class="full-width text-weight-bold"
+                  :disabled="!newFolderUrlInput.trim()"
+                  @click="addFolderResource"
+                />
+              </div>
+            </div>
+          </div>
+
+          <q-separator class="q-my-md" />
+
+          <!-- Master Sheet Workspace-Level Toggle -->
+          <div
+            class="master-sheet-toggle-card q-pa-md q-mb-md rounded-borders row items-center justify-between no-wrap"
+          >
+            <div class="col">
+              <div class="row items-center q-gutter-xs q-mb-xs">
+                <q-icon name="table_chart" color="amber-8" size="18px" />
+                <span class="text-subtitle2 text-weight-bold text-navy"
+                  >Scrittura Automatica sul Foglio Master</span
+                >
+              </div>
+              <p class="text-caption text-grey-7 q-mb-none">
+                Quando attivo, tutti i task di questo Workspace scrivono automaticamente i risultati
+                sul Foglio Master Google. Puoi disattivarlo per ogni singolo task.
+              </p>
+            </div>
+            <q-toggle
+              v-model="autoSyncToMasterSheet"
+              color="amber-8"
+              size="lg"
+              class="q-ml-md"
+              :label="autoSyncToMasterSheet ? 'Attivo' : 'Disattivo'"
+            />
+          </div>
+
+          <q-separator class="q-my-md" />
+
+          <!-- Default Email Signature for the Workspace -->
+          <div class="q-mb-md">
+            <div class="text-subtitle2 text-weight-bold text-navy q-mb-xs">
+              ✍️ Firma Email Predefinita del Workspace:
+            </div>
+            <p class="text-caption text-grey-7 q-mb-sm">
+              Questa firma viene ereditata automaticamente da tutti i task del Workspace (può essere
+              personalizzata nel singolo task).
+            </p>
             <q-input
-              v-model="testInput"
+              v-model="defaultEmailSignature"
+              type="textarea"
+              rows="4"
               outlined
               dense
-              placeholder="Type a test instruction (e.g. Find private clinics and save to spreadsheet)..."
-              class="q-mb-sm"
-              @keyup.enter="runSandboxTest"
-            >
-              <template #after>
-                <q-btn
-                  color="secondary"
-                  icon="play_arrow"
-                  label="Test Prompt"
-                  no-caps
-                  :loading="isTesting"
-                  @click="runSandboxTest"
-                />
-              </template>
-            </q-input>
+              placeholder="Inserisci la firma predefinita (es. Cordiali saluti, Team OpsFlow...)"
+            />
+          </div>
+        </q-tab-panel>
 
-            <div v-if="testOutput" class="q-pa-md bg-grey-2 rounded-borders text-caption font-mono">
-              <pre style="white-space: pre-wrap; margin: 0">{{ testOutput }}</pre>
-            </div>
-          </q-tab-panel>
-        </q-tab-panels>
-      </q-card-section>
+        <!-- TAB 3: Assigned Agents -->
+        <q-tab-panel name="agents" class="q-pa-none">
+          <div class="text-body2 text-grey-8 q-mb-md">
+            Seleziona quali agenti IA coordinati sono abilitati ad operare su questo Workspace:
+          </div>
 
-      <q-separator />
+          <q-option-group
+            v-model="assignedAgents"
+            :options="agentOptions"
+            type="checkbox"
+            color="primary"
+            class="q-mb-md"
+          />
+        </q-tab-panel>
 
-      <!-- ── Fixed Footer Actions ──────────────────────────────────────── -->
-      <q-card-actions
-        align="right"
-        class="attitude-modal-card__footer q-px-lg q-py-sm bg-white shrink-0"
-      >
-        <q-btn flat label="Cancel" color="grey-8" no-caps v-close-popup />
+        <!-- TAB 4: Sandbox Test -->
+        <q-tab-panel name="sandbox" class="q-pa-none">
+          <div class="text-body2 text-grey-8 q-mb-sm">
+            Test the AI response with the attitude and linked resources before saving:
+          </div>
+
+          <q-input
+            v-model="testInput"
+            outlined
+            dense
+            placeholder="Type a test instruction (e.g. Find private clinics and save to spreadsheet)..."
+            class="q-mb-sm"
+            @keyup.enter="runSandboxTest"
+          >
+            <template #after>
+              <q-btn
+                color="secondary"
+                icon="play_arrow"
+                label="Test Prompt"
+                no-caps
+                :loading="isTesting"
+                @click="runSandboxTest"
+              />
+            </template>
+          </q-input>
+
+          <div v-if="testOutput" class="q-pa-md bg-grey-2 rounded-borders text-caption font-mono">
+            <pre style="white-space: pre-wrap; margin: 0">{{ testOutput }}</pre>
+          </div>
+        </q-tab-panel>
+      </q-tab-panels>
+    </div>
+
+    <!-- ── Fixed Footer Actions ──────────────────────────────────────── -->
+    <template #footer>
+      <div class="row items-center justify-end q-gutter-sm">
+        <q-btn flat label="Cancel" color="grey-8" no-caps @click="isOpen = false" />
         <q-btn
           unelevated
           color="primary"
@@ -1341,9 +1334,9 @@ const handleSave = async (): Promise<void> => {
           :loading="isSaving"
           @click="handleSave"
         />
-      </q-card-actions>
-    </q-card>
-  </q-dialog>
+      </div>
+    </template>
+  </AppFloatingWindow>
 </template>
 
 <style scoped lang="scss">

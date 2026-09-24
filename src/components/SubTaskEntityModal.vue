@@ -42,6 +42,9 @@ import type {
   EntityDomain,
 } from "../types/models";
 
+// ── Components ───────────────────────────────────────────────────────────────
+import AppFloatingWindow from "./AppFloatingWindow.vue";
+
 // ── Stores ───────────────────────────────────────────────────────────────────
 import { useAuthStore } from "../stores/authStore";
 import { useSubtaskUiStore } from "../stores/subtaskUiStore";
@@ -568,577 +571,527 @@ const formatEventDate = (isoStr: string): string => {
 </script>
 
 <template>
-  <q-dialog v-model="isOpen" persistent transition-show="scale" transition-hide="scale">
-    <q-card
-      v-if="subtask"
-      class="subtask-entity-card column no-wrap"
-      style="
-        width: 1060px;
-        max-width: 96vw;
-        height: 88vh;
-        max-height: 88vh;
-        background-color: #fcfbfa;
-      "
-    >
-      <!-- ── Header Elite ──────────────────────────────────────────────────────── -->
+  <AppFloatingWindow
+    v-if="subtask"
+    v-model="isOpen"
+    window-id="subtask-entity-modal"
+    :title="subtask.title"
+    :subtitle="subtask.subtitle || domainConfig.domainLabel"
+    :icon="domainConfig.entityIcon"
+    icon-color="amber-5"
+    :initial-width="1060"
+    :initial-height="720"
+    :min-width="480"
+    :min-height="380"
+    @close="isOpen = false"
+  >
+    <template #header-middle>
+      <div class="row items-center q-gutter-x-xs no-wrap">
+        <q-badge
+          v-if="subtask.entityExternalId"
+          outline
+          color="amber-4"
+          :label="subtask.entityExternalId"
+          class="text-weight-bold"
+        />
+        <q-badge dense color="navy-light" text-color="grey-4" :label="domainConfig.domainLabel" />
+        <!-- Outcome Badge -->
+        <q-badge
+          v-if="localOutcome === 'won'"
+          color="positive"
+          class="q-pa-xs text-weight-bold shadow-1"
+        >
+          ⭐ Concluso (Won)
+        </q-badge>
+        <q-badge
+          v-else-if="localOutcome === 'lost'"
+          color="grey-7"
+          class="q-pa-xs text-weight-bold shadow-1"
+        >
+          ❌ Archiviato (Lost)
+        </q-badge>
+
+        <!-- Quick Status Dropdown -->
+        <q-btn-dropdown
+          dense
+          rounded
+          outline
+          size="sm"
+          :color="currentStatusObj.color"
+          :label="currentStatusObj.label"
+          :icon="currentStatusObj.icon"
+          class="q-px-sm text-weight-bold bg-dark"
+        >
+          <q-list dense style="min-width: 180px">
+            <q-item
+              v-for="opt in subtaskStatusOptions"
+              :key="opt.value"
+              clickable
+              v-close-popup
+              @click="handleStatusChange(opt.value)"
+            >
+              <q-item-section avatar style="min-width: 24px">
+                <q-icon :name="opt.icon" :color="opt.color" size="18px" />
+              </q-item-section>
+              <q-item-section class="text-caption text-weight-medium">
+                {{ opt.label }}
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-btn-dropdown>
+      </div>
+    </template>
+
+    <!-- ── Two-Column Split-View Body (Img 5 Coherent Layout) ────────────────── -->
+    <div class="col row no-wrap overflow-hidden subtask-split-container">
+      <!-- ── LEFT COLUMN: Dati Ereditati, Attributi & Note Operative ───────── -->
       <div
-        class="q-pa-md bg-royal-navy text-white row items-center justify-between no-wrap elite-header"
+        class="col-12 col-md-6 column no-wrap scroll q-pa-md border-right-light left-pane bg-grey-1"
+        style="overflow-y: auto"
       >
-        <div class="row items-center no-wrap ellipsis q-mr-sm" style="flex: 1">
-          <q-avatar
-            size="44px"
-            font-size="24px"
-            color="amber-9"
-            text-color="dark"
-            :icon="domainConfig.entityIcon"
-            class="shadow-2 q-mr-md"
-          />
-          <div class="column ellipsis" style="flex: 1">
-            <div class="row items-center q-gutter-x-sm no-wrap">
-              <span class="text-subtitle1 text-weight-bolder text-white ellipsis">
-                {{ subtask.title }}
-              </span>
-              <q-badge
-                v-if="subtask.entityExternalId"
-                outline
-                color="amber-4"
-                :label="subtask.entityExternalId"
-                class="text-weight-bold"
-              />
-              <q-badge
-                dense
-                color="navy-light"
-                text-color="grey-4"
-                :label="domainConfig.domainLabel"
-              />
+        <!-- Card 1: Dati Ereditati dalla Tabella / Chat -->
+        <q-card flat bordered class="rounded-borders bg-white q-pa-md shadow-1 q-mb-md">
+          <div class="row items-center justify-between q-mb-sm">
+            <div
+              class="text-caption text-weight-bold text-primary text-uppercase letter-spacing row items-center"
+            >
+              <q-icon name="info" size="18px" color="primary" class="q-mr-xs" />
+              Dati Ereditati & Profilo Fonte
             </div>
-            <div v-if="subtask.subtitle" class="text-caption text-grey-4 ellipsis q-mt-xs">
-              {{ subtask.subtitle }}
-            </div>
+            <q-btn
+              v-if="profileUrl"
+              outline
+              dense
+              size="xs"
+              color="primary"
+              icon="open_in_new"
+              label="Apri Profilo Fonte"
+              :href="profileUrl"
+              target="_blank"
+              class="q-px-sm"
+            />
           </div>
-        </div>
 
-        <!-- Right Header Controls: Status Dropdown & Outcome -->
-        <div class="row items-center q-gutter-x-sm no-wrap">
-          <!-- Outcome Badge -->
-          <q-badge
-            v-if="localOutcome === 'won'"
-            color="positive"
-            class="q-pa-xs text-weight-bold shadow-1"
-          >
-            ⭐ Concluso (Won)
-          </q-badge>
-          <q-badge
-            v-else-if="localOutcome === 'lost'"
-            color="grey-7"
-            class="q-pa-xs text-weight-bold shadow-1"
-          >
-            ❌ Archiviato (Lost)
-          </q-badge>
-
-          <!-- Quick Status Dropdown -->
-          <q-btn-dropdown
-            dense
-            rounded
-            outline
-            size="sm"
-            :color="currentStatusObj.color"
-            :label="currentStatusObj.label"
-            :icon="currentStatusObj.icon"
-            class="q-px-sm text-weight-bold bg-dark"
-          >
-            <q-list dense style="min-width: 180px">
-              <q-item
-                v-for="opt in subtaskStatusOptions"
-                :key="opt.value"
-                clickable
-                v-close-popup
-                @click="handleStatusChange(opt.value)"
-              >
-                <q-item-section avatar style="min-width: 24px">
-                  <q-icon :name="opt.icon" :color="opt.color" size="18px" />
+          <div v-if="extractedRowCells.length > 0" class="q-mt-sm">
+            <q-list dense separator class="rounded-borders bg-grey-1">
+              <q-item v-for="(cell, cIdx) in extractedRowCells" :key="cIdx" class="q-py-xs">
+                <q-item-section avatar style="min-width: 32px">
+                  <q-badge color="grey-4" text-color="dark" :label="`Col ${cIdx + 1}`" />
                 </q-item-section>
-                <q-item-section class="text-caption text-weight-medium">
-                  {{ opt.label }}
+                <q-item-section class="text-caption" style="word-break: break-all">
+                  <template v-if="/^https?:\/\//i.test(cell)">
+                    <a :href="cell" target="_blank" class="text-primary text-weight-bold">
+                      {{ cell }} 🔗
+                    </a>
+                  </template>
+                  <template v-else>
+                    {{ cell }}
+                  </template>
+                </q-item-section>
+                <q-item-section side>
+                  <q-btn
+                    flat
+                    dense
+                    round
+                    size="xs"
+                    icon="content_copy"
+                    color="grey-6"
+                    @click="handleCopyText(cell, `Valore Colonna ${cIdx + 1}`)"
+                  >
+                    <q-tooltip>Copia Valore</q-tooltip>
+                  </q-btn>
                 </q-item-section>
               </q-item>
             </q-list>
-          </q-btn-dropdown>
+          </div>
 
-          <!-- Delete Subtask Icon -->
-          <q-btn
-            round
-            dense
-            flat
-            color="red-3"
-            icon="delete_forever"
-            :loading="isDeletingSubtask"
-            @click="handleDeleteSubtask"
+          <div v-else class="text-caption text-grey-6 q-pa-sm text-center">
+            Nessun valore tabellare specifico ereditato.
+          </div>
+
+          <!-- Meta attributes summary -->
+          <div class="q-mt-md q-pt-xs border-top-light">
+            <div
+              class="row justify-between items-center text-caption q-py-2xs border-bottom-dashed"
+            >
+              <span class="text-grey-7">Dominio Applicativo:</span>
+              <span class="text-weight-bold text-dark">{{ domainConfig.domainLabel }}</span>
+            </div>
+            <div
+              class="row justify-between items-center text-caption q-py-2xs border-bottom-dashed"
+            >
+              <span class="text-grey-7">Data Creazione:</span>
+              <span class="text-grey-8">{{ formatEventDate(subtask.createdAt) }}</span>
+            </div>
+            <div class="row justify-between items-center text-caption q-py-2xs">
+              <span class="text-grey-7">Ultimo Aggiornamento:</span>
+              <span class="text-grey-8">{{ formatEventDate(subtask.updatedAt) }}</span>
+            </div>
+          </div>
+
+          <!-- Unidirectional sync boundary note -->
+          <div
+            class="q-mt-sm q-pa-xs bg-blue-1 text-primary text-caption rounded-borders row items-center no-wrap"
+            style="font-size: 0.72rem"
           >
-            <q-tooltip>Elimina definitivamente la risorsa da Firebase</q-tooltip>
-          </q-btn>
+            <q-icon name="sync_disabled" size="16px" class="q-mr-xs text-primary shrink" />
+            <span>
+              <strong>Isolamento Garantito:</strong> Gli stati e le note sono memorizzati in OpsFlow
+              senza alterare le celle del Google Sheet originale.
+            </span>
+          </div>
+        </q-card>
 
-          <!-- Close Icon -->
-          <q-btn round dense flat color="grey-4" icon="close" @click="isOpen = false">
-            <q-tooltip>Chiudi Scheda Risorsa</q-tooltip>
-          </q-btn>
-        </div>
+        <!-- Card 2: Note Operative & Appunti di Contatto -->
+        <q-card
+          flat
+          bordered
+          class="rounded-borders bg-white q-pa-md shadow-1 q-mb-xs col-grow column no-wrap"
+        >
+          <div class="row items-center justify-between q-mb-xs">
+            <div class="row items-center">
+              <q-icon name="sticky_note_2" color="amber-9" size="20px" class="q-mr-xs" />
+              <span class="text-subtitle2 text-weight-bold text-primary">Note Operative</span>
+            </div>
+
+            <div class="row items-center q-gutter-x-xs">
+              <q-badge v-if="hasUnsavedNotes" outline color="deep-orange" label="Non salvate" />
+              <q-btn
+                unelevated
+                size="xs"
+                color="primary"
+                icon="save"
+                label="Salva Note"
+                :loading="isSavingNotes"
+                class="text-weight-bold q-px-sm"
+                @click="handleSaveNotes"
+              />
+            </div>
+          </div>
+
+          <!-- Healthcare Alert (GDPR Art. 9) -->
+          <div
+            v-if="subtask.domain === 'healthcare'"
+            class="q-mb-xs q-pa-xs bg-amber-1 text-amber-10 text-caption rounded-borders row items-center"
+            style="font-size: 0.72rem"
+          >
+            <q-icon name="security" size="16px" class="q-mr-xs" />
+            <span><strong>GDPR Art. 9:</strong> Informazioni sanitarie isolate per tenant.</span>
+          </div>
+
+          <q-input
+            v-model="localNotes"
+            type="textarea"
+            outlined
+            autogrow
+            rows="6"
+            placeholder="Inserisci note sulla risorsa, riassunto colloqui, disponibilità, richieste economiche..."
+            class="subtask-notes-input full-width q-mt-xs"
+            @update:model-value="hasUnsavedNotes = true"
+          />
+        </q-card>
       </div>
 
-      <!-- ── Two-Column Split-View Body (Img 5 Coherent Layout) ────────────────── -->
-      <div class="col row no-wrap overflow-hidden subtask-split-container">
-        <!-- ── LEFT COLUMN: Dati Ereditati, Attributi & Note Operative ───────── -->
-        <div
-          class="col-12 col-md-6 column no-wrap scroll q-pa-md border-right-light left-pane bg-grey-1"
-          style="overflow-y: auto"
+      <!-- ── RIGHT COLUMN: Timeline Privata & Mini-Task Checklist Affiancati ── -->
+      <div
+        class="col-12 col-md-6 column no-wrap scroll q-pa-md right-pane bg-white"
+        style="overflow-y: auto"
+      >
+        <!-- Sezione Mini-Task Checklist (Fisarmonica Espandibile con Persistenza Store Locale) -->
+        <q-card
+          flat
+          bordered
+          class="rounded-borders bg-grey-1 q-pa-sm shadow-1 q-mb-sm border-light"
         >
-          <!-- Card 1: Dati Ereditati dalla Tabella / Chat -->
-          <q-card flat bordered class="rounded-borders bg-white q-pa-md shadow-1 q-mb-md">
-            <div class="row items-center justify-between q-mb-sm">
-              <div
-                class="text-caption text-weight-bold text-primary text-uppercase letter-spacing row items-center"
-              >
-                <q-icon name="info" size="18px" color="primary" class="q-mr-xs" />
-                Dati Ereditati & Profilo Fonte
+          <div class="row items-center justify-between cursor-pointer" @click="toggleMiniTasks">
+            <div class="row items-center q-gutter-x-xs">
+              <q-icon name="checklist" color="teal-7" size="20px" />
+              <span class="text-subtitle2 text-weight-bold text-primary">Mini-Task Checklist</span>
+              <q-badge
+                v-if="subtask.nestedTasks && subtask.nestedTasks.length > 0"
+                color="teal-7"
+                rounded
+                dense
+                :label="`${subtask.nestedTasks.filter((t) => t.completed).length}/${subtask.nestedTasks.length}`"
+              />
+            </div>
+            <div class="row items-center q-gutter-x-2xs">
+              <span class="text-caption text-grey-6" style="font-size: 0.72rem">
+                {{ isMiniTasksExpanded ? "Nascondi" : "Mostra" }}
+              </span>
+              <q-icon
+                :name="isMiniTasksExpanded ? 'expand_less' : 'expand_more'"
+                color="grey-7"
+                size="18px"
+              />
+            </div>
+          </div>
+
+          <!-- Expandable Checklist Body -->
+          <q-slide-transition>
+            <div v-show="isMiniTasksExpanded" class="q-pt-sm">
+              <!-- Add Mini-Task -->
+              <div class="row q-gutter-x-xs items-center q-mb-sm">
+                <q-input
+                  v-model="newMiniTaskTitle"
+                  dense
+                  outlined
+                  placeholder="Nuova azione (es. Inviare accordo entro giovedì)..."
+                  class="col bg-white"
+                  style="font-size: 0.8rem"
+                  @keyup.enter="handleAddMiniTask"
+                />
+                <q-btn
+                  dense
+                  unelevated
+                  size="sm"
+                  color="teal-7"
+                  icon="add"
+                  class="q-px-xs"
+                  :loading="isSavingMiniTask"
+                  @click="handleAddMiniTask"
+                >
+                  <q-tooltip>Aggiungi Mini-Task</q-tooltip>
+                </q-btn>
               </div>
+
+              <!-- Mini Tasks List -->
+              <div
+                v-if="subtask.nestedTasks && subtask.nestedTasks.length > 0"
+                class="q-gutter-y-2xs"
+                style="max-height: 170px; overflow-y: auto"
+              >
+                <div
+                  v-for="(mt, mtIdx) in subtask.nestedTasks"
+                  :key="mt.id || mtIdx"
+                  class="row items-center justify-between q-py-2xs q-px-xs rounded-borders bg-white border-light"
+                >
+                  <div class="row items-center q-gutter-x-xs col ellipsis">
+                    <q-checkbox
+                      :model-value="mt.completed"
+                      color="teal-7"
+                      dense
+                      size="xs"
+                      @update:model-value="handleToggleMiniTask(mtIdx)"
+                    />
+                    <span
+                      class="text-caption ellipsis"
+                      :class="{
+                        'text-strike text-grey-5': mt.completed,
+                        'text-dark text-weight-medium': !mt.completed,
+                      }"
+                      style="font-size: 0.78rem"
+                    >
+                      {{ mt.title }}
+                    </span>
+                  </div>
+                  <q-btn
+                    flat
+                    dense
+                    round
+                    size="2xs"
+                    icon="delete_outline"
+                    color="negative"
+                    @click="handleDeleteMiniTask(mtIdx)"
+                  >
+                    <q-tooltip>Elimina mini-task</q-tooltip>
+                  </q-btn>
+                </div>
+              </div>
+              <div
+                v-else
+                class="text-caption text-grey-5 text-center q-pa-xs"
+                style="font-size: 0.72rem"
+              >
+                Nessuna sotto-azione inserita. Aggiungine una con il campo in alto.
+              </div>
+            </div>
+          </q-slide-transition>
+        </q-card>
+
+        <!-- Sezione Timeline Privata degli Eventi (Identica visivamente alla Timeline Principale di Img 5) -->
+        <q-card
+          flat
+          bordered
+          class="rounded-borders bg-white q-pa-md shadow-1 col-grow column no-wrap"
+        >
+          <div class="row items-center justify-between q-mb-sm border-bottom-light q-pb-xs">
+            <div>
+              <div class="row items-center q-gutter-x-xs">
+                <q-icon name="history" color="primary" size="20px" />
+                <span class="text-subtitle2 text-weight-bold text-primary">Timeline Privata</span>
+                <q-badge
+                  v-if="subtask.timeline && subtask.timeline.length > 0"
+                  color="primary"
+                  rounded
+                  dense
+                  :label="subtask.timeline.length"
+                />
+              </div>
+              <div class="text-caption text-grey-6" style="font-size: 0.72rem">
+                Storico cronologico delle interazioni (chiamate, email, colloqui)
+              </div>
+            </div>
+
+            <!-- Quick Log Action Bar: [📞 Chiamata] [✉️ Email] [💬 WhatsApp] [📝 Nota] -->
+            <div class="row items-center q-gutter-2xs">
               <q-btn
-                v-if="profileUrl"
                 outline
                 dense
                 size="xs"
                 color="primary"
-                icon="open_in_new"
-                label="Apri Profilo Fonte"
-                :href="profileUrl"
-                target="_blank"
-                class="q-px-sm"
+                icon="call"
+                label="Chiamata"
+                class="q-px-2xs"
+                @click="openAddEvent('call')"
+              />
+              <q-btn
+                outline
+                dense
+                size="xs"
+                color="teal-7"
+                icon="mail"
+                label="Email"
+                class="q-px-2xs"
+                @click="openAddEvent('email')"
+              />
+              <q-btn
+                outline
+                dense
+                size="xs"
+                color="green-8"
+                icon="chat"
+                label="WhatsApp"
+                class="q-px-2xs"
+                @click="openAddEvent('whatsapp')"
+              />
+              <q-btn
+                outline
+                dense
+                size="xs"
+                color="amber-9"
+                icon="edit_note"
+                label="Nota"
+                class="q-px-2xs"
+                @click="openAddEvent('note')"
               />
             </div>
+          </div>
 
-            <div v-if="extractedRowCells.length > 0" class="q-mt-sm">
-              <q-list dense separator class="rounded-borders bg-grey-1">
-                <q-item v-for="(cell, cIdx) in extractedRowCells" :key="cIdx" class="q-py-xs">
-                  <q-item-section avatar style="min-width: 32px">
-                    <q-badge color="grey-4" text-color="dark" :label="`Col ${cIdx + 1}`" />
-                  </q-item-section>
-                  <q-item-section class="text-caption" style="word-break: break-all">
-                    <template v-if="/^https?:\/\//i.test(cell)">
-                      <a :href="cell" target="_blank" class="text-primary text-weight-bold">
-                        {{ cell }} 🔗
-                      </a>
-                    </template>
-                    <template v-else>
-                      {{ cell }}
-                    </template>
-                  </q-item-section>
-                  <q-item-section side>
-                    <q-btn
-                      flat
-                      dense
-                      round
-                      size="xs"
-                      icon="content_copy"
-                      color="grey-6"
-                      @click="handleCopyText(cell, `Valore Colonna ${cIdx + 1}`)"
-                    >
-                      <q-tooltip>Copia Valore</q-tooltip>
-                    </q-btn>
-                  </q-item-section>
-                </q-item>
-              </q-list>
-            </div>
-
-            <div v-else class="text-caption text-grey-6 q-pa-sm text-center">
-              Nessun valore tabellare specifico ereditato.
-            </div>
-
-            <!-- Meta attributes summary -->
-            <div class="q-mt-md q-pt-xs border-top-light">
-              <div
-                class="row justify-between items-center text-caption q-py-2xs border-bottom-dashed"
-              >
-                <span class="text-grey-7">Dominio Applicativo:</span>
-                <span class="text-weight-bold text-dark">{{ domainConfig.domainLabel }}</span>
-              </div>
-              <div
-                class="row justify-between items-center text-caption q-py-2xs border-bottom-dashed"
-              >
-                <span class="text-grey-7">Data Creazione:</span>
-                <span class="text-grey-8">{{ formatEventDate(subtask.createdAt) }}</span>
-              </div>
-              <div class="row justify-between items-center text-caption q-py-2xs">
-                <span class="text-grey-7">Ultimo Aggiornamento:</span>
-                <span class="text-grey-8">{{ formatEventDate(subtask.updatedAt) }}</span>
-              </div>
-            </div>
-
-            <!-- Unidirectional sync boundary note -->
+          <!-- Quick Add Event Form (Slide Transition) -->
+          <q-slide-transition>
             <div
-              class="q-mt-sm q-pa-xs bg-blue-1 text-primary text-caption rounded-borders row items-center no-wrap"
-              style="font-size: 0.72rem"
+              v-if="isAddingEvent"
+              class="q-pa-sm bg-grey-1 rounded-borders q-mb-sm border-light"
             >
-              <q-icon name="sync_disabled" size="16px" class="q-mr-xs text-primary shrink" />
-              <span>
-                <strong>Isolamento Garantito:</strong> Gli stati e le note sono memorizzati in
-                OpsFlow senza alterare le celle del Google Sheet originale.
-              </span>
-            </div>
-          </q-card>
-
-          <!-- Card 2: Note Operative & Appunti di Contatto -->
-          <q-card
-            flat
-            bordered
-            class="rounded-borders bg-white q-pa-md shadow-1 q-mb-xs col-grow column no-wrap"
-          >
-            <div class="row items-center justify-between q-mb-xs">
-              <div class="row items-center">
-                <q-icon name="sticky_note_2" color="amber-9" size="20px" class="q-mr-xs" />
-                <span class="text-subtitle2 text-weight-bold text-primary">Note Operative</span>
+              <div class="row items-center justify-between q-mb-xs">
+                <div class="text-caption text-weight-bold text-primary" style="font-size: 0.78rem">
+                  Registra Nuova Interazione ({{ newEventType.toUpperCase() }})
+                </div>
+                <q-btn flat round dense size="2xs" icon="close" @click="isAddingEvent = false" />
               </div>
-
-              <div class="row items-center q-gutter-x-xs">
-                <q-badge v-if="hasUnsavedNotes" outline color="deep-orange" label="Non salvate" />
-                <q-btn
-                  unelevated
-                  size="xs"
-                  color="primary"
-                  icon="save"
-                  label="Salva Note"
-                  :loading="isSavingNotes"
-                  class="text-weight-bold q-px-sm"
-                  @click="handleSaveNotes"
-                />
-              </div>
-            </div>
-
-            <!-- Healthcare Alert (GDPR Art. 9) -->
-            <div
-              v-if="subtask.domain === 'healthcare'"
-              class="q-mb-xs q-pa-xs bg-amber-1 text-amber-10 text-caption rounded-borders row items-center"
-              style="font-size: 0.72rem"
-            >
-              <q-icon name="security" size="16px" class="q-mr-xs" />
-              <span><strong>GDPR Art. 9:</strong> Informazioni sanitarie isolate per tenant.</span>
-            </div>
-
-            <q-input
-              v-model="localNotes"
-              type="textarea"
-              outlined
-              autogrow
-              rows="6"
-              placeholder="Inserisci note sulla risorsa, riassunto colloqui, disponibilità, richieste economiche..."
-              class="subtask-notes-input full-width q-mt-xs"
-              @update:model-value="hasUnsavedNotes = true"
-            />
-          </q-card>
-        </div>
-
-        <!-- ── RIGHT COLUMN: Timeline Privata & Mini-Task Checklist Affiancati ── -->
-        <div
-          class="col-12 col-md-6 column no-wrap scroll q-pa-md right-pane bg-white"
-          style="overflow-y: auto"
-        >
-          <!-- Sezione Mini-Task Checklist (Fisarmonica Espandibile con Persistenza Store Locale) -->
-          <q-card
-            flat
-            bordered
-            class="rounded-borders bg-grey-1 q-pa-sm shadow-1 q-mb-sm border-light"
-          >
-            <div class="row items-center justify-between cursor-pointer" @click="toggleMiniTasks">
-              <div class="row items-center q-gutter-x-xs">
-                <q-icon name="checklist" color="teal-7" size="20px" />
-                <span class="text-subtitle2 text-weight-bold text-primary"
-                  >Mini-Task Checklist</span
-                >
-                <q-badge
-                  v-if="subtask.nestedTasks && subtask.nestedTasks.length > 0"
-                  color="teal-7"
-                  rounded
+              <div class="q-gutter-y-xs">
+                <q-input
+                  v-model="newEventTitle"
                   dense
-                  :label="`${subtask.nestedTasks.filter((t) => t.completed).length}/${subtask.nestedTasks.length}`"
+                  outlined
+                  placeholder="Titolo evento (es. Chiamata conoscitiva con esito positivo)"
+                  class="bg-white"
+                  style="font-size: 0.8rem"
                 />
-              </div>
-              <div class="row items-center q-gutter-x-2xs">
-                <span class="text-caption text-grey-6" style="font-size: 0.72rem">
-                  {{ isMiniTasksExpanded ? "Nascondi" : "Mostra" }}
-                </span>
-                <q-icon
-                  :name="isMiniTasksExpanded ? 'expand_less' : 'expand_more'"
-                  color="grey-7"
-                  size="18px"
+                <q-input
+                  v-model="newEventDesc"
+                  dense
+                  outlined
+                  type="textarea"
+                  rows="2"
+                  placeholder="Dettagli / note opzionali..."
+                  class="bg-white"
+                  style="font-size: 0.8rem"
                 />
-              </div>
-            </div>
-
-            <!-- Expandable Checklist Body -->
-            <q-slide-transition>
-              <div v-show="isMiniTasksExpanded" class="q-pt-sm">
-                <!-- Add Mini-Task -->
-                <div class="row q-gutter-x-xs items-center q-mb-sm">
-                  <q-input
-                    v-model="newMiniTaskTitle"
-                    dense
-                    outlined
-                    placeholder="Nuova azione (es. Inviare accordo entro giovedì)..."
-                    class="col bg-white"
-                    style="font-size: 0.8rem"
-                    @keyup.enter="handleAddMiniTask"
-                  />
+                <div class="row justify-end q-gutter-x-xs">
+                  <q-btn flat size="xs" label="Annulla" @click="isAddingEvent = false" />
                   <q-btn
-                    dense
                     unelevated
-                    size="sm"
-                    color="teal-7"
-                    icon="add"
-                    class="q-px-xs"
-                    :loading="isSavingMiniTask"
-                    @click="handleAddMiniTask"
-                  >
-                    <q-tooltip>Aggiungi Mini-Task</q-tooltip>
-                  </q-btn>
-                </div>
-
-                <!-- Mini Tasks List -->
-                <div
-                  v-if="subtask.nestedTasks && subtask.nestedTasks.length > 0"
-                  class="q-gutter-y-2xs"
-                  style="max-height: 170px; overflow-y: auto"
-                >
-                  <div
-                    v-for="(mt, mtIdx) in subtask.nestedTasks"
-                    :key="mt.id || mtIdx"
-                    class="row items-center justify-between q-py-2xs q-px-xs rounded-borders bg-white border-light"
-                  >
-                    <div class="row items-center q-gutter-x-xs col ellipsis">
-                      <q-checkbox
-                        :model-value="mt.completed"
-                        color="teal-7"
-                        dense
-                        size="xs"
-                        @update:model-value="handleToggleMiniTask(mtIdx)"
-                      />
-                      <span
-                        class="text-caption ellipsis"
-                        :class="{
-                          'text-strike text-grey-5': mt.completed,
-                          'text-dark text-weight-medium': !mt.completed,
-                        }"
-                        style="font-size: 0.78rem"
-                      >
-                        {{ mt.title }}
-                      </span>
-                    </div>
-                    <q-btn
-                      flat
-                      dense
-                      round
-                      size="2xs"
-                      icon="delete_outline"
-                      color="negative"
-                      @click="handleDeleteMiniTask(mtIdx)"
-                    >
-                      <q-tooltip>Elimina mini-task</q-tooltip>
-                    </q-btn>
-                  </div>
-                </div>
-                <div
-                  v-else
-                  class="text-caption text-grey-5 text-center q-pa-xs"
-                  style="font-size: 0.72rem"
-                >
-                  Nessuna sotto-azione inserita. Aggiungine una con il campo in alto.
-                </div>
-              </div>
-            </q-slide-transition>
-          </q-card>
-
-          <!-- Sezione Timeline Privata degli Eventi (Identica visivamente alla Timeline Principale di Img 5) -->
-          <q-card
-            flat
-            bordered
-            class="rounded-borders bg-white q-pa-md shadow-1 col-grow column no-wrap"
-          >
-            <div class="row items-center justify-between q-mb-sm border-bottom-light q-pb-xs">
-              <div>
-                <div class="row items-center q-gutter-x-xs">
-                  <q-icon name="history" color="primary" size="20px" />
-                  <span class="text-subtitle2 text-weight-bold text-primary">Timeline Privata</span>
-                  <q-badge
-                    v-if="subtask.timeline && subtask.timeline.length > 0"
+                    size="xs"
                     color="primary"
-                    rounded
-                    dense
-                    :label="subtask.timeline.length"
+                    label="Salva Evento"
+                    :loading="isSavingEvent"
+                    @click="handleAddTimelineEvent"
                   />
                 </div>
-                <div class="text-caption text-grey-6" style="font-size: 0.72rem">
-                  Storico cronologico delle interazioni (chiamate, email, colloqui)
-                </div>
-              </div>
-
-              <!-- Quick Log Action Bar: [📞 Chiamata] [✉️ Email] [💬 WhatsApp] [📝 Nota] -->
-              <div class="row items-center q-gutter-2xs">
-                <q-btn
-                  outline
-                  dense
-                  size="xs"
-                  color="primary"
-                  icon="call"
-                  label="Chiamata"
-                  class="q-px-2xs"
-                  @click="openAddEvent('call')"
-                />
-                <q-btn
-                  outline
-                  dense
-                  size="xs"
-                  color="teal-7"
-                  icon="mail"
-                  label="Email"
-                  class="q-px-2xs"
-                  @click="openAddEvent('email')"
-                />
-                <q-btn
-                  outline
-                  dense
-                  size="xs"
-                  color="green-8"
-                  icon="chat"
-                  label="WhatsApp"
-                  class="q-px-2xs"
-                  @click="openAddEvent('whatsapp')"
-                />
-                <q-btn
-                  outline
-                  dense
-                  size="xs"
-                  color="amber-9"
-                  icon="edit_note"
-                  label="Nota"
-                  class="q-px-2xs"
-                  @click="openAddEvent('note')"
-                />
               </div>
             </div>
+          </q-slide-transition>
 
-            <!-- Quick Add Event Form (Slide Transition) -->
-            <q-slide-transition>
-              <div
-                v-if="isAddingEvent"
-                class="q-pa-sm bg-grey-1 rounded-borders q-mb-sm border-light"
+          <!-- Vertical Timeline List (Visually identical to TaskChatWindow Timeline in Img 5) -->
+          <div class="col scroll q-pr-xs q-pt-xs" style="overflow-y: auto">
+            <q-timeline
+              v-if="subtask.timeline && subtask.timeline.length > 0"
+              color="secondary"
+              dense
+              class="subtask-timeline q-px-xs"
+            >
+              <q-timeline-entry
+                v-for="evt in subtask.timeline"
+                :key="evt.id"
+                :subtitle="formatEventDate(evt.timestamp)"
+                :icon="
+                  evt.eventType === 'call'
+                    ? 'call'
+                    : evt.eventType === 'email'
+                      ? 'mail'
+                      : evt.eventType === 'whatsapp'
+                        ? 'chat'
+                        : evt.eventType === 'status_change'
+                          ? 'sync_alt'
+                          : 'edit_note'
+                "
+                :color="
+                  evt.eventType === 'call'
+                    ? 'primary'
+                    : evt.eventType === 'email'
+                      ? 'teal-7'
+                      : evt.eventType === 'whatsapp'
+                        ? 'green-8'
+                        : evt.eventType === 'status_change'
+                          ? 'amber-9'
+                          : 'indigo-6'
+                "
+                class="task-timeline-entry"
               >
-                <div class="row items-center justify-between q-mb-xs">
-                  <div
-                    class="text-caption text-weight-bold text-primary"
-                    style="font-size: 0.78rem"
-                  >
-                    Registra Nuova Interazione ({{ newEventType.toUpperCase() }})
-                  </div>
-                  <q-btn flat round dense size="2xs" icon="close" @click="isAddingEvent = false" />
-                </div>
-                <div class="q-gutter-y-xs">
-                  <q-input
-                    v-model="newEventTitle"
-                    dense
-                    outlined
-                    placeholder="Titolo evento (es. Chiamata conoscitiva con esito positivo)"
-                    class="bg-white"
-                    style="font-size: 0.8rem"
-                  />
-                  <q-input
-                    v-model="newEventDesc"
-                    dense
-                    outlined
-                    type="textarea"
-                    rows="2"
-                    placeholder="Dettagli / note opzionali..."
-                    class="bg-white"
-                    style="font-size: 0.8rem"
-                  />
-                  <div class="row justify-end q-gutter-x-xs">
-                    <q-btn flat size="xs" label="Annulla" @click="isAddingEvent = false" />
-                    <q-btn
-                      unelevated
-                      size="xs"
-                      color="primary"
-                      label="Salva Evento"
-                      :loading="isSavingEvent"
-                      @click="handleAddTimelineEvent"
-                    />
-                  </div>
-                </div>
-              </div>
-            </q-slide-transition>
-
-            <!-- Vertical Timeline List (Visually identical to TaskChatWindow Timeline in Img 5) -->
-            <div class="col scroll q-pr-xs q-pt-xs" style="overflow-y: auto">
-              <q-timeline
-                v-if="subtask.timeline && subtask.timeline.length > 0"
-                color="secondary"
-                dense
-                class="subtask-timeline q-px-xs"
-              >
-                <q-timeline-entry
-                  v-for="evt in subtask.timeline"
-                  :key="evt.id"
-                  :subtitle="formatEventDate(evt.timestamp)"
-                  :icon="
-                    evt.eventType === 'call'
-                      ? 'call'
-                      : evt.eventType === 'email'
-                        ? 'mail'
-                        : evt.eventType === 'whatsapp'
-                          ? 'chat'
-                          : evt.eventType === 'status_change'
-                            ? 'sync_alt'
-                            : 'edit_note'
-                  "
-                  :color="
-                    evt.eventType === 'call'
-                      ? 'primary'
-                      : evt.eventType === 'email'
-                        ? 'teal-7'
-                        : evt.eventType === 'whatsapp'
-                          ? 'green-8'
-                          : evt.eventType === 'status_change'
-                            ? 'amber-9'
-                            : 'indigo-6'
-                  "
-                  class="task-timeline-entry"
+                <template #title>
+                  <span class="text-weight-bold text-caption text-primary">
+                    {{ evt.title }}
+                  </span>
+                </template>
+                <div
+                  v-if="evt.description"
+                  class="text-caption text-grey-8 q-mt-xs"
+                  style="font-size: 0.74rem; line-height: 1.35"
                 >
-                  <template #title>
-                    <span class="text-weight-bold text-caption text-primary">
-                      {{ evt.title }}
-                    </span>
-                  </template>
-                  <div
-                    v-if="evt.description"
-                    class="text-caption text-grey-8 q-mt-xs"
-                    style="font-size: 0.74rem; line-height: 1.35"
-                  >
-                    {{ evt.description }}
-                  </div>
-                  <div class="text-caption text-grey-5 q-mt-xs" style="font-size: 0.68rem">
-                    Registrato da: {{ evt.authorName }}
-                  </div>
-                </q-timeline-entry>
-              </q-timeline>
+                  {{ evt.description }}
+                </div>
+                <div class="text-caption text-grey-5 q-mt-xs" style="font-size: 0.68rem">
+                  Registrato da: {{ evt.authorName }}
+                </div>
+              </q-timeline-entry>
+            </q-timeline>
 
-              <div v-else class="text-caption text-grey-6 text-center q-pa-md">
-                Nessun evento registrato nella timeline privata. Utilizza i pulsanti rapidi in alto
-                per aggiungere una chiamata o una nota.
-              </div>
+            <div v-else class="text-caption text-grey-6 text-center q-pa-md">
+              Nessun evento registrato nella timeline privata. Utilizza i pulsanti rapidi in alto
+              per aggiungere una chiamata o una nota.
             </div>
-          </q-card>
-        </div>
+          </div>
+        </q-card>
       </div>
+    </div>
 
-      <!-- ── Footer Actions Elite ──────────────────────────────────────────────── -->
-      <div class="q-pa-md bg-white border-top-light row items-center justify-between no-wrap">
+    <!-- ── Footer Actions Elite ──────────────────────────────────────────────── -->
+    <template #footer>
+      <div class="row items-center justify-between full-width no-wrap">
         <div class="row items-center q-gutter-x-sm">
-          <q-btn flat dense color="grey-7" label="Chiudi" @click="isOpen = false" />
+          <q-btn flat dense color="grey-7" label="Chiudi" no-caps @click="isOpen = false" />
           <q-btn
             v-if="localOutcome === 'won' || localOutcome === 'lost'"
             outline
@@ -1147,6 +1100,7 @@ const formatEventDate = (isoStr: string): string => {
             color="primary"
             icon="restart_alt"
             label="Riapri Scheda Risorsa"
+            no-caps
             class="q-px-sm"
             @click="handleReopenEntity"
           />
@@ -1157,6 +1111,7 @@ const formatEventDate = (isoStr: string): string => {
             color="negative"
             icon="delete_forever"
             label="Elimina Sub-Task"
+            no-caps
             class="q-px-xs"
             :loading="isDeletingSubtask"
             @click="handleDeleteSubtask"
@@ -1173,7 +1128,8 @@ const formatEventDate = (isoStr: string): string => {
             color="grey-8"
             icon="cancel"
             label="Rifiuta / Archivia (Lost)"
-            class="q-px-md text-weight-bold"
+            no-caps
+            class="text-weight-bold"
             :disable="localOutcome === 'lost'"
             @click="handleOutcomeLost"
           />
@@ -1183,15 +1139,16 @@ const formatEventDate = (isoStr: string): string => {
             color="positive"
             icon="star"
             label="Accetta & Concludi (Won)"
-            class="q-px-md text-weight-bold shadow-2 text-dark bg-amber-5"
+            no-caps
+            class="text-weight-bold shadow-2 text-dark bg-amber-5"
             style="background-color: #c5a065 !important; color: #0a2342 !important"
             :disable="localOutcome === 'won'"
             @click="handleOutcomeWon"
           />
         </div>
       </div>
-    </q-card>
-  </q-dialog>
+    </template>
+  </AppFloatingWindow>
 </template>
 
 <style scoped lang="scss">

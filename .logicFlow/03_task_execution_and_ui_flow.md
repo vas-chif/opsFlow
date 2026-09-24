@@ -234,3 +234,47 @@ Per rispettare il principio DRY (Don't Repeat Yourself) e le direttive [AGENTS.m
 - **Archiviazione Selettiva:** Dal menu contestuale a 3 puntini di ciascuna card, l'operatore può selezionare _"📦 Archivia Task"_. Il task scompare dalla griglia principale dei task attivi e viene trasferito nella sezione archivio (`archived: true`).
 - **Expander di Default Chiuso:** In calce alla pagina del workspace è presente un `<q-expansion-item>` con intestazione _"📦 Task Archiviati (N)"_. Rimane tassativamente chiuso all'avvio per non ingombrare la visuale di lavoro.
 - **Ripristino Istantaneo:** Aprendo l'archivio, ciascun task dispone dell'azione rapida _"♻️ Ripristina"_, che lo rimuove dall'archivio e lo riposiziona istantaneamente nella griglia dei task attivi del workspace.
+
+---
+
+## 🪟 9. Sistema Multi-Finestra Desktop Fluttuante & Dockbar Operativa
+
+### 9.1 Architettura Multi-Finestra Fluttuante (`AppFloatingWindow.vue`)
+
+Per superare i limiti di fruizione dei modali dialog a pieno schermo che bloccavano l'interazione simultanea tra chat, fogli di calcolo e impostazioni, OpsFlow implementa un'architettura **Desktop Multi-Window**:
+
+1. **Ridimensionamento Libero (Resize Handle):** Ciascuna finestra dispone di un indicatore visivo nell'angolo inferiore destro e gestori d'evento mouse per il resizing fluido bidirezionale, rispettando vincoli minimi (`minWidth`, `minHeight`) e massimi (`viewport - padding`).
+2. **Trascinamento Libero (Draggable Header):** La barra superiore (Design System Elite: Royal Navy `#0a2342` e Gold `#c5a065`) permette il drag & drop della finestra ovunque all'interno dell'area di lavoro, garantendo che non esca mai dai bordi utili.
+3. **Modalità Schermo Intero (Fullscreen Toggle):** Doppio click sull'header o click sul pulsante `[ ⛶ ]` espande la finestra a 100vw/100vh. Il tasto `Escape` ripristina istantaneamente le coordinate precedenti.
+4. **Riduzione a Icona (Minimize):** Il pulsante `[ - ]` minimizza la finestra riducendola ad una barra compatta di 48px, liberando la visuale della dashboard sottostante.
+5. **Apertura Contemporanea Multi-Finestra:** L'operatore può mantenere contemporaneamente aperte più finestre (es. chat del task, foglio impostazioni, decomposizione IA, scheda risorsa del candidato), passando da una all'altra senza interruzioni di contesto.
+
+### 9.2 Gestore Unificato dei Livelli Z-Index (`useFloatingWindowManager.ts`)
+
+Un composable reattivo centralizzato e condiviso (`useFloatingWindowManager.ts` sincronizzato con `taskChatStore.ts`) gestisce la gerarchia visiva globale con base di partenza unificata a `1000`:
+
+- **Porta in Primo Piano (`bringToFront`):** Cliccando su una qualsiasi finestra (chat o modale operativa) o trascinandone l'header, il suo z-index viene incrementato rispetto al massimo globale corrente, ponendola immediatamente e in modo assoluto in primo piano.
+- **Apertura Gerarchica Garantita:** Quando una finestra figlia viene aperta da una finestra padre (es. `TaskSettingsModal` aperta tramite il pulsante `[ ⚙️ ]` dentro `TaskChatWindow`), riceve istantaneamente `globalHighestZ + 1`, apparendo sempre sopra la finestra chiamante.
+- **Manda in Secondo Piano (`sendToBack`):** Un pulsante dedicato consente di inviare una finestra dietro alle altre senza chiuderla.
+- **Registro Reattivo Unificato (`registeredWindows`):** Notifica alla dockbar lo stato, il titolo, l'icona e lo stato di minimizzazione sia delle finestre operative che delle sessioni di chat attive (`chat-${taskId}`).
+
+### 9.3 Dockbar Desktop & Taskbar Operativa (`AppWindowDock.vue`)
+
+Ancorata al centro inferiore dello schermo con effetto glassmorphism:
+
+- **Badge di Stato:** Indicatore visivo a LED (verde per finestre attive a schermo, ambra/dorato per finestre minimizzate).
+- **Ripristino con un Click:** Cliccando sull'icona nella dock, la finestra viene ripristinata dalla minimizzazione e portata direttamente in primo piano.
+- **Chiusura Rapida:** Consente di chiudere singole finestre direttamente dalla dock.
+
+### 9.4 Finestre Operative Convertite
+
+I seguenti flussi operativi sono stati completamente integrati nello standard multi-finestra desktop:
+
+1. **Finestra Chat & Assistente IA** (`TaskChatWindow.vue` - ID: `chat-${taskId}`)
+2. **Atteggiamento del Workspace** (`WorkspaceAttitudeModal.vue` - ID: `workspace-attitude-modal`)
+3. **Impostazioni Operative Task** (`TaskSettingsModal.vue` - ID: `task-settings-${taskId}`)
+4. **Pianifica Ricerca Ricorrente** (`ScheduleTaskModal.vue` - ID: `schedule-task-modal`)
+5. **AI Prompt Architect** (`AIPromptArchitectModal.vue` - ID: `ai-prompt-architect-modal`)
+6. **AI Task Architect & Intelligent Decomposition** (`AITaskArchitectModal.vue` - ID: `ai-task-architect-modal`)
+7. **Scheda Risorsa / Lead Polymorphic SubTask** (`SubTaskEntityModal.vue` - ID: `subtask-entity-modal`)
+8. **Gestione Membri Team & Inviti** (`MainLayout.vue` / `TeamMembersPanel.vue` - ID: `team-members-modal`)

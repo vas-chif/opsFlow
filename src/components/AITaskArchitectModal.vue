@@ -17,6 +17,9 @@ import { useQuasar } from "quasar";
 // ── Types ────────────────────────────────────────────────────────────────────
 import type { RefinedTaskDraft, Task } from "@/types/models";
 
+// ── Components ───────────────────────────────────────────────────────────────
+import AppFloatingWindow from "./AppFloatingWindow.vue";
+
 // ── Stores ───────────────────────────────────────────────────────────────────
 import { useTaskStore } from "@/stores/taskStore";
 
@@ -310,257 +313,242 @@ function handleClose(): void {
 </script>
 
 <template>
-  <q-dialog
+  <AppFloatingWindow
     :model-value="modelValue"
-    persistent
-    maximized-mobile
-    transition-show="scale"
-    transition-hide="scale"
+    window-id="ai-task-architect-modal"
+    :title="
+      isRegenerateMode ? '✨ AI Task Architect — Rigenera Sotto-Task' : '✨ AI Task Architect'
+    "
+    :subtitle="
+      isRegenerateMode
+        ? `Task: ${props.existingTask?.title || 'Attivo'} | Intelligent Decomposition`
+        : 'Intelligent Decomposition & Operational Sheet'
+    "
+    icon="auto_awesome"
+    icon-color="amber-5"
+    :initial-width="780"
+    :initial-height="660"
+    :min-width="480"
+    :min-height="380"
     @update:model-value="emit('update:modelValue', $event)"
+    @close="handleClose"
   >
-    <q-card class="dbs-modal-card" style="width: 720px; max-width: 95vw">
-      <!-- ── Header Royal Navy ─────────────────────────────────────────── -->
-      <q-card-section class="bg-navy text-white row items-center justify-between">
-        <div class="row items-center q-gutter-sm">
-          <q-icon name="auto_awesome" color="gold" size="28px" />
-          <div>
-            <div class="text-h6 text-weight-bold">
-              {{
-                isRegenerateMode
-                  ? "✨ AI Task Architect — Rigenera Sotto-Task"
-                  : "✨ AI Task Architect"
-              }}
-            </div>
-            <div class="text-caption text-gold-light">
-              {{
-                isRegenerateMode
-                  ? `Task: ${props.existingTask?.title || "Attivo"} | Intelligent Decomposition`
-                  : "Intelligent Decomposition & Operational Sheet"
-              }}
-            </div>
-          </div>
-        </div>
-        <q-btn flat round dense icon="close" color="white" @click="handleClose" />
-      </q-card-section>
+    <!-- ── Card Body Light ─────────────────────────────────────────── -->
+    <div class="q-pa-md">
+      <div class="text-body2 text-grey-8 q-mb-sm">
+        <template v-if="isRegenerateMode">
+          Verifica o adatta il prompt/obiettivo per questo task già aperto. AgentePlanner analizzerà
+          la richiesta ed estrarrà la <strong>nuova Checklist di Sotto-Task</strong>
+          operative senza creare task duplicati.
+        </template>
+        <template v-else>
+          Incolla l'email o la richiesta grezza ricevuta dal cliente o fornitore (il
+          <strong>COSA CERCARE / ESEGUIRE</strong>). Gemini estrarrà automaticamente il
+          <strong>Titolo</strong>, la <strong>Categoria</strong>, la <strong>Priorità</strong> e la
+          <strong>Checklist di Sotto-Task</strong> operative progressive.
+        </template>
+      </div>
 
-      <!-- ── Card Body Light ─────────────────────────────────────────── -->
-      <q-card-section class="q-pa-md">
-        <div class="text-body2 text-grey-8 q-mb-sm">
-          <template v-if="isRegenerateMode">
-            Verifica o adatta il prompt/obiettivo per questo task già aperto. AgentePlanner
-            analizzerà la richiesta ed estrarrà la <strong>nuova Checklist di Sotto-Task</strong>
-            operative senza creare task duplicati.
-          </template>
-          <template v-else>
-            Incolla l'email o la richiesta grezza ricevuta dal cliente o fornitore (il
-            <strong>COSA CERCARE / ESEGUIRE</strong>). Gemini estrarrà automaticamente il
-            <strong>Titolo</strong>, la <strong>Categoria</strong>, la <strong>Priorità</strong> e
-            la <strong>Checklist di Sotto-Task</strong> operative progressive.
-          </template>
+      <div
+        class="text-caption text-primary q-mb-md bg-blue-1 q-pa-sm rounded-borders row items-center justify-between"
+      >
+        <div class="row items-center q-gutter-xs">
+          <q-icon :name="isRegenerateMode ? 'sync' : 'mail_outline'" color="primary" size="20px" />
+          <span class="text-weight-bold">
+            {{
+              isRegenerateMode
+                ? "Rigenerazione Contestuale del Task Aperto"
+                : "Elaborazione Intelligente da Email & Testo Grezzo"
+            }}
+          </span>
         </div>
-
-        <div
-          class="text-caption text-primary q-mb-md bg-blue-1 q-pa-sm rounded-borders row items-center justify-between"
+        <span class="text-caption text-grey-7"
+          >Zero-Allucinazione: tariffe o disponibilità mancanti vengono catalogate come GAP da
+          verificare.</span
         >
-          <div class="row items-center q-gutter-xs">
-            <q-icon
-              :name="isRegenerateMode ? 'sync' : 'mail_outline'"
-              color="primary"
-              size="20px"
-            />
-            <span class="text-weight-bold">
-              {{
-                isRegenerateMode
-                  ? "Rigenerazione Contestuale del Task Aperto"
-                  : "Elaborazione Intelligente da Email & Testo Grezzo"
-              }}
-            </span>
-          </div>
-          <span class="text-caption text-grey-7"
-            >Zero-Allucinazione: tariffe o disponibilità mancanti vengono catalogate come GAP da
-            verificare.</span
-          >
+      </div>
+
+      <!-- Quick Templates (solo per nuovi task) -->
+      <div v-if="!isRegenerateMode" class="q-mb-md">
+        <div class="text-caption text-weight-bold text-grey-7 q-mb-xs">
+          Oppure seleziona un esempio rapido:
         </div>
-
-        <!-- Quick Templates (solo per nuovi task) -->
-        <div v-if="!isRegenerateMode" class="q-mb-md">
-          <div class="text-caption text-weight-bold text-grey-7 q-mb-xs">
-            Oppure seleziona un esempio rapido:
-          </div>
-          <div class="row q-gutter-xs">
-            <q-chip
-              v-for="tpl in presetTemplates"
-              :key="tpl.label"
-              clickable
-              outline
-              color="primary"
-              size="sm"
-              @click="selectTemplate(tpl.text)"
-            >
-              {{ tpl.label }}
-            </q-chip>
-          </div>
-        </div>
-
-        <!-- Draft Input -->
-        <q-input
-          v-model="rawDraft"
-          type="textarea"
-          rows="4"
-          outlined
-          dense
-          :placeholder="
-            isRegenerateMode
-              ? 'Rivedi o adatta il prompt del task per guidare AgentePlanner nella decomposizione delle sotto-task...'
-              : 'Incolla qui l\'email del cliente o l\'appunto grezzo (es. \'Buongiorno, cerchiamo con urgenza un docente Camunda a Milano per fine mese. Non abbiamo budget concordato: potete mandarci disponibilità e profili?\')...'
-          "
-          class="q-mb-md"
-        />
-
-        <div class="row justify-end q-mb-md">
-          <q-btn
+        <div class="row q-gutter-xs">
+          <q-chip
+            v-for="tpl in presetTemplates"
+            :key="tpl.label"
+            clickable
+            outline
             color="primary"
-            unelevated
-            rounded
-            icon="auto_awesome"
-            :label="
-              isRegenerateMode ? 'RIGENERA SOTTO-TASK CON AI' : 'GENERATE TASK STRUCTURE WITH AI'
-            "
-            :loading="taskStore.isRefiningTaskDraft"
-            :disable="rawDraft.trim().length < 5"
-            @click="handleRefine"
+            size="sm"
+            @click="selectTemplate(tpl.text)"
+          >
+            {{ tpl.label }}
+          </q-chip>
+        </div>
+      </div>
+
+      <!-- Draft Input -->
+      <q-input
+        v-model="rawDraft"
+        type="textarea"
+        rows="4"
+        outlined
+        dense
+        :placeholder="
+          isRegenerateMode
+            ? 'Rivedi o adatta il prompt del task per guidare AgentePlanner nella decomposizione delle sotto-task...'
+            : 'Incolla qui l\'email del cliente o l\'appunto grezzo (es. \'Buongiorno, cerchiamo con urgenza un docente Camunda a Milano per fine mese. Non abbiamo budget concordato: potete mandarci disponibilità e profili?\')...'
+        "
+        class="q-mb-md"
+      />
+
+      <div class="row justify-end q-mb-md">
+        <q-btn
+          color="primary"
+          unelevated
+          rounded
+          icon="auto_awesome"
+          :label="
+            isRegenerateMode ? 'RIGENERA SOTTO-TASK CON AI' : 'GENERATE TASK STRUCTURE WITH AI'
+          "
+          :loading="taskStore.isRefiningTaskDraft"
+          :disable="rawDraft.trim().length < 5"
+          @click="handleRefine"
+        />
+      </div>
+
+      <!-- FASE 2: Anteprima Scheda Task Generata -->
+      <template v-if="refinedDraft">
+        <q-separator class="q-my-md" />
+        <div class="text-subtitle1 text-weight-bold text-navy q-mb-sm row items-center">
+          <q-icon name="preview" class="q-mr-xs" color="secondary" />
+          Generated Task Preview
+        </div>
+
+        <!-- Category & Priority -->
+        <div class="row q-col-gutter-md q-mb-md">
+          <div class="col-12 col-md-6">
+            <q-card flat bordered class="q-pa-sm bg-grey-1">
+              <div class="text-caption text-grey-6 text-uppercase text-weight-bold">
+                Suggested Category
+              </div>
+              <div class="row q-gutter-xs q-mt-xs">
+                <q-chip
+                  v-for="cat in [
+                    'general',
+                    'admin',
+                    'clinical',
+                    'marketing',
+                    'research',
+                    'dev',
+                  ] as const"
+                  :key="cat"
+                  clickable
+                  :outline="editableCategory !== cat"
+                  :color="editableCategory === cat ? 'primary' : 'grey-7'"
+                  :text-color="editableCategory === cat ? 'white' : 'dark'"
+                  size="sm"
+                  @click="editableCategory = cat"
+                >
+                  {{ categoryLabels[cat] }}
+                </q-chip>
+              </div>
+            </q-card>
+          </div>
+
+          <div class="col-12 col-md-6">
+            <q-card flat bordered class="q-pa-sm bg-grey-1">
+              <div class="text-caption text-grey-6 text-uppercase text-weight-bold">
+                Priority &amp; Estimated Duration
+              </div>
+              <div class="row items-center justify-between q-mt-xs">
+                <div class="row q-gutter-xs">
+                  <q-chip
+                    v-for="p in ['low', 'medium', 'high'] as const"
+                    :key="p"
+                    clickable
+                    :outline="editablePriority !== p"
+                    :color="editablePriority === p ? priorityChipColor(p) : 'grey-7'"
+                    :text-color="editablePriority === p ? 'white' : 'dark'"
+                    size="sm"
+                    @click="editablePriority = p"
+                  >
+                    {{ { low: "Low", medium: "Medium", high: "High" }[p] }}
+                  </q-chip>
+                </div>
+                <q-badge color="grey-8" text-color="white" class="q-pa-xs">
+                  ⏱ {{ refinedDraft.estimatedMinutes }} min
+                </q-badge>
+              </div>
+            </q-card>
+          </div>
+        </div>
+
+        <!-- Title & Description -->
+        <div class="q-mb-md">
+          <div class="text-caption text-grey-7 text-weight-bold q-mb-xs">Task Title:</div>
+          <q-input
+            v-model="editableTitle"
+            outlined
+            dense
+            class="q-mb-sm bg-white"
+            :rules="[(v) => !!v.trim() || 'Title is required']"
+          />
+          <div class="text-caption text-grey-7 text-weight-bold q-mb-xs">
+            Operational Description:
+          </div>
+          <q-input
+            v-model="editableDescription"
+            type="textarea"
+            rows="2"
+            outlined
+            dense
+            class="bg-white"
           />
         </div>
 
-        <!-- FASE 2: Anteprima Scheda Task Generata -->
-        <template v-if="refinedDraft">
-          <q-separator class="q-my-md" />
-          <div class="text-subtitle1 text-weight-bold text-navy q-mb-sm row items-center">
-            <q-icon name="preview" class="q-mr-xs" color="secondary" />
-            Generated Task Preview
+        <!-- Generated Subtasks Checklist -->
+        <div class="q-mb-md">
+          <div class="text-caption text-grey-7 text-weight-bold q-mb-xs">
+            📋 Generated Operational Subtasks (select / deselect):
           </div>
+          <q-list bordered dense separator class="rounded-borders bg-grey-1">
+            <q-item
+              v-for="st in editableSubtasks"
+              :key="st.order"
+              tag="label"
+              v-ripple
+              class="q-py-xs"
+              :class="{ 'text-strike text-grey-6': !st.selected }"
+            >
+              <q-item-section side top>
+                <q-checkbox v-model="st.selected" color="primary" dense />
+              </q-item-section>
+              <q-item-section>
+                <q-item-label class="text-weight-bold text-navy text-body2">
+                  {{ st.order }}. {{ st.title }}
+                </q-item-label>
+                <q-item-label caption class="text-grey-7">
+                  {{ st.description }}
+                </q-item-label>
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </div>
+      </template>
+    </div>
 
-          <!-- Category & Priority -->
-          <div class="row q-col-gutter-md q-mb-md">
-            <div class="col-12 col-md-6">
-              <q-card flat bordered class="q-pa-sm bg-grey-1">
-                <div class="text-caption text-grey-6 text-uppercase text-weight-bold">
-                  Suggested Category
-                </div>
-                <div class="row q-gutter-xs q-mt-xs">
-                  <q-chip
-                    v-for="cat in [
-                      'general',
-                      'admin',
-                      'clinical',
-                      'marketing',
-                      'research',
-                      'dev',
-                    ] as const"
-                    :key="cat"
-                    clickable
-                    :outline="editableCategory !== cat"
-                    :color="editableCategory === cat ? 'primary' : 'grey-7'"
-                    :text-color="editableCategory === cat ? 'white' : 'dark'"
-                    size="sm"
-                    @click="editableCategory = cat"
-                  >
-                    {{ categoryLabels[cat] }}
-                  </q-chip>
-                </div>
-              </q-card>
-            </div>
-
-            <div class="col-12 col-md-6">
-              <q-card flat bordered class="q-pa-sm bg-grey-1">
-                <div class="text-caption text-grey-6 text-uppercase text-weight-bold">
-                  Priority &amp; Estimated Duration
-                </div>
-                <div class="row items-center justify-between q-mt-xs">
-                  <div class="row q-gutter-xs">
-                    <q-chip
-                      v-for="p in ['low', 'medium', 'high'] as const"
-                      :key="p"
-                      clickable
-                      :outline="editablePriority !== p"
-                      :color="editablePriority === p ? priorityChipColor(p) : 'grey-7'"
-                      :text-color="editablePriority === p ? 'white' : 'dark'"
-                      size="sm"
-                      @click="editablePriority = p"
-                    >
-                      {{ { low: "Low", medium: "Medium", high: "High" }[p] }}
-                    </q-chip>
-                  </div>
-                  <q-badge color="grey-8" text-color="white" class="q-pa-xs">
-                    ⏱ {{ refinedDraft.estimatedMinutes }} min
-                  </q-badge>
-                </div>
-              </q-card>
-            </div>
-          </div>
-
-          <!-- Title & Description -->
-          <div class="q-mb-md">
-            <div class="text-caption text-grey-7 text-weight-bold q-mb-xs">Task Title:</div>
-            <q-input
-              v-model="editableTitle"
-              outlined
-              dense
-              class="q-mb-sm bg-white"
-              :rules="[(v) => !!v.trim() || 'Title is required']"
-            />
-            <div class="text-caption text-grey-7 text-weight-bold q-mb-xs">
-              Operational Description:
-            </div>
-            <q-input
-              v-model="editableDescription"
-              type="textarea"
-              rows="2"
-              outlined
-              dense
-              class="bg-white"
-            />
-          </div>
-
-          <!-- Generated Subtasks Checklist -->
-          <div class="q-mb-md">
-            <div class="text-caption text-grey-7 text-weight-bold q-mb-xs">
-              📋 Generated Operational Subtasks (select / deselect):
-            </div>
-            <q-list bordered dense separator class="rounded-borders bg-grey-1">
-              <q-item
-                v-for="st in editableSubtasks"
-                :key="st.order"
-                tag="label"
-                v-ripple
-                class="q-py-xs"
-                :class="{ 'text-strike text-grey-6': !st.selected }"
-              >
-                <q-item-section side top>
-                  <q-checkbox v-model="st.selected" color="primary" dense />
-                </q-item-section>
-                <q-item-section>
-                  <q-item-label class="text-weight-bold text-navy text-body2">
-                    {{ st.order }}. {{ st.title }}
-                  </q-item-label>
-                  <q-item-label caption class="text-grey-7">
-                    {{ st.description }}
-                  </q-item-label>
-                </q-item-section>
-              </q-item>
-            </q-list>
-          </div>
-        </template>
-      </q-card-section>
-
-      <!-- ── Footer Actions ─────────────────────────────────────────────── -->
-      <q-card-actions align="right" class="bg-grey-2 q-pa-md">
-        <q-btn flat label="Cancel" color="grey-8" @click="handleClose" />
+    <!-- ── Footer Actions ─────────────────────────────────────────────── -->
+    <template #footer>
+      <div class="row items-center justify-end full-width q-gutter-sm">
+        <q-btn flat label="Cancel" color="grey-8" no-caps @click="handleClose" />
         <q-btn
           v-if="refinedDraft"
           flat
           label="Edit Draft"
           color="primary"
+          no-caps
           @click="refinedDraft = null"
         />
         <q-btn
@@ -570,6 +558,7 @@ function handleClose(): void {
           rounded
           icon="auto_awesome"
           label="Aggiorna Sotto-Task del Task Attivo"
+          no-caps
           :loading="isSaving"
           :disable="!editableTitle.trim()"
           @click="handleUpdateExistingTask"
@@ -581,13 +570,14 @@ function handleClose(): void {
           rounded
           icon="rocket_launch"
           label="Create Task in Workspace"
+          no-caps
           :loading="isSaving"
           :disable="!editableTitle.trim()"
           @click="handleCreateTask"
         />
-      </q-card-actions>
-    </q-card>
-  </q-dialog>
+      </div>
+    </template>
+  </AppFloatingWindow>
 </template>
 
 <style scoped lang="scss">
