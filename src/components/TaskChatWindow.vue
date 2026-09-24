@@ -2336,7 +2336,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
                       <q-item-label
                         :class="{ 'text-strike text-grey-6': sub.completed }"
                         class="text-weight-bold text-caption text-primary"
-                        style="overflow-wrap: break-word; word-break: normal"
+                        style="overflow-wrap: break-word; word-break: break-word; line-height: 1.35"
                       >
                         {{ sub.order ? `${sub.order}. ` : "" }}{{ sub.title }}
                       </q-item-label>

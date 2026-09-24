@@ -253,14 +253,15 @@ $radius: 10px;
 
   &__header {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 6px;
-    margin-bottom: 4px;
-    flex-wrap: nowrap;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
   }
 
   &__icon {
     flex-shrink: 0;
+    margin-top: 1px;
   }
 
   &__title {
@@ -268,10 +269,11 @@ $radius: 10px;
     font-size: 13px;
     font-weight: 700;
     color: #0a2342;
-    flex: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    flex: 1 1 auto;
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    line-height: 1.35;
     min-width: 0;
 
     body.body--dark & {
@@ -291,6 +293,9 @@ $radius: 10px;
     color: #2d3748;
     margin: 0 0 4px 0;
     line-height: 1.5;
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-break: break-word;
 
     body.body--dark & {
       color: rgba($off-white, 0.85);
