@@ -1343,7 +1343,10 @@ const handleApproveAction = async (
           : "Action approved and executed successfully!",
         icon: "check_circle",
       });
-    } else if (res.status === 401 && result?.error === "oauth_error") {
+    } else if (
+      res.status === 401 &&
+      (result?.error === "oauth_error" || result?.error === "oauth_expired")
+    ) {
       // Step 21 §5.2 — Token scaduto: mostra banner di riconnessione, non errore generico
       chatStore.setSessionOAuthError(taskId, {
         code: (result.code as import("../types/models").OAuthErrorCode) ?? "TOKEN_EXPIRED",

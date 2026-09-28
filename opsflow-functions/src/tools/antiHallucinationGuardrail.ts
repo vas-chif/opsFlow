@@ -130,29 +130,66 @@ export const normalizeUrl = (url: string): string => {
 }; /* end normalizeUrl */
 
 /**
+ * Evaluates whether a given URL is a generic root domain or homepage portal
+ * lacking deep specific path evidence (e.g. "https://domain.com/", "https://domain.com/index.html").
+ * Root URLs cannot serve as verified documentary evidence for specific entity records.
+ * @param {string} url - URL string to check.
+ * @return {boolean} True if the URL is a root or generic portal homepage.
+ */
+export const isRootOrGenericPortal = (url: string): boolean => {
+  try {
+    const trimmed = url.trim().replace(/^http:\/\//i, "https://");
+    const parsed = new URL(trimmed);
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    if (segments.length === 0) {
+      return true;
+    }
+    if (segments.length === 1 && /^index\.(html?|php|asp|aspx)$|^home$/i.test(segments[0])) {
+      return true;
+    }
+    return false;
+  } catch {
+    return true;
+  }
+}; /* end isRootOrGenericPortal */
+
+/**
  * Builds a normalized Set from an array of raw URLs (e.g., from webSearch results).
  * This Set is the "ground truth" whitelist for URL validation.
+ * Filters out generic root domains/homepages so they cannot act as wildcards.
  * @param {string[]} rawUrls - List of raw URLs discovered during search.
  * @return {Set<string>} Set of normalized unique URLs.
  */
 export const buildGroundTruthSet = (rawUrls: string[]): Set<string> => {
-  return new Set(rawUrls.map(normalizeUrl));
+  return new Set(
+    rawUrls
+      .filter((url) => Boolean(url) && !isRootOrGenericPortal(url))
+      .map(normalizeUrl),
+  );
 }; /* end buildGroundTruthSet */
 
 /**
  * Determines whether a given URL is present in the ground-truth Set.
- * Uses prefix matching to handle sub-page variations of a verified domain.
+ * Requires non-root URL and allows only forward deep-path subpage variations.
  * @param {string} url - Target URL to verify.
  * @param {Set<string>} groundTruthUrls - Ground-truth Set of certified URLs.
  * @return {boolean} True if the URL matches a ground-truth entry.
  */
 const isUrlGroundTruth = (url: string, groundTruthUrls: Set<string>): boolean => {
+  if (isRootOrGenericPortal(url)) return false;
+
   const normalized = normalizeUrl(url);
   // Exact match
   if (groundTruthUrls.has(normalized)) return true;
-  // Prefix match: if a ground-truth URL is a prefix of this URL (sub-page of verified profile)
+
+  // Prefix match: only forward (a verified sub-page/anchor of an already verified deep URL)
+  // NEVER reverse (trusted.startsWith(normalized)) which permits generic root domains!
   for (const trusted of groundTruthUrls) {
-    if (normalized.startsWith(trusted) || trusted.startsWith(normalized)) {
+    if (
+      normalized.startsWith(trusted + "/") ||
+      normalized.startsWith(trusted + "?") ||
+      normalized.startsWith(trusted + "#")
+    ) {
       return true;
     }
   }
@@ -364,9 +401,20 @@ export const classifyFieldEvidence = (
   }
   // Check if the value itself is a URL present in ground truth
   if (URL_LIKE_REGEX.test(fieldValue)) {
-    const normalized = fieldValue.trim().replace(/^http:\/\//i, "https://").toLowerCase();
+    // Root or generic portal URLs cannot serve as verified entity evidence
+    if (isRootOrGenericPortal(fieldValue)) {
+      return { type: "gap" };
+    }
+    const normalized = normalizeUrl(fieldValue);
+    if (groundTruthUrls.has(normalized)) {
+      return { type: "verified", sourceUrl: normalized };
+    }
     for (const trusted of groundTruthUrls) {
-      if (normalized.startsWith(trusted) || trusted.startsWith(normalized)) {
+      if (
+        normalized.startsWith(trusted + "/") ||
+        normalized.startsWith(trusted + "?") ||
+        normalized.startsWith(trusted + "#")
+      ) {
         return { type: "verified", sourceUrl: trusted };
       }
     }

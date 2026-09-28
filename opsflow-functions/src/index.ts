@@ -368,7 +368,7 @@ export const chatWithAgent = onRequest(
   {
     cors: true,
     region: "europe-west1",
-    timeoutSeconds: 60, // Step 12: Reduced from 300s → 60s (eliminates idle billing on blocked requests)
+    timeoutSeconds: 120, // Post-Audit: 120s ensures multi-turn research completes without 504 timeout
     memory: "512MiB", // Standard Cloud Functions memory allocation
     minInstances: 0, // Scale-to-Zero: €0,00 during inactivity
     maxInstances: 10, // Hard-cap for 1000 concurrent users
@@ -444,7 +444,14 @@ interface ResolveApprovalBody {
  * Path listened: tenants/{tenantId}/workspaces/{wsId}/tasks/{taskId}/approvals/{approvalId}
  */
 export const resolveApproval = onRequest(
-  { cors: true, region: "europe-west1" },
+  {
+    cors: true,
+    region: "europe-west1",
+    timeoutSeconds: 120,
+    memory: "512MiB",
+    minInstances: 0,
+    maxInstances: 10,
+  },
   async (req, res) => {
     const { tenantId, workspaceId, taskId, approvalId, userId, decision, editedData } =
       req.body as ResolveApprovalBody;
@@ -845,13 +852,19 @@ export const resolveApproval = onRequest(
           requiredScopes: err.requiredScopes,
         });
       } else if (
-        // Step 21: Catch googleapis/gaxios invalid_grant (token expired or revoked)
+        // Step 21 & Post-Audit: Catch googleapis/gaxios invalid_grant across all error structures
         err &&
         typeof err === "object" &&
         (
-          ("message" in err && typeof (err as { message: unknown }).message === "string" &&
+          ("message" in err &&
+            typeof (err as { message: unknown }).message === "string" &&
             ((err as { message: string }).message.includes("invalid_grant") ||
              (err as { message: string }).message.includes("Token has been expired or revoked"))) ||
+          ("data" in err &&
+            err.data &&
+            typeof err.data === "object" &&
+            "error" in err.data &&
+            (err.data as { error: string }).error === "invalid_grant") ||
           ("response" in err &&
             err.response &&
             typeof err.response === "object" &&
@@ -859,14 +872,15 @@ export const resolveApproval = onRequest(
             err.response.data &&
             typeof err.response.data === "object" &&
             "error" in err.response.data &&
-            (err.response.data as { error: string }).error === "invalid_grant")
+            (err.response.data as { error: string }).error === "invalid_grant") ||
+          (String(err).includes("invalid_grant"))
         )
       ) {
         logger.warn("resolveApproval: Google OAuth token expired (invalid_grant)", { tenantId, userId });
         res.status(401).json({
           error: "oauth_error",
           code: "TOKEN_EXPIRED",
-          message: "Il token di autorizzazione Google è scaduto o è stato revocato. Riconnetti l'account.",
+          message: "Google Workspace session expired. Please re-authenticate in Workspace Settings.",
         });
       } else {
         let errorMsg = "Internal error during approval execution.";
