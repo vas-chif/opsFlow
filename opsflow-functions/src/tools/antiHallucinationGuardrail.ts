@@ -338,18 +338,27 @@ export interface EvidenceChip {
   /** The ground-truth URL that verified this value (only set when type="verified"). */
   sourceUrl?: string;
 }
+/**
+ * Result of a single field evidence classification against ground truth.
+ */
+export interface FieldEvidenceResult {
+  /** Verification status: verified or gap. */
+  type: EvidenceChipType;
+  /** The ground-truth URL that verified this value (only when verified). */
+  sourceUrl?: string;
+}
 
 /**
  * Classifies a single field value against the ground-truth URL set.
  * Pure function — no side effects, no I/O.
  * @param {string} fieldValue - The raw string value to classify.
  * @param {Set<string>} groundTruthUrls - Normalized URL set from web search.
- * @return {{ type: EvidenceChipType; sourceUrl?: string }} Classification result.
+ * @return {FieldEvidenceResult} Classification result.
  */
 export const classifyFieldEvidence = (
   fieldValue: string,
   groundTruthUrls: Set<string>,
-): { type: EvidenceChipType; sourceUrl?: string } => {
+): FieldEvidenceResult => {
   if (!fieldValue || !fieldValue.trim()) {
     return { type: "gap" };
   }
