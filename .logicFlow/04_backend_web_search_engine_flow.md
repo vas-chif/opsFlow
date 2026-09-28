@@ -147,3 +147,46 @@ Per prevenire timeout, blocchi di memoria o addebiti inutili su istanze inattive
 | `minInstances`      | `0`                      | **Scale-to-Zero:** Costo € 0,00 durante i periodi di inattività                           |
 | `maxInstances`      | `10`                     | Hard-Cap per contenere i costi totali sotto il budget target                              |
 | `secrets`           | `[BRAVE_SEARCH_API_KEY]` | Iniezione sicura da GCP Secret Manager (Zero secrets in `.env` di produzione)             |
+
+---
+
+## 🛡️ 5. Connessione con l'Agentic Control Plane (Flow 07)
+
+I risultati restituiti dal search engine costituiscono il fulcro della pipeline di sicurezza e ottimizzazione costi del Control Plane (§5, §14 AGENTS.md):
+
+### 5.1 Cache Deterministica SHA-256 a 72h & Policy TTL Nativa (Budget Lockdown)
+
+Prima di inoltrare la richiesta a Brave Search o Google Search:
+
+1. Viene calcolato l'hash crittografico **SHA-256** della stringa di ricerca normalizzata (lowercase, trim).
+2. Viene interrogata la collezione Firestore `tenants/{tenantId}/webSearchCache/{queryHash}`.
+3. Se il documento esiste ed è stato creato meno di 72 ore fa, il payload viene restituito istantaneamente (**0 ms latenza di rete, zero addebiti API**).
+4. Se la cache è assente o scaduta, viene eseguita la query live e il risultato viene persistito valorizzando il campo `expiresAt = Timestamp.fromDate(new Date(Date.now() + 72 * 3600 * 1000))`.
+5. **Policy TTL Nativa Google Cloud:** Per azzerare i costi di storage e prevenire memory leak su Firestore, la cancellazione automatica dei record scaduti è delegata all'engine nativo di Google Cloud:
+   ```bash
+   gcloud firestore fields ttls update expiresAt --collection-group=webSearchCache
+   ```
+
+### 5.2 Throttling Deterministico Brave Search (Prevenzione 429 da Frequenza)
+
+L'API gratuita di Brave Search impone un limite di frequenza di 1 richiesta al secondo (1 QPS):
+
+- Quando un task o un job schedulato (Flow 05) lancia query X-Ray sequenziali (es. per figure specialistiche o competenze multiple), il dispatcher applica un delay obbligatorio di **1.100 ms** (`await sleep(1100)`) tra le chiamate.
+- **Protezione Tier 2:** Questo previene l'errore `HTTP 429 Too Many Requests` dovuto a burst simultanei, evitando che il sistema scivoli prematuramente su Tavily (Tier 2) consumando crediti del fornitore di riserva quando la quota mensile di Brave è ancora intatta.
+
+### 5.3 Quota Cap Per-Workspace / Anti-Abuso (Cost Lockdown)
+
+Oltre al contatore globale di sistema (`system/searchUsage_{YYYY_MM}` fissato a 950 chiamate), il runtime impone un massimale per singolo Workspace:
+
+- Prima di inoltrare la richiesta a `webSearchTool`, la Cloud Function verifica il contatore `workspace.searchUsageCount`.
+- Per i workspace con piano **Freemium**, il limite è fissato a **50 ricerche/mese**. Al raggiungimento della soglia, la richiesta viene bloccata con un messaggio esplicativo e non genera addebiti verso i provider a pagamento (Tavily/Exa).
+
+### 5.4 Pre-Filtering a Regex a Monte (Pattern Clay.com)
+
+I risultati grezzi non vengono passati integralmente al modello linguistico:
+
+- Un middleware Node.js applica espressioni regolari per estrarre telefoni territoriali (es. `0584`/`0585`), email palesi conformi a RFC 5322 e URL LinkedIn/web normalizzati.
+- A Gemini Flash viene passato solo il compendio semantico pre-strutturato, **riducendo i token di input del 40%** e prevenendo allucinazioni di formattazione.
+
+Per i dettagli completi su Gate 1, Gate 2, Evidence Citation Chips (Dust.tt) e Checkpointing (LangGraph), consultare:  
+👉 [07_agentic_control_plane_and_governance_flow.md](file:///home/chif-vas/projects/opsflow/.logicFlow/07_agentic_control_plane_and_governance_flow.md).

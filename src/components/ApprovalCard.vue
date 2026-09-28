@@ -4,13 +4,15 @@
  * @description Human-in-the-Loop interactive preview, editing, and fullscreen modal card for pending AI actions.
  * @author Vasile Chifeac
  * @created 2026-08-14
- * @modified 2026-09-08
+ * @modified 2026-09-28
  *
  * @notes
  * - Renders inline in the Task Chat feed for each ApprovalRecord with status 'pending'.
  * - Supports Fullscreen Expanded Modal for detailed analysis and in-place editing.
  * - Supports editing recipient (TO), subject, body, signature, range, and table cells before approval.
  * - Emits 'approve' (with edited payload) and 'reject' events upward to TaskChatWindow.vue.
+ * - Step 28 (Dust.tt): evidenceChips prop renders [\U0001f7e2 VERIFIED] / [\U0001f7e1 GAP] chips below table.
+ * - Step 28 (Lindy.ai): pushBack emit triggers batch export of outcomes to originating Google Sheet.
  * - Design System "Elite": border gold #c5a065, background off-white #f9f7f2, navy #0a2342.
  */
 
@@ -21,12 +23,26 @@ import { useQuasar } from "quasar";
 // ── Types ─────────────────────────────────────────────────────────────────────
 import type { ApprovalRecord, GmailDraftPreview, LinkedGoogleResource } from "../types/models";
 
+/** Step 28 — Dust.tt Pattern: Evidence chip descriptor (mirrors antiHallucinationGuardrail.ts). */
+interface EvidenceChip {
+  field: string;
+  value: string;
+  type: "verified" | "gap";
+  sourceUrl?: string;
+}
+
 // ── Props & Emits ─────────────────────────────────────────────────────────────
 const props = defineProps<{
   approval: ApprovalRecord;
   isResolving?: boolean | undefined;
   emailSignature?: string | undefined;
   availableSheets?: LinkedGoogleResource[] | undefined;
+  /**
+   * Step 28 — Dust.tt: Evidence chips produced by antiHallucinationGuardrail.ts
+   * for the current approval record. Rendered below the table as
+   * [\U0001f7e2 VERIFIED] / [\U0001f7e1 GAP] interactive badges.
+   */
+  evidenceChips?: EvidenceChip[] | undefined;
 }>();
 
 const emit = defineEmits<{
@@ -38,6 +54,15 @@ const emit = defineEmits<{
   ): void;
   (
     e: "reject",
+    approvalId: string,
+    context?: { tenantId?: string; workspaceId?: string; taskId?: string },
+  ): void;
+  /**
+   * Step 28 — Lindy.ai: Batch push-back of outcomes to the originating Google Sheet.
+   * Triggered by the [Update Results on Sheet] button in the Actions bar.
+   */
+  (
+    e: "pushBack",
     approvalId: string,
     context?: { tenantId?: string; workspaceId?: string; taskId?: string },
   ): void;
@@ -66,6 +91,27 @@ const isSheetAppend = computed(() => props.approval.actionType === "sheet_append
 const isPending = computed(() => props.approval.status === "pending");
 const isApproved = computed(() => props.approval.status === "approved");
 const isRejected = computed(() => props.approval.status === "rejected");
+
+/**
+ * Step 28 — Dust.tt: Chips classified as verified (\U0001f7e2 green) from evidenceChips prop.
+ * Rendered as clickable badges that open the source URL in a new tab.
+ */
+const verifiedChips = computed<EvidenceChip[]>(
+  () => props.evidenceChips?.filter((c) => c.type === "verified") ?? [],
+); /*end verifiedChips*/
+
+/**
+ * Step 28 — Dust.tt: Chips classified as gap (\U0001f7e1 amber) from evidenceChips prop.
+ * Rendered with Quick Action buttons (Lindy.ai pattern): InMail / Call / Skip.
+ */
+const gapChips = computed<EvidenceChip[]>(
+  () => props.evidenceChips?.filter((c) => c.type === "gap") ?? [],
+); /*end gapChips*/
+
+/** Whether evidence chips section should be shown. */
+const hasEvidenceChips = computed(
+  () => (props.evidenceChips?.length ?? 0) > 0,
+); /*end hasEvidenceChips*/
 
 const gmailPreview = computed<GmailDraftPreview | null>(() => {
   if (!isGmailDraft.value) return null;
@@ -345,6 +391,25 @@ const onReject = (): void => {
     taskId: props.approval.taskId,
   });
 }; /*end onReject*/
+
+/**
+ * Step 28 — Lindy.ai: Triggers batch push-back of outcomes to the originating Google Sheet.
+ * Creates a new ApprovalCard request (sheet_append) with updated Won/Lost columns.
+ */
+const onPushBack = (): void => {
+  isExpanded.value = false;
+  emit("pushBack", props.approval.id, {
+    tenantId: props.approval.tenantId,
+    workspaceId: props.approval.workspaceId,
+    taskId: props.approval.taskId,
+  });
+  q.notify({
+    type: "info",
+    message: "Updating outcomes on the Google Sheet… A new approval card will appear.",
+    icon: "sync",
+    timeout: 2500,
+  });
+}; /*end onPushBack*/
 </script>
 
 <template>
@@ -636,17 +701,93 @@ const onReject = (): void => {
       <!-- Action Buttons (only when pending) -->
       <template v-if="isPending">
         <q-separator />
+
+        <!-- Step 28: Evidence Citation Chips (Dust.tt pattern) -->
+        <q-card-section v-if="hasEvidenceChips" class="approval-card__evidence-section q-pa-sm">
+          <div class="row items-center q-mb-xs">
+            <q-icon name="verified_user" size="14px" color="amber-8" class="q-mr-xs" />
+            <span class="text-caption text-weight-bold text-grey-8">Evidence Sources</span>
+          </div>
+          <!-- Verified chips (🟢) -->
+          <div class="row wrap q-gutter-xs q-mb-xs">
+            <a
+              v-for="chip in verifiedChips"
+              :key="chip.field"
+              :href="chip.sourceUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="approval-card__chip approval-card__chip--verified"
+            >
+              <q-icon name="check_circle" size="12px" class="q-mr-xs" />
+              <span>{{ chip.field }}: {{ chip.value.slice(0, 28) }}</span>
+            </a>
+          </div>
+          <!-- Gap chips (🟡) with Quick Actions (Lindy.ai pattern) -->
+          <div
+            v-for="chip in gapChips"
+            :key="chip.field"
+            class="row items-center q-gutter-xs q-mb-xs"
+          >
+            <span class="approval-card__chip approval-card__chip--gap">
+              <q-icon name="warning" size="12px" class="q-mr-xs" />
+              <span>{{ chip.field }}: {{ chip.value.slice(0, 24) }}</span>
+            </span>
+            <q-btn
+              flat
+              dense
+              no-caps
+              size="xs"
+              icon="mail_outline"
+              label="InMail"
+              color="primary"
+              class="q-px-xs"
+            >
+              <q-tooltip>Request via LinkedIn InMail</q-tooltip>
+            </q-btn>
+            <q-btn
+              flat
+              dense
+              no-caps
+              size="xs"
+              icon="skip_next"
+              label="Skip"
+              color="grey-6"
+              class="q-px-xs"
+            >
+              <q-tooltip>Ignore this gap and proceed</q-tooltip>
+            </q-btn>
+          </div>
+        </q-card-section>
+
+        <q-separator v-if="hasEvidenceChips" />
+
         <q-card-actions class="approval-card__actions q-pa-sm row justify-between items-center">
-          <q-btn
-            flat
-            dense
-            no-caps
-            size="sm"
-            :icon="isEditing ? 'visibility' : 'edit'"
-            :label="isEditing ? 'Visualizza Anteprima' : '✏️ Modifica Dati'"
-            color="primary"
-            @click="isEditing = !isEditing"
-          />
+          <div class="row q-gutter-xs items-center">
+            <q-btn
+              flat
+              dense
+              no-caps
+              size="sm"
+              :icon="isEditing ? 'visibility' : 'edit'"
+              :label="isEditing ? 'Preview' : '✏️ Edit Data'"
+              color="primary"
+              @click="isEditing = !isEditing"
+            />
+            <!-- Step 28 Rifinitura 4: Push-Back to Google Sheet (Lindy.ai) -->
+            <q-btn
+              v-if="isSheetAppend"
+              flat
+              dense
+              no-caps
+              size="sm"
+              icon="sync"
+              label="Update Results on Sheet"
+              color="teal-8"
+              @click="onPushBack"
+            >
+              <q-tooltip>Batch-export Won/Lost outcomes to the originating Google Sheet</q-tooltip>
+            </q-btn>
+          </div>
 
           <div class="row q-gutter-sm">
             <q-btn
@@ -1072,22 +1213,37 @@ const onReject = (): void => {
           v-if="isPending"
           class="approval-dialog__footer bg-white q-py-md q-px-xl justify-between"
         >
-          <q-btn
-            flat
-            no-caps
-            icon="close"
-            label="Rifiuta ed Elimina"
-            color="grey-8"
-            class="q-px-md"
-            @click="onReject"
-          />
+          <div class="row items-center q-gutter-md">
+            <q-btn
+              flat
+              no-caps
+              icon="close"
+              label="Reject & Discard"
+              color="grey-8"
+              class="q-px-md"
+              @click="onReject"
+            />
+            <!-- Step 28 Rifinitura 4: Push-Back button in fullscreen modal -->
+            <q-btn
+              v-if="isSheetAppend"
+              outline
+              no-caps
+              icon="sync"
+              label="🔄 Update Results on Sheet"
+              color="teal-8"
+              class="q-px-md"
+              @click="onPushBack"
+            >
+              <q-tooltip>Batch-export Won/Lost outcomes to the originating Google Sheet</q-tooltip>
+            </q-btn>
+          </div>
 
           <div class="row q-gutter-md">
             <q-btn
               outline
               no-caps
               :icon="isEditing ? 'visibility' : 'edit'"
-              :label="isEditing ? 'Anteprima Risultato' : '✏️ Modifica Dati'"
+              :label="isEditing ? 'Preview Result' : '✏️ Edit Data'"
               color="primary"
               class="q-px-md"
               @click="isEditing = !isEditing"
@@ -1096,7 +1252,7 @@ const onReject = (): void => {
               unelevated
               no-caps
               icon="check_circle"
-              label="✅ Approva ed Esegui Operazione"
+              label="✅ Approve & Execute Operation"
               color="amber-9"
               class="approval-card__btn-approve q-px-lg text-weight-bold"
               :loading="isResolving"
@@ -1352,5 +1508,43 @@ const onReject = (): void => {
 .hover-negative:hover {
   color: var(--q-negative) !important;
   background: rgba(193, 0, 21, 0.1);
+}
+
+/* Step 28 — Evidence Citation Chips (Dust.tt pattern) */
+.approval-card__evidence-section {
+  background: rgba(10, 35, 66, 0.02);
+  border-top: 1px solid rgba(197, 160, 101, 0.15);
+}
+
+.approval-card__chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-family: "Mulish", sans-serif;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: filter 0.15s ease;
+
+  &--verified {
+    background: rgba(33, 186, 69, 0.12);
+    color: #1a7a35;
+    border: 1px solid rgba(33, 186, 69, 0.3);
+    cursor: pointer;
+
+    &:hover {
+      filter: brightness(0.9);
+      text-decoration: underline;
+    }
+  }
+
+  &--gap {
+    background: rgba(230, 160, 30, 0.12);
+    color: #8a5c00;
+    border: 1px solid rgba(230, 160, 30, 0.3);
+    cursor: default;
+  }
 }
 </style>

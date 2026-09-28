@@ -175,6 +175,8 @@ export interface Task {
   assignedMembers?: string[];
   aiMetadata: TaskAIMetadata;
   settings?: TaskSettings;
+  /** Tranche harvesting state for progressive sourcing (Pattern LangGraph). */
+  harvestingState?: TaskHarvestingState;
   archived?: boolean;
   archivedAt?: FirestoreTimestamp | string | null;
   pinned?: boolean;
@@ -182,6 +184,16 @@ export interface Task {
   createdAt: FirestoreTimestamp;
   updatedAt: FirestoreTimestamp;
 } /*end Task*/
+
+/**
+ * Tranche harvesting state for progressive multi-agent sourcing (Pattern LangGraph).
+ */
+export interface TaskHarvestingState {
+  lastProcessedIndex: number;
+  processedUrls: string[];
+  totalTarget: number;
+  completedTranches: number;
+} /*end TaskHarvestingState*/
 
 /**
  * AI-generated subtasks for breaking down complex tasks.
@@ -274,11 +286,24 @@ export interface EntitySubTask {
   notes: string;
   timeline: EntityTimelineEvent[];
   nestedTasks: NestedMiniTask[];
+  /** Times Management: Structured time slots for courses, classroom sessions, and medical appointments */
+  scheduleSlots?: ScheduleSlot[];
 
   /** Timestamps */
   createdAt: string;
   updatedAt: string;
 } /*end EntitySubTask*/
+
+/**
+ * Structured time slot for scheduling courses, classroom sessions, and medical visits.
+ */
+export interface ScheduleSlot {
+  date?: string; // YYYY-MM-DD
+  start: string; // HH:mm
+  end: string; // HH:mm
+  notes?: string;
+  location?: string;
+} /*end ScheduleSlot*/
 
 /**
  * AI metadata attached to tasks for learning and automation.

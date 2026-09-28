@@ -3,7 +3,7 @@
  * @description Deterministic middleware to sanitize LLM-generated tabular data before Firestore persistence.
  * @author Vasile Chifeac
  * @created 2026-09-17
- * @modified 2026-09-17
+ * @modified 2026-09-28
  *
  * @notes
  * - Ground-Truth URL Matching: only URLs in the groundTruthUrls Set (from webSearch.ts) are accepted.
@@ -11,6 +11,8 @@
  * - GDPR Art. 14 Date Forcing: overwrites any GDPR notification date with now() + 30 days (deterministic).
  * - Zero LLM calls, zero Firestore reads — pure Node.js in-memory computation.
  * - Architecture Pattern: Pure middleware injected by manageGoogleSheetTool before Firestore write.
+ * - Step 28 (Dust.tt Pattern): classifyFieldEvidence() and buildEvidenceChips() generate
+ *   typed chip descriptors ([\U0001f7e2 VERIFIED] / [\U0001f7e1 GAP]) consumed by ApprovalCard.vue.
  *
  * @dependencies
  * - Node.js built-in: no external dependencies required.
@@ -310,6 +312,82 @@ export const buildGuardrailSummary = (result: SanitizationResult): string | null
   if (result.flags.gdprDatesNormalized > 0) {
     parts.push(`${result.flags.gdprDatesNormalized} date GDPR forzate a +30gg (Art. 14)`);
   }
-  return `🛡️ OpsFlow Guardrail: ${parts.join(", ")}.`;
+  return `\u{1F6E1}\uFE0F OpsFlow Guardrail: ${parts.join(", ")}.`;
 }; /* end buildGuardrailSummary */
 
+// ── Step 28: Evidence Citation Chips (Dust.tt Pattern) ──────────────────────────────
+
+/**
+ * Verification status for a single data field (Dust.tt Evidence Chip pattern).
+ * - "verified": the value was found in the ground-truth URL set from web search.
+ * - "gap": the value could not be confirmed against ground-truth sources.
+ */
+export type EvidenceChipType = "verified" | "gap";
+
+/**
+ * A structured evidence descriptor for a single data field,
+ * rendered as a clickable chip in ApprovalCard.vue.
+ */
+export interface EvidenceChip {
+  /** Human-readable field label (e.g. "Website", "LinkedIn"). */
+  field: string;
+  /** The raw value from the LLM output. */
+  value: string;
+  /** Verification status: verified (\U0001f7e2) or gap (\U0001f7e1). */
+  type: EvidenceChipType;
+  /** The ground-truth URL that verified this value (only set when type="verified"). */
+  sourceUrl?: string;
+}
+
+/**
+ * Classifies a single field value against the ground-truth URL set.
+ * Pure function — no side effects, no I/O.
+ * @param {string} fieldValue - The raw string value to classify.
+ * @param {Set<string>} groundTruthUrls - Normalized URL set from web search.
+ * @return {{ type: EvidenceChipType; sourceUrl?: string }} Classification result.
+ */
+export const classifyFieldEvidence = (
+  fieldValue: string,
+  groundTruthUrls: Set<string>,
+): { type: EvidenceChipType; sourceUrl?: string } => {
+  if (!fieldValue || !fieldValue.trim()) {
+    return { type: "gap" };
+  }
+  // Check if the value itself is a URL present in ground truth
+  if (URL_LIKE_REGEX.test(fieldValue)) {
+    const normalized = fieldValue.trim().replace(/^http:\/\//i, "https://").toLowerCase();
+    for (const trusted of groundTruthUrls) {
+      if (normalized.startsWith(trusted) || trusted.startsWith(normalized)) {
+        return { type: "verified", sourceUrl: trusted };
+      }
+    }
+    return { type: "gap" };
+  }
+  // For non-URL values (e.g. company names, emails) — treat as gap by default
+  // The LLM prompt should use [GAP TO VERIFY: ...] for unverifiable fields;
+  // those are always classified as gap.
+  if (fieldValue.includes("[GAP")) {
+    return { type: "gap" };
+  }
+  // If we have no URL-based evidence, mark as gap
+  return { type: "gap" };
+}; /* end classifyFieldEvidence */
+
+/**
+ * Step 28 — Dust.tt Pattern: Builds an array of EvidenceChip descriptors
+ * for a row of LLM-generated data fields.
+ * Consumed by ApprovalCard.vue to render [\U0001f7e2 VERIFIED] / [\U0001f7e1 GAP] chips.
+ *
+ * @param {Record<string, string>} fields - Map of field name -> field value.
+ * @param {Set<string>} groundTruthUrls - Ground-truth URL set from web search.
+ * @return {EvidenceChip[]} Array of evidence chip descriptors.
+ */
+export const buildEvidenceChips = (
+  fields: Record<string, string>,
+  groundTruthUrls: Set<string>,
+): EvidenceChip[] => {
+  return Object.entries(fields).map(([field, value]) => {
+    const { type, sourceUrl } = classifyFieldEvidence(value, groundTruthUrls);
+    return { field, value, type, sourceUrl };
+  });
+}; /* end buildEvidenceChips */

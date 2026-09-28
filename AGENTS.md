@@ -1,7 +1,8 @@
-#OpsFlow — Unified Agent Instructions
+# OpsFlow — Universal Agentic Constitution (SSoT)
 
-OpsFlow is an AI-first SaaS platform built with Quasar 2 (Vue 3), TypeScript, Firebase, and Pinia.
-This file is the **Single Source of Truth** for the AI Agent. The Agent must follow these instructions strictly.
+> **OpsFlow** is an enterprise AI-first SaaS platform built with Quasar 2 (Vue 3), TypeScript, Firebase, and Pinia.  
+> This file is the **Single Source of Truth (SSoT) and Universal Root Constitution** for **ALL** AI agents and coding tools (Google Gemini Flash, Anthropic Claude Code, Google Antigravity, Cursor, GitHub Copilot).  
+> All agents MUST follow these instructions strictly without exception.
 
 ---
 
@@ -9,7 +10,7 @@ This file is the **Single Source of Truth** for the AI Agent. The Agent must fol
 
 Prima di ogni modifica a codice o file, l'Agent deve dichiarare:
 
-```
+```markdown
 > **Cosa:** [file + funzione/componente + righe interessate]
 > **Come:** [approccio tecnico specifico]
 > **Perché:** [regola rispettata + problema risolto]
@@ -24,37 +25,31 @@ Non procedere mai ad applicare modifiche senza aver prima scritto questo blocco 
 
 È fatto divieto assoluto di creare logiche di backend isolate senza la loro controparte visiva e reattiva nel Frontend. Ogni Cloud Function, Tool o listener deve essere **immediatamente collegato e testabile nella UI di Quasar** (Pannelli, Chat, Approval Card, Pinia Store). L'utente deve poter vedere, interagire, approvare e verificare ogni singolo dato a schermo.
 
----
+### 🌐 DIRETTIVA FONDAMENTALE (Allineamento con `.logicFlow/`)
 
-### 🌐 DIRETTIVA FONDAMENTALE: Visione Olistica della Codebase & Allineamento con `.logicFlow/`
+Prima di ogni modifica, l'Agent deve:
 
-Prima di ogni modifica, l'Agent deve obbligatoriamente:
-
-1. **Analisi Olistica dell'Intera Codebase**: Considerare sempre l'intero sistema (Frontend Quasar, Pinia Store, Backend Cloud Functions, Firestore Security Rules e contratti TypeScript). È severamente vietato applicare modifiche "cieche" o locali senza aver valutato l'impatto trasversale sull'intera architettura.
-2. **Rispetto Tassativo dei Flussi Architetturali (`.logicFlow/`)**: Ogni modifica al codice deve rigorosamente seguire i flussi logico-operativi già stabiliti nei documenti della cartella `.logicFlow/` (es. ciclo di vita workspace, segregazione ruoli, autenticazione, esecuzione task).
-3. **Aggiornamento Sincrono dei Flussi di Logica**: Se un nuovo requisito, una correzione di bug o una modifica architetturale altera o estende i comportamenti stabiliti, l'Agent **DEVE contestualmente aggiornare i file pertinenti in `.logicFlow/`**.
-4. **Spiegazione Preventiva del Differenziale**: Prima di applicare qualsiasi modifica, l'Agent deve spiegare all'utente in modo chiaro e trasparente:
-   - **Cosa modifica** (file, funzioni, righe)
-   - **Perché lo modifica** (causa radice del problema e regola applicata)
-   - **Cosa cambia rispetto a prima** (il comportamento vecchio vs il nuovo comportamento introdotto)
+1. **Analisi Olistica:** Valutare l'impatto trasversale sull'intero sistema (Quasar, Pinia, Cloud Functions, Firestore Rules, TypeScript).
+2. **Rispetto dei Flussi:** Rispettare i flussi operativi stabiliti nei documenti `.logicFlow/`.
+3. **Aggiornamento Sincrono:** Aggiornare contestualmente `.logicFlow/` quando le modifiche alterano o estendono i comportamenti.
 
 ---
 
-## 📌 §1 — Git & Branch Management (Regola §1.9 — Workflow Unificato su dev)
+## 📌 §1 — Git & Branch Management (Workflow su dev)
 
-- **Branch Check**: All'inizio di ogni sessione, verificare il branch corrente (`git branch`). Assicurarsi di essere SEMPRE posizionati su `dev`.
-- **Workflow Unificato su `dev`**: Tutte le modifiche di sviluppo, implementazioni e collaudi operativi devono risiedere e confluire direttamente sul branch **`dev`**. È vietato disperdere il lavoro lasciando branch `feature/` orfani o sparsi nel repository.
-- **Rilascio Protetto su `main`**: Il branch `main` è rigorosamente protetto e riservato alla Produzione. Il merge da `dev` verso `main` è consentito **SOLO ED ESCLUSIVAMENTE dopo che l'intero sistema è stato testato e convalidato con successo** (`yarn typecheck` a 0 errori, `yarn lint:check` a 0 errori/warning e collaudo a schermo). MAI committare direttamente su `main`. MAI `git push --force` su branch condivisi.
-- **Commit Messages**: Usare la convenzione **Conventional Commits** (`feat: ...`, `fix: ...`, `chore: ...`, `security: ...`, `style: ...`) con intestazione massima di 100 caratteri.
+- **Branch Check:** Verificare sempre il branch corrente (`git branch`). Assicurarsi di essere SEMPRE su **`dev`**.
+- **Workflow Unificato su `dev`:** Tutte le modifiche, implementazioni e collaudi devono risiedere sul branch `dev`. Vietato lasciare branch orfani.
+- **Rilascio Protetto su `main`:** Il branch `main` è riservato alla produzione. Il merge da `dev` a `main` è consentito SOLO dopo che l'intero sistema è stato validato con successo (`yarn typecheck` = 0 errori, `yarn lint:check` = 0 errori/warning, collaudo a schermo). MAI committare direttamente su `main`. MAI `git push --force`.
+- **Commit Messages:** Convenzione **Conventional Commits** (`feat: ...`, `fix: ...`, `chore: ...`, `security: ...`, `style: ...`) max 100 caratteri.
 
 ---
 
 ## 📋 §2 — Comandi del Progetto
 
-Usa esclusivamente **yarn** come package manager principale. Usa **npm** SOLO dove strettamente necessario (es. ambienti o script specifici Firebase). MAI usare `pnpm`.
+Usa esclusivamente **yarn** come package manager principale. Usa **npm** SOLO dove strettamente necessario (cartella `opsflow-functions`). MAI usare `pnpm`.
 
 | Task                     | Command           |
-| ------------------------ | ----------------- |
+| :----------------------- | :---------------- |
 | Dev server (HMR)         | `yarn dev`        |
 | Production build         | `yarn build`      |
 | Lint + format (auto-fix) | `yarn lint`       |
@@ -65,336 +60,72 @@ Usa esclusivamente **yarn** come package manager principale. Usa **npm** SOLO do
 
 ## 🛡️ §3 — Sicurezza, Privacy & GDPR (Healthcare Data Protection)
 
-Ogni dato sanitario e anagrafica paziente è altamente sensibile (PII). Per i dettagli completi sulla Security Policy ed il protocollo di Responsible Disclosure, fare riferimento al file **[SECURITY.md](file:///home/chif-vas/projects/opsflow/SECURITY.md)**.
-
-### GDPR Compliance (Art. 30 e 32)
-
-- **Crittografia Client-Side**: Tutti i dati personali e sanitari (PII) dei pazienti DEVONO essere cifrati client-side con **AES-256-GCM** prima di essere scritti su Firestore.
-- **Pseudonimizzazione**: Usare hash (SHA-256) per l'ID paziente. MAI salvare nome e cognome in chiaro nel DB. Le chiavi di decrittografia non devono mai lasciare il dispositivo dell'utente.
-- **Audit Logs**: Generare log di tracciamento (GDPR Art. 30) per ogni creazione/modifica/accesso a dati clinici.
-- **Auto-Logout**: Implementare logout automatico per inattività a 15 minuti su dispositivi condivisi.
-
-### Anti-XSS (Sanitizzazione Input)
-
-- **Sanitize**: Sanitizzare esplicitamente ogni input utente prima del rendering.
-- **v-html**: MAI usare `v-html` senza una utility `sanitize()` esplicita. Prediligere `{{ mustache }}` per il testo semplice.
-
-### HTTP Stack & Supply Chain Security
-
-- **Firebase SDK**: Usare solo il client SDK ufficiale di Firebase per operazioni cloud.
-- **Email**: Usare solo `@emailjs/browser` per l'invio di email client-side.
-- **Divieti**: È vietato aggiungere o usare `axios`, `got`, `node-fetch`, `superagent` o librerie simili per ridurre la superficie di attacco della supply chain.
-
-### Logging & Console
-
-- **Custom Logger**: Usare sempre un logger custom isolato per i log applicativi, assicurando che non vengano mai loggati dati PII in chiaro.
-- **console.log**: MAI usare `console.log` in codice di produzione (GDPR Art. 32).
-- **Eccezioni**: Sono permesse eccezioni solo all'interno di build scripts, service workers e fase di inizializzazione di Firebase.
-
-### Sicurezza a 3 Layer
-
-Ogni restrizione UI deve avere copertura lato DB e Server:
-
-1. **Layer 1 (Frontend)**: Visualizzazione condizionale (es. `v-if`, `disabled`).
-2. **Layer 2 (Database)**: Firestore Security Rules (restrizioni su letture/scritture).
-3. **Layer 3 (Backend)**: Cloud Functions e token JWT Custom Claims.
+- **Crittografia Client-Side (AES-256-GCM):** Dati sanitari e anagrafica pazienti (PII) DEVONO essere cifrati client-side prima di Firestore.
+- **Pseudonimizzazione:** Hash SHA-256 per ID paziente. MAI nomi in chiaro su DB. Chiavi mai trasmesse al cloud.
+- **Anti-XSS:** Sanitizzare ogni input utente. MAI `v-html` senza utility `sanitize()`. Prediligere `{{ mustache }}`.
+- **Supply Chain:** Solo Firebase Client SDK ufficiale e `@emailjs/browser`. VIETATO importare `axios`, `got`, `node-fetch`.
+- **Logging Sicuro:** MAI usare `console.log` in codice di produzione (GDPR Art. 32). Usare logger custom isolato.
+- **Sicurezza a 3 Layer:** Layer 1 (UI `v-if`) + Layer 2 (Firestore Rules) + Layer 3 (Cloud Functions JWT Custom Claims).
 
 ---
 
 ## 🏗️ §4 — Vincoli Architetturali & Convenzioni Vue 3
 
-### Project Structure
-
-```
-src/
-  boot/        # App initialization (boot files run before mount)
-  components/  # Reusable Vue components
-  css/         # Global SCSS styles; Quasar variables in quasar.variables.scss
-  i18n/        # Translations (en-US default); all user-facing strings go here
-  pages/       # File-based routing (see Routing below)
-  router/      # Router config; typed-router.d.ts is AUTO-GENERATED — never edit it
-  stores/      # Pinia stores
-```
-
-### Routing
-
-- **Filename-based routing** — i file in `src/pages/` diventano rotte automaticamente. Do NOT add routes to router config manually.
-- Router mode: **hash** (`/#/path`).
-- Route types are auto-generated in `src/router/typed-router.d.ts` — never edit this file.
-- Catch-all 404: `src/pages/[...path].vue`.
-- Layouts annidati: `src/pages/index.vue` è il layout; `src/pages/index/(index).vue` è la pagina index su `/`.
-
-### Vue Component Conventions
-
-- **Sempre `<script setup>`** — no Options API, no `defineComponent`.
-- Use `defineProps<T>()` con interfaccia TypeScript per le props tipizzate.
-- Importa i composable di Quasar (es. `useQuasar`) direttamente da `'quasar'`.
-- Importa gli helper di app-level da `'#q-app'` (es. `defineBoot`, `defineRouter`).
-- Struttura dei file `.vue`:
-  1. `<script setup lang="ts">`
-  2. `<template>`
-  3. `<style scoped lang="scss">`
-     (MAI posizionare il template o lo stile prima dello script).
-
-### State Management (Pinia)
-
-- Crea gli store usando `defineStore('store-id', { state, getters, actions })` in `src/stores/`.
-- Importa Pinia da `src/stores/index.ts` (collegato al boot di Quasar).
-- Gli store supportano HMR — usa il pattern `import.meta.hot` presente in `src/stores/example-store.ts`.
-
-### Styling
-
-- File principale: `src/css/app.scss`.
-- Quasar variable overrides: `src/css/quasar.variables.scss`.
-- Non usare stili inline; preferisci le classi utility di Quasar e file SCSS.
-
-### Linting & Formatting
-
-- **oxlint** (non ESLint) e **oxfmt** (non Prettier) — basati su Rust, estremamente veloci.
-- Configurazione: `oxlint.config.ts` e `oxfmt.config.ts`.
-- Esegui `yarn lint` per l'auto-fix prima di effettuare commit.
-- Il file `src/router/typed-router.d.ts` è escluso dal linting.
-
-### Tipi TypeScript Centralizzati
-
-- Tutti i tipi e le interfacce per modelli dati Firestore DEVONO risiedere in `src/types/` (es. `src/types/models.ts`).
-- Non definire mai interfacce dati inline all'interno di componenti Vue o store.
-- I tipi ad uso esclusivo dell'interfaccia utente (UI-only) sono ammessi localmente se accompagnati dal commento `// UI-only — not Firestore data`.
-- È vietato disabilitare le regole con commenti come `// eslint-disable` o `// oxlint-disable`. Risolvere sempre i problemi alla radice.
-
-### Ordine dei Gruppi di Import
-
-In ogni file `.ts` o `.vue`, raggruppare gli import usando separatori commentati in quest'ordine preciso:
-
-```typescript
-// ── Vue & Framework ──────────────────────────────────────────────────────────
-// ── Firebase ─────────────────────────────────────────────────────────────────
-// ── Types ────────────────────────────────────────────────────────────────────
-// ── Stores ───────────────────────────────────────────────────────────────────
-// ── Composables ──────────────────────────────────────────────────────────────
-// ── Utils ────────────────────────────────────────────────────────────────────
-// ── Components ───────────────────────────────────────────────────────────────
-```
-
-### § Code Style Obbligatorio (JSDoc & Marcatori)
-
-**1. JSDoc Header (ogni file .ts / .vue significativo)**
-Ogni nuovo file o componente complesso DEVE iniziare con l'header standard JSDoc:
-
-```typescript
-/**
- * @file NomeFile.ts
- * @description [max 2 frasi — cosa fa, non come]
- * @author Vasile Chifeac
- * @created YYYY-MM-DD
- * @modified YYYY-MM-DD
- *
- * @notes
- * - Pattern architetturale usato
- * - Considerazioni sicurezza
- *
- * @dependencies
- * - Lista dipendenze critiche
- *
- * @performance
- * - Metriche performance (es: <10ms, <5 reads Firestore/month)
- */
-```
-
-**2. Marcatori fine funzione**
-Chiudere SEMPRE le funzioni con il marcatore di chiusura commentato:
-
-```typescript
-const myFn = (): string => {
-  return value;
-}; /*end myFn*/
-```
-
-**3. Lingua**
-
-- **Codice, variabili, JSDoc, commenti .ts/.vue**: INGLESE professionale.
-- **Chat, documentazione .md, roadmap**: ITALIANO, analogie semplici.
+- **Sempre `<script setup lang="ts">`:** No Options API, no `defineComponent`.
+- **Struttura File `.vue`:** 1. `<script setup>`, 2. `<template>`, 3. `<style scoped lang="scss">`.
+- **Tipi Centralizzati:** Modelli dati Firestore risiedono tassativamente in `src/types/models.ts`. Vietati tipi inline nel componente.
+- **Elite Design System:** Palette Royal Navy (`#0a2342`), Gold (`#c5a065`), Off-White (`#f9f7f2`). GlassCard e layout Triple-Pane.
+- **Lighthouse:** Obiettivo 100/100 su Performance, Accessibility, Best Practices e SEO.
 
 ---
 
-## 💰 §5 — Ottimizzazione Costi Cloud (Firebase)
+## 💰 §5 — Ottimizzazione Costi Cloud (Firebase/GCP)
 
-**Target**: Costo totale inferiore a €1.00/mese per 1000 utenti attivi.
+**Target:** Costo totale < €1.00/mese per 1000 utenti attivi.
 
-- **JWT-Only Navigation**: Usare i Custom Claims del token JWT per validare i ruoli e i permessi dell'utente. MAI effettuare interrogazioni (`getDoc`) a Firestore solo per autorizzare la navigazione.
-- **Sync On-Demand**: Sincronizzare i dati solo in fase di avvio (se cache scaduta), post-scrittura, o su refresh manuale dell'utente. Evitare sync continui in background o `onSnapshot` su risorse non critiche.
-- **Cache Locale**: Salvare i dati in cache locale (Pinia / IndexedDB / localStorage) con validità 30 giorni per resistere all'uso offline, usando il namespace `opsflow_user_{userId}_{dbName}`.
-- **Write Strategy**: Scrivere sempre prima su Firestore e poi aggiornare la cache locale (Firestore-First Write) per evitare disallineamenti o perdite dati.
-- **Logout Sicuro**: Nel logout, NON usare `localStorage.clear()` (cancella i dati offline dell'utente), ma resettare gli store Pinia e rimuovere solo i token di sessione.
-
----
-
-## ✨ §6 — Design System "Elite" & Lighthouse
-
-- **Palette Colori**: Royal Navy (`#0a2342`), Gold (`#c5a065`), Off-White (`#f9f7f2`).
-- **Tipografia**: _Playfair Display_ per titoli eleganti, _Mulish_ (o _Outfit_) per testi leggibili.
-- **Componenti**: Utilizzo di stili basati su `GlassCard.vue` con sfocatura di sfondo, angoli arrotondati, e spaziature ariose (`q-pa-xl`, `q-mb-xl`).
-- **Qualità**: Evitare design commerciali predefiniti da "startup generica".
-- **Lighthouse**: Ciascuna pagina deve puntare ad un punteggio di **100/100** su Performance, Accessibility, Best Practices e SEO.
+- **JWT-Only Navigation:** Ruoli e permessi verificati via JWT Custom Claims. MAI query Firestore per autorizzare la navigazione.
+- **Lock-in su Gemini Flash:** Esecuzione agentica rigorosamente su **Gemini 1.5/3.6 Flash** via Firebase Genkit.
+- **Multi-Level Cache:** Cache locale Pinia a 30 giorni e cache ricerche web a 72h con indice TTL nativo Google Cloud.
+- **Scale-to-Zero:** Tutte le funzioni Cloud Run configurate con `minInstances: 0`.
 
 ---
 
-## 📋 §7 — Pre-Commit Checklist & Key Notes
+## 🗂️ §6 — L'Agentic Control Plane Modulare (`.agents/`)
 
-Prima di effettuare qualsiasi commit Git, eseguire e superare con zero errori/warning:
+OpsFlow scompone le regole operative in moduli contestuali per eliminare il "Cognitive Bleed" (-65% token):
 
-- [ ] `yarn typecheck` superato con successo.
-- [ ] `yarn lint` eseguito con successo (zero errori/warning attivi).
-- [ ] TypeScript strict mode attivo (tutti i tipi devono essere espliciti).
-- [ ] Node.js ≥ 22.12 richiesto per lo sviluppo.
-- [ ] Nessun file `.env` o credenziale/chiave inserita nel commit.
-- [ ] Messaggio di commit conforme a Conventional Commits.
-- [ ] Struttura dei file `.vue` ordinata (script -> template -> style).
-- [ ] JSDoc header presente in tutti i nuovi file di logica o componenti complessi.
-- [ ] `sinkFolder/` è una cartella di trasferimento/scratch e non fa parte del build finale.
-
----
-
-## 🔍 §8 — Grep di Controllo Post-Modifica (Cybersecurity)
-
-Dopo ogni modifica a file critici, esegui controlli rapidi via terminale per verificare i layer di sicurezza:
-
-```bash
-# Esempio: se modificato firestore.rules, controlla le restrizioni di sicurezza
-grep -n "request.auth" firestore.rules
-
-# Esempio: se modificato il router, controlla le rotte protette
-grep -n "requiresAuth" src/router/index.ts
+```
+.agents/
+├── rules/                           ← Regole modulari per argomento
+│   ├── 00-governance.md             ← Git, explain-before-doing, yarn
+│   ├── 01-security-gdpr.md          ← AES-256-GCM, PII, anti-XSS
+│   ├── 02-multitenancy.md           ← Isolamento tenant, JWT claims
+│   ├── 03-frontend-quasar.md        ← Vue 3, Quasar, Elite Design
+│   ├── 04-anti-hallucination.md     ← Doppio Gate, DBS, GAP logging
+│   ├── 05-cost-optimization.md      ← Budget, cache 72h, throttling
+│   └── 06-fullstack-alignment.md    ← Visual parity, ApprovalCard
+│
+├── agents/                          ← Profili e prompt degli 8 agenti
+│   ├── planner.md                   ← AgentePlanner (scomposizione subtask)
+│   ├── inspector.md                 ← AgenteIspettore (audit qualità)
+│   ├── archivist.md                 ← AgenteArchivista (RAG indexer)
+│   ├── researcher.md                ← AgenteRicerca (skill matcher)
+│   ├── administrator.md             ← AgenteAmministrativo (report)
+│   ├── supervisor.md                ← AgenteSupervisore (compliance)
+│   ├── ai-engineer-agent.md         ← AgenteAiEngineer (modelli & budget)
+│   └── prompt-engineer-agent.md     ← AgentePromptEngineer (DBS prompt)
+│
+└── hooks/                           ← Script di verifica deterministica
+    ├── pre-commit-validate.sh       ← typecheck, lint, build functions
+    ├── pre-tool-security.sh         ← blocco console.log, axios, v-html
+    └── post-write-audit.sh          ← JSDoc header e marcatori /*end fn*/
 ```
 
 ---
 
-## 🧠 §9 — Workflow Avanzati & Skills
+## 💬 §7 — Stile di Comunicazione & Mentoring
 
-Per audit complessi, analisi di sicurezza o architetturali strutturate su 5 livelli (Architect, Analyst, Hacker, Giurista, Businessman), consultare le procedure contenute nella cartella **[SKILL/](file:///home/chif-vas/projects/opsflow/SKILL)** e in particolare i file **[SKILL/senior-architect/SKILL.md](file:///home/chif-vas/projects/opsflow/SKILL/senior-architect/SKILL.md)** o **[SKILL/senior-qa-engineer/SKILL.md](file:///home/chif-vas/projects/opsflow/SKILL/senior-qa-engineer/SKILL.md)** prima di procedere.
-
----
-
-## 🛡️ §10 — Approccio Diagnosi Cybersecurity
-
-Quando ricevi codice da rivedere, controlla sistematicamente:
-
-1. **OWASP Top 10**: Injection, XSS, IDOR, Misconfiguration, Cryptographic Failures, Insecure Design, Vulnerable Components, Auth Failures, Integrity Failures, SSRF.
-2. **GDPR Art. 32**: PII in chiaro? Logging sicuro? Auto-logout? Audit trail? Crittografia client-side attiva?
-3. **Firebase Rules**: Principio del minimo privilegio? L'utente accede solo ai propri dati?
-4. **JWT Claims**: `isActive`, `role` verificati da JWT (non Firestore)?
-5. **Supply Chain**: Nuove dipendenze aggiunte? No axios/fetch non approvati?
-   _Segnala SEMPRE i problemi di sicurezza rilevati anche se non espressamente richiesti dal task._
-
----
-
-## 🚫 §11 — Anti-Patterns (MAI FARE)
-
-```typescript
-// ❌ Package manager sbagliato rispetto al progetto (usa solo yarn, npm solo per Firebase)
-// ❌ Firestore query per permission checks (usa JWT claims)
-// ❌ Tipi TypeScript Firestore definiti inline nel componente
-// ❌ console.log con dati sensibili (PII, email, token) in production
-// ❌ localStorage.clear() nel logout (cancella dati offline persistenti)
-// ❌ import axios from 'axios'
-// ❌ <div v-html="content"> senza sanitize()
-// ❌ <template> prima di <script> in .vue
-// ❌ Dati PII/sanitari in chiaro in Firestore (richiede AES-256-GCM client-side)
-// ❌ // eslint-disable o // oxlint-disable (risolvi alla radice)
-// ❌ onSnapshot continuo per dati non real-time critici
-// ❌ git push --force su branch condivisi
-// ❌ Commit su main per feature (usa PR da branch dedicato)
-// ❌ Modificare file generati automaticamente (es. typed-router.d.ts)
-// ❌ Design con colori/font fuori dal Design System "Elite"
-// ❌ Aggiungere route manualmente se il progetto usa filename-based routing
-```
-
----
-
-## 💬 §12 — Mentoring Style & Comunicazione
-
-1. **Spiega PRIMA** con il blocco Explain-Before-Doing.
-2. **Usa analogie semplici** — _"Pinia è come un cassetto del comodino, Firestore è il caveau in banca"_.
-3. **Chiedi conferma** prima di operazioni invasive (delete, deploy, refactoring massicci).
-4. **Mostra costi** — ogni query Firestore ha un costo, documenta sempre l'impatto.
-5. **Celebra i miglioramenti** — _"Risparmio: 99.7%! "_.
-6. **Lingua**: Chat, documentazione e roadmap in **ITALIANO**. Codice, commenti tecnici e variabili in **INGLESE**.
-
----
-
-## 💡 §13 — Proposte di Miglioramento Regole
-
-Puoi proporre modifiche o miglioramenti a questo file di regole solo dopo aver completato il task principale, usando questo formato preciso:
-
-```
-## 💡 Proposta Miglioramento Regole (SOLO SU CONSENSO)
-
-**Sezione interessata:** [nome sezione]
-**Problema attuale:** [descrizione del gap o ambiguità]
-**Proposta:** [testo preciso della modifica]
-**Motivazione:** [perché migliora sicurezza/efficienza/chiarezza]
-
-Vuoi che applichi questa modifica? ✅ Sì / ❌ No / 🔄 Modifica proposta
-```
-
-Proponi al massimo 2 miglioramenti per sessione.
-
----
-
-## 🤖 §14 — Architettura & Orchestrazione Agenti IA (Genkit & Gemini)
-
-OpsFlow utilizza una struttura ad **Agenti IA Specializzati** (Orchestrazione Agentica) basata su **Firebase Genkit** e **Gemini** per la produttività consapevole, gestione dei workspace e analisi documentale stile NotebookLM.
-
-### 1. Definizione degli Agenti Operativi & System Prompts
-
-- **AgentePlanner (Pianificatore Strategico):**
-  - **Scopo:** Analizza i task del workspace e li scompone automaticamente in sotto-task operativi ordinate (`SubTask`), assegnando uno score di complessità (`complexityScore` 1-10) ed una categoria consigliata (`suggestedCategory`).
-  - **Trigger Firestore:** `tenants/{tenantId}/tasks/{taskId}` (evento: `onCreate`).
-  - **System Prompt:** _"Sei AgentePlanner, l'esperto di produttività e decomposizione strategica dei task di OpsFlow. Analizza il titolo e la descrizione del task fornito (anonimizzato). Scomponi l'attività in 3-5 sotto-task operative, concrete ed in sequenza logica. Assegna un punteggio di complessità da 1 a 10 ed una categoria pertinente. Rispondi ESCLUSIVAMENTE in formato JSON valido."_
-
-- **AgenteIspettore (Quality & Compliance Audit):**
-  - **Scopo:** Revisiona la qualità, la consistenza ed il grado di completamento delle sotto-task prima della chiusura finale. Rileva eventuali anomalie o discrepanze.
-  - **Trigger Firestore:** `tenants/{tenantId}/tasks/{taskId}` (evento: `onUpdate` con status='in-progress' o 'completed').
-  - **System Prompt:** _"Sei AgenteIspettore, il garante della qualità e conformità operativa di OpsFlow. Revisiona lo stato di avanzamento delle sotto-task e verifica che tutti i requisiti descritti nel task siano stati soddisfatti. Se trovi discrepanze o lacune, genera un avviso di ispezione chiaro e conciso."_
-
-- **AgenteArchivista (Knowledge Base & RAG Indexer):**
-  - **Scopo:** Indicizza le note, le regole aziendali ed i pattern ricorrenti estratti dai task completati nella collezione `knowledgeBase` del tenant.
-  - **Trigger Firestore:** `tenants/{tenantId}/knowledgeBase/{kbId}` (evento: `onCreate` o `onUpdate`).
-  - **System Prompt:** _"Sei AgenteArchivista, la memoria storica del tenant in OpsFlow. Analizza il contesto operativo ed estrai regole ricorsive, preferenze utente o best-practice. Formatta i risultati come regole chiare per l'indicizzazione RAG."_
-
-- **AgenteRicerca (Lead & Skill Matcher):**
-  - **Scopo:** Monitora, analizza e filtra profilazioni di lead o trainer per trovare il miglior match operativo orientato al ROI.
-  - **Stile:** Sintetico, orientato al ROI, focalizzato sull'analisi delle competenze chiavi.
-  - **System Prompt:** _"Sei AgenteRicerca, lo specialista di screening e skill-matching di OpsFlow. Il tuo unico obiettivo è valutare i profili ed i lead riducendo al minimo i costi d'azione. Sii sintetico, fornisci una valutazione numerica del match (0-100%) e motiva la scelta con 3 punti chiave orientati al ROI."_
-
-- **AgenteAmministrativo (Report & Document Synthesis):**
-  - **Scopo:** Automatizza la stesura di report sintetici, riassume catene di comunicazioni e prepara dati strutturati per l'esportazione.
-  - **System Prompt:** _"Sei AgenteAmministrativo, l'assistente operativo per la gestione documentale. Sintetizza le informazioni ricevute in punti elenco ordinati, con chiarezza espositiva ed un tono professionale ed elegante."_
-
-- **AgenteSupervisore (Rule Compliance Audit):**
-  - **Scopo:** Monitora la conformità delle azioni dell'utente e degli altri agenti rispetto alle regole aziendali ed al file `AGENTS.md`.
-  - **System Prompt:** _"Sei AgenteSupervisore, il custode della compliance e della sicurezza di OpsFlow. Verifichi che le azioni eseguite nel workspace non violino le regole aziendali, le politiche GDPR o i vincoli di sicurezza."_
-
-- **AgenteAiEngineer (AI Infrastructure & Model Tiering):**
-  - **Scopo:** Gestisce l'orchestrazione Genkit, il tiering dei modelli (Gemini 1.5 Flash), il controllo del token budget, l'ottimizzazione del memory loop e la resilienza ai timeout.
-  - **Skill File:** `SKILL/ai-engineer/SKILL.md`
-  - **System Prompt:** _"Sei AgenteAiEngineer, lo specialista dell'architettura Genkit e del controllo dei costi AI in OpsFlow. Il tuo compito è ottimizzare le pipeline agentiche, garantire il lock-in sui modelli Flash ed eliminare sprechi di token e timeout."_
-
-- **AgentePromptEngineer (DBS Framework & Zero-Hallucination):**
-  - **Scopo:** Progetta costituzioni aziendali, 3-level stacked prompt, regole vincolanti DO/DON'T e schemi di output Zod trasparenti.
-  - **Skill File:** `SKILL/prompt-engineer/SKILL.md`
-  - **System Prompt:** _"Sei AgentePromptEngineer, il maestro del framework DBS di OpsFlow. Garantisci che ogni prompt sia strutturato su 3 livelli, privo di allucinazioni ed allineato alle regole DO e DON'T del Workspace."_
-
-### 2. Protocollo di Comunicazione tra Agenti
-
-La comunicazione avviene mediante il modello **Event-Driven via Firestore**:
-
-1. **Trigger:** Un'azione utente (es. creazione task) scrive su `tenants/{tenantId}/tasks/{taskId}`.
-2. **Execution:** La Cloud Function intercetta la scrittura, applica il **Middleware di Anonimizzazione PII** (`piiSanitizer.ts`), e invoca la pipeline Genkit/Gemini.
-3. **Writeback:** L'agente scrive i risultati strutturati (es. `subtasks`, `complexityScore`, regole KB) sulla collezione tenant corrispondente.
-
-### 3. Regole di Sicurezza & Anonimizzazione PII
-
-1. **Isolamento Tenant Scoped:** Ogni chiamata verso gli agenti eredita ed impone il `tenantId` estratto dai JWT Custom Claims.
-2. **Anonimizzazione PII (GDPR Art. 32):** Nessun dato personale (nomi, email, dati finanziari) viene inviato direttamente a modelli LLM esterni senza prima passare per il sanitizzatore PII.
-3. **JWT-Only Claims:** Le autorizzazioni per l'esecuzione degli agenti sono verificate tramite Custom Claims (`isActive == true`).
+1. **Spiega PRIMA** con il blocco Explain-Before-Doing (§0).
+2. **Usa analogie semplici:** _"Pinia è come un cassetto del comodino, Firestore è il caveau in banca"_.
+3. **Chiedi conferma** prima di operazioni invasive o distruttive.
+4. **Lingua:** Chat, documentazione e roadmap in **ITALIANO**. Codice, commenti tecnici e variabili in **INGLESE**.

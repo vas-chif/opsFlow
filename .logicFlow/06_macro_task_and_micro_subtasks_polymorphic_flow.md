@@ -317,6 +317,16 @@ Quando tutti i sub-task collegati al task raggiungono un esito finale definitivo
   _"Tutte le risorse sono state gestite. Vuoi completare e archiviare il task principale?"_
 - L'utente mantiene il controllo sovrano ("Human-in-the-Loop") prima che parta il teardown a cascata.
 
+### 5.5 Sincronizzazione di Rientro On-Demand su Google Sheets (Push-Back Esiti & Note)
+
+Sebbene la sincronizzazione continua cella-per-cella sia categoricamente vietata (§5.3) per prevenire race conditions e saturazione delle quote API, il ciclo operativo richiede che il Foglio Google originario del cliente o del team HR possa essere allineato con gli esiti finali:
+
+- **Azione On-Demand:** Nella Action Bar dei Sub-Task (`TaskChatWindow.vue` e `SubTaskEntityModal.vue`) è presente l'azione `[Esporta Esiti su Foglio]`.
+- **ApprovalCard Batch:** Il click genera una `ApprovalCard.vue` che visualizza l'anteprima differenziale:
+  - Identificativo e riga corrispondente sul Google Sheet.
+  - Nuova colonna Esito (`Won` / `Lost`) e Note di screening aggiornate.
+- **Aggiornamento Deterministico:** Solo su autorizzazione esplicita dell'utente, la Cloud Function invoca una singola operazione `sheets.spreadsheets.values.batchUpdate` aggiornando esclusivamente le colonne di stato, senza rischiare di cancellare dati o creare righe duplicate.
+
 ---
 
 ## 🌐 6. Astrazione Polimorfica Multi-Dominio
@@ -458,6 +468,15 @@ export interface EntitySubTask {
   notes: string;
   timeline: EntityTimelineEvent[];
   nestedTasks: NestedMiniTask[];
+
+  /** Times Management: Supporto per pianificazione orari d'aula e visite mediche */
+  scheduleSlots?: Array<{
+    date?: string; // YYYY-MM-DD
+    start: string; // HH:mm
+    end: string; // HH:mm
+    notes?: string;
+    location?: string;
+  }>;
 
   /** Timestamps */
   createdAt: string;

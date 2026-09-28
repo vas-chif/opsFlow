@@ -154,3 +154,5 @@ graph LR
    Se l'operazione su Sheets restituisce `HTTP 401 Unauthorized`, il worker tenta il rinnovo tramite `refreshAccessToken()`. Se fallisce, il job passa in `paused` con errore `oauth_revoked` e viene emesso un avviso in chat.
 4. **GDPR Art. 14 Automatic Deadline:**
    Per ogni nuovo candidato reperito tramite fonti pubbliche, il sistema valorizza automaticamente la data limite calcolata a `+30 giorni` dalla data odierna.
+5. **State Checkpointing delle Tranche (Pattern LangGraph):**
+   L'avanzamento dell'estrazione viene persistito nel campo `harvestingState` del task (`lastProcessedIndex`, `processedUrls`). In caso di interruzioni o esecuzioni successive del job schedulato, il dispatcher riprende dall'ultimo indice salvato senza rielaborare candidati preesistenti né ricaricare l'intera cronologia di chat (cfr. [07_agentic_control_plane_and_governance_flow.md](file:///home/chif-vas/projects/opsflow/.logicFlow/07_agentic_control_plane_and_governance_flow.md)).

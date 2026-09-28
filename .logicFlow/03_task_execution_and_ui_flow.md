@@ -320,3 +320,8 @@ A livello di sistema (`promptBuilder.ts` e callable functions), il generatore AI
 - Rileva in tempo reale la lingua dell'input dell'utente.
 - Risponde rigorosamente e con naturalezza nativa nella medesima lingua dell'utente (Italiano con Italiano, Inglese con Inglese, Spagnolo con Spagnolo, ecc.).
 - Rifiuta qualsiasi bias o forzatura statica dell'italiano derivante da titoli di workspace o keyword di contesto.
+
+### 10.5 Riferimento al Flusso di Controllo Agentico (Flow 07)
+
+L'intero ciclo di vita esecutivo descritto in questo documento (Gate cognitivo, grounding deterministico delle fonti, Human-in-the-Loop tramite `ApprovalCard.vue` e orchestrazione multi-agente) è governato formalmente dall'**Universal Agentic Control Plane** documentato in:
+👉 [07_agentic_control_plane_and_governance_flow.md](file:///home/chif-vas/projects/opsflow/.logicFlow/07_agentic_control_plane_and_governance_flow.md).
