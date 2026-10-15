@@ -32,7 +32,24 @@ import { logger } from "firebase-functions";
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
 import { randomUUID } from "node:crypto";
-import { validateAndSanitizeRows, buildGuardrailSummary } from "./antiHallucinationGuardrail";
+import {
+  validateAndSanitizeRows,
+  buildGuardrailSummary,
+  groundTruthUrlBuffer,
+  resetGroundTruthBuffer,
+  addGroundTruthUrls,
+  addGroundTruthSearchResults,
+  getGroundTruthEvidenceText,
+} from "./antiHallucinationGuardrail";
+
+// Re-export for backward compatibility
+export {
+  groundTruthUrlBuffer,
+  resetGroundTruthBuffer,
+  addGroundTruthUrls,
+  addGroundTruthSearchResults,
+  getGroundTruthEvidenceText,
+};
 
 // ── Context Management ───────────────────────────────────────────────────────
 
@@ -44,31 +61,6 @@ export interface GoogleWorkspaceContext {
 }
 
 export const activeWorkspaceContext: GoogleWorkspaceContext = {};
-
-/**
- * Step 21 — Anti-Hallucination Ground-Truth URL Buffer.
- * Accumulates all URLs returned by webSearch tools in a single agent turn.
- * Set is reset at the start of each chatWithAgentFlow invocation.
- * @see antiHallucinationGuardrail.ts
- */
-export const groundTruthUrlBuffer: Set<string> = new Set();
-
-/**
- * Resets the ground-truth URL buffer for a new agent turn.
- */
-export function resetGroundTruthBuffer(): void {
-  groundTruthUrlBuffer.clear();
-} /* end resetGroundTruthBuffer */
-
-/**
- * Adds verified URLs from a search result to the ground-truth buffer.
- * @param {string[]} urls - List of verified ground-truth URLs to accumulate.
- */
-export function addGroundTruthUrls(urls: string[]): void {
-  for (const url of urls) {
-    if (url) groundTruthUrlBuffer.add(url);
-  }
-} /* end addGroundTruthUrls */
 
 /**
  * Sets the active workspace context for the current tool execution.
@@ -221,7 +213,10 @@ export const manageGoogleSheetTool = ai.defineTool(
     name: "manageGoogleSheetTool",
     description:
       "Prepara righe di dati per un foglio Google Sheets e crea un record di approvazione nella chat. " +
-      "I dati NON vengono scritti finché l'utente non clicca [✅ Approva ed Esegui].",
+      "I dati NON vengono scritti finché l'utente non clicca [✅ Approva ed Esegui]. " +
+      "VINCOLO TASSATIVO: Tutti gli URL e nominativi di profili DEVONO provenire esattamente dai risultati reali " +
+      "di searchWebAndPlatformsTool. Se l'URL o il nominativo non è presente nella ricerca, il tool fallisce con " +
+      "errore bloccante HALLUCINATED_URL_REJECTED / HALLUCINATED_NAME_REJECTED.",
     inputSchema: ManageGoogleSheetSchema,
     outputSchema: z.object({
       approvalId: z.string(),
@@ -254,8 +249,20 @@ export const manageGoogleSheetTool = ai.defineTool(
       Array.isArray(row) ? row.map((cell) => String(cell ?? "")) : [String(row ?? "")],
     );
 
-    // Step 21 — Anti-Hallucination Guardrail: sanitize before Firestore write
-    const guardrailResult = validateAndSanitizeRows(rawNormalized, groundTruthUrlBuffer, true);
+    // Step 21 & Step 28 — Anti-Hallucination Guardrail: sanitize & validate before Firestore write
+    let guardrailResult;
+    try {
+      guardrailResult = validateAndSanitizeRows(
+        rawNormalized,
+        groundTruthUrlBuffer,
+        true,
+        getGroundTruthEvidenceText(),
+      );
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error("[manageGoogleSheetTool] Aborted by Anti-Hallucination Gate 2", { error: errMsg });
+      throw err;
+    }
     const normalizedValues = guardrailResult.sanitizedValues;
     const guardrailSummary = buildGuardrailSummary(guardrailResult);
 

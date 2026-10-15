@@ -68,6 +68,116 @@ const DUMMY_PHONE_PATTERNS = [
 const URL_LIKE_REGEX = /^https?:\/\//i;
 
 /**
+ * Regex: Blacklist for placeholder, anonymous or synthetic candidate designations.
+ * Categorically blocks strings like "Candidato #01", "Senior Scala Engineer #1", "Developer #2", etc.
+ */
+export const PLACEHOLDER_NAME_REGEX =
+  /^(candidato|candidate|senior|lead|engineer|developer|profilo|profile|specialist)\s*(#|\d+|[a-z]+)?/i;
+
+/**
+ * Regex: Detects candidate / person name columns from headers.
+ */
+export const CANDIDATE_NAME_HEADER_REGEX =
+  /^(candidat|nominativ|profilo|persona|full.?name|nome|name|cognome|lead)/i;
+
+/**
+ * Global Ground-Truth URL Buffer.
+ * Accumulates normalized URLs returned by webSearch tools in a single agent turn.
+ */
+export const groundTruthUrlBuffer: Set<string> = new Set();
+
+/**
+ * Global Ground-Truth Search Snippets Buffer.
+ * Contains raw text (titles + snippets) from search engines to verify entity names.
+ */
+export const groundTruthSnippetBuffer: string[] = [];
+
+/**
+ * Resets all ground-truth buffers for a new agent turn.
+ * @return {void}
+ */
+export function resetGroundTruthBuffer(): void {
+  groundTruthUrlBuffer.clear();
+  groundTruthSnippetBuffer.length = 0;
+} /* end resetGroundTruthBuffer */
+
+/**
+ * Adds raw URLs to the ground-truth buffer.
+ * Filters out generic root domains/homepages.
+ * @param {string[]} urls - List of URLs discovered during search or provided by user.
+ * @return {void}
+ */
+export function addGroundTruthUrls(urls: string[]): void {
+  for (const url of urls) {
+    if (url && !isRootOrGenericPortal(url)) {
+      groundTruthUrlBuffer.add(normalizeUrl(url));
+    }
+  }
+} /* end addGroundTruthUrls */
+
+/**
+ * Adds full search results (urls + titles + snippets) to the ground-truth buffer.
+ * @param {Array<object>} results - Search results containing url, title, and snippet.
+ * @return {void}
+ */
+export function addGroundTruthSearchResults(
+  results: Array<{ url?: string; title?: string; snippet?: string }>,
+): void {
+  if (!results || !Array.isArray(results)) return;
+  for (const item of results) {
+    if (item.url && !isRootOrGenericPortal(item.url)) {
+      groundTruthUrlBuffer.add(normalizeUrl(item.url));
+    }
+    if (item.title) {
+      groundTruthSnippetBuffer.push(item.title);
+    }
+    if (item.snippet) {
+      groundTruthSnippetBuffer.push(item.snippet);
+    }
+  }
+} /* end addGroundTruthSearchResults */
+
+/**
+ * Gets the consolidated text of all search snippets and URLs for name verification.
+ * @return {string} Lowercased concatenated string of all search evidence.
+ */
+export function getGroundTruthEvidenceText(): string {
+  const parts: string[] = [...groundTruthSnippetBuffer];
+  for (const url of groundTruthUrlBuffer) {
+    parts.push(url);
+  }
+  return parts.join(" ").toLowerCase();
+} /* end getGroundTruthEvidenceText */
+
+/**
+ * Determines if a string resembles a URL (protocol or domain structure).
+ * @param {string} val - String to evaluate.
+ * @return {boolean} True if string is a URL.
+ */
+export const isUrlLike = (val: string): boolean => {
+  const trimmed = val.trim();
+  if (!trimmed) return false;
+  if (/^https?:\/\//i.test(trimmed)) return true;
+  if (/^(www\.)?[a-zA-Z0-9-]+\.(com|it|org|net|io|eu|dev|co|me|ai|app|edu|gov)(\/.*)?$/i.test(trimmed)) {
+    return true;
+  }
+  return false;
+}; /* end isUrlLike */
+
+/**
+ * Verifies whether at least one token of a candidate's name is present in search snippets.
+ * @param {string} name - Candidate name string.
+ * @param {string} snippetsText - Consolidated lowercased text of search snippets.
+ * @return {boolean} True if verifiable or if snippets buffer is empty.
+ */
+export const isNameVerifiableInSnippets = (name: string, snippetsText: string): boolean => {
+  if (!snippetsText || snippetsText.trim() === "") return true;
+  const tokens = name.toLowerCase().split(/\s+/).filter((t) => t.length >= 3);
+  if (tokens.length === 0) return false;
+  return tokens.some((token) => snippetsText.includes(token));
+}; /* end isNameVerifiableInSnippets */
+
+/**
  * Regex: detects GDPR-related date columns by header keywords.
  */
 const GDPR_COLUMN_KEYWORDS = [
@@ -85,11 +195,6 @@ const GDPR_COLUMN_KEYWORDS = [
  */
 const CONTACT_FALLBACK = "Contatto via InMail / Profilo Pubblico";
 
-/**
- * Replacement string for unverified URLs not found in ground-truth results.
- */
-const URL_UNVERIFIED_LABEL = "[Profilo non certificato dai motori]";
-
 // ── Core Utilities ────────────────────────────────────────────────────────────
 
 /**
@@ -104,7 +209,10 @@ const URL_UNVERIFIED_LABEL = "[Profilo non certificato dai motori]";
  */
 export const normalizeUrl = (url: string): string => {
   try {
-    const trimmed = url.trim().replace(/^http:\/\//i, "https://");
+    let trimmed = url.trim();
+    if (!/^https?:\/\//i.test(trimmed)) {
+      trimmed = "https://" + trimmed;
+    }
     const parsed = new URL(trimmed);
     // Remove tracking parameters
     const trackingParams = [
@@ -138,7 +246,10 @@ export const normalizeUrl = (url: string): string => {
  */
 export const isRootOrGenericPortal = (url: string): boolean => {
   try {
-    const trimmed = url.trim().replace(/^http:\/\//i, "https://");
+    let trimmed = url.trim();
+    if (!/^https?:\/\//i.test(trimmed)) {
+      trimmed = "https://" + trimmed;
+    }
     const parsed = new URL(trimmed);
     const segments = parsed.pathname.split("/").filter(Boolean);
     if (segments.length === 0) {
@@ -170,30 +281,19 @@ export const buildGroundTruthSet = (rawUrls: string[]): Set<string> => {
 
 /**
  * Determines whether a given URL is present in the ground-truth Set.
- * Requires non-root URL and allows only forward deep-path subpage variations.
+ * Enforces STRICT EXACT-MATCH against normalized ground-truth URLs from raw search results.
+ * Root domains and generic portal homepages are strictly rejected.
+ * No reverse or permissive prefix matches are permitted.
  * @param {string} url - Target URL to verify.
  * @param {Set<string>} groundTruthUrls - Ground-truth Set of certified URLs.
- * @return {boolean} True if the URL matches a ground-truth entry.
+ * @return {boolean} True if the URL matches an exact ground-truth entry.
  */
-const isUrlGroundTruth = (url: string, groundTruthUrls: Set<string>): boolean => {
-  if (isRootOrGenericPortal(url)) return false;
+export const isUrlGroundTruth = (url: string, groundTruthUrls: Set<string>): boolean => {
+  if (!url || isRootOrGenericPortal(url)) return false;
+  if (!groundTruthUrls || groundTruthUrls.size === 0) return false;
 
   const normalized = normalizeUrl(url);
-  // Exact match
-  if (groundTruthUrls.has(normalized)) return true;
-
-  // Prefix match: only forward (a verified sub-page/anchor of an already verified deep URL)
-  // NEVER reverse (trusted.startsWith(normalized)) which permits generic root domains!
-  for (const trusted of groundTruthUrls) {
-    if (
-      normalized.startsWith(trusted + "/") ||
-      normalized.startsWith(trusted + "?") ||
-      normalized.startsWith(trusted + "#")
-    ) {
-      return true;
-    }
-  }
-  return false;
+  return groundTruthUrls.has(normalized);
 }; /* end isUrlGroundTruth */
 
 /**
@@ -247,19 +347,24 @@ const isGdprDateColumn = (header: string): boolean => {
  * Validates and sanitizes a 2D string array from the LLM before Firestore write.
  *
  * Pipeline (in order):
- * 1. URL Ground-Truth check — flags URLs not in webSearch results.
- * 2. Synthetic email/phone blocker — replaces fake contacts with InMail fallback.
- * 3. GDPR date forcing — overwrites GDPR columns with deterministic +30d deadline.
+ * 1. URL Ground-Truth check — enforces STRICT EXACT-MATCH against groundTruthUrls.
+ *    Any unverified or synthetic URL immediately throws HALLUCINATED_URL_REJECTED.
+ * 2. Candidate Name Blacklist & Verification — blocks placeholder/anonymous names
+ *    and verifies entity names against search snippets.
+ * 3. Synthetic email/phone blocker — replaces fake contacts with InMail fallback.
+ * 4. GDPR date forcing — overwrites GDPR columns with deterministic +30d deadline.
  *
  * @param {Array<Array<string>>} values - Raw 2D string array from LLM.
  * @param {Set<string>} groundTruthUrls - Set of normalized URLs from search.
- * @param {boolean} hasHeaders - Whether the first row contains headers.
+ * @param {boolean} [hasHeaders=true] - Whether the first row contains headers.
+ * @param {string} [evidenceText] - Optional consolidated search snippets text.
  * @return {SanitizationResult} Result with sanitized data and metrics.
  */
 export const validateAndSanitizeRows = (
   values: string[][],
   groundTruthUrls: Set<string>,
   hasHeaders = true,
+  evidenceText?: string,
 ): SanitizationResult => {
   const flags = {
     unverifiedUrlsRemoved: 0,
@@ -283,6 +388,18 @@ export const validateAndSanitizeRows = (
     }, []),
   );
 
+  // Identify candidate name columns from headers
+  const candidateColumnIndices = new Set<number>(
+    headers.reduce<number[]>((acc, h, i) => {
+      if (CANDIDATE_NAME_HEADER_REGEX.test(h)) acc.push(i);
+      return acc;
+    }, []),
+  );
+  // Default to column 0 if no headers matched but columns exist
+  if (candidateColumnIndices.size === 0 && headers.length > 0) {
+    candidateColumnIndices.add(0);
+  }
+
   // Pre-compute GDPR deadline once (deterministic for the whole batch)
   const gdprDeadline = computeGdprDeadline();
 
@@ -297,14 +414,41 @@ export const validateAndSanitizeRows = (
         return gdprDeadline;
       }
 
-      // ── Rule 2: URL Ground-Truth Verification ───────────────────────────
-      if (URL_LIKE_REGEX.test(trimmed)) {
-        // Only validate if we have ground-truth URLs to compare against
-        if (groundTruthUrls.size > 0 && !isUrlGroundTruth(trimmed, groundTruthUrls)) {
-          flags.unverifiedUrlsRemoved++;
-          return URL_UNVERIFIED_LABEL;
+      // ── Rule 2: Strict Exact-Match URL Ground-Truth Verification ───────
+      if (isUrlLike(trimmed)) {
+        if (!isUrlGroundTruth(trimmed, groundTruthUrls)) {
+          throw new Error(
+            `HALLUCINATED_URL_REJECTED: L'URL ${trimmed} non proviene dai risultati reali della ricerca web.`,
+          );
         }
-        return cell; // URL is verified or no ground-truth available
+        return cell; // URL strictly verified against ground truth
+      }
+
+      // ── Rule 2b: Candidate Name Blacklist & Verification ────────────────
+      if (trimmed !== "" && trimmed !== "-" && trimmed.toLowerCase() !== "n/a") {
+        // Universal placeholder blacklist (blocks 'Candidato #01', 'Senior Scala Engineer #1', etc.)
+        if (PLACEHOLDER_NAME_REGEX.test(trimmed)) {
+          throw new Error(
+            `HALLUCINATED_NAME_REJECTED: Il nominativo '${trimmed}' è un segnaposto fittizio non verificabile. ` +
+            "I record devono contenere un Nome e Cognome reale di persona fisica.",
+          );
+        }
+        // Strict verification on candidate/entity name columns
+        if (candidateColumnIndices.has(colIndex)) {
+          const words = trimmed.split(/\s+/).filter(Boolean);
+          if (words.length < 2) {
+            throw new Error(
+              `HALLUCINATED_NAME_REJECTED: Il nominativo '${trimmed}' ` +
+              "non contiene un Nome e Cognome reale di persona fisica.",
+            );
+          }
+          if (evidenceText && !isNameVerifiableInSnippets(trimmed, evidenceText)) {
+            throw new Error(
+              `HALLUCINATED_NAME_REJECTED: Il nominativo '${trimmed}' ` +
+              "non è verificabile nei risultati della ricerca web.",
+            );
+          }
+        }
       }
 
       // ── Rule 3: Synthetic Email Blocker ─────────────────────────────────
@@ -388,6 +532,7 @@ export interface FieldEvidenceResult {
 /**
  * Classifies a single field value against the ground-truth URL set.
  * Pure function — no side effects, no I/O.
+ * Enforces strict exact match on certified URLs.
  * @param {string} fieldValue - The raw string value to classify.
  * @param {Set<string>} groundTruthUrls - Normalized URL set from web search.
  * @return {FieldEvidenceResult} Classification result.
@@ -408,15 +553,6 @@ export const classifyFieldEvidence = (
     const normalized = normalizeUrl(fieldValue);
     if (groundTruthUrls.has(normalized)) {
       return { type: "verified", sourceUrl: normalized };
-    }
-    for (const trusted of groundTruthUrls) {
-      if (
-        normalized.startsWith(trusted + "/") ||
-        normalized.startsWith(trusted + "?") ||
-        normalized.startsWith(trusted + "#")
-      ) {
-        return { type: "verified", sourceUrl: trusted };
-      }
     }
     return { type: "gap" };
   }

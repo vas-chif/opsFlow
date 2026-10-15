@@ -13,6 +13,7 @@
 
 import { ai } from "./genkitConfig";
 import { z } from "genkit";
+import * as logger from "firebase-functions/logger";
 import { sanitizePii } from "./piiSanitizer";
 import { buildStackedPrompt } from "./promptBuilder";
 import {
@@ -145,6 +146,10 @@ export const chatWithAgentFlow = ai.defineFlow(
 
     // Step 21 — Reset ground-truth URL buffer for this agent turn (multi-query accumulation)
     resetGroundTruthBuffer();
+    const userProvidedUrls = sanitized.sanitizedText.match(/https?:\/\/[^\s"'<>]+/gi) || [];
+    if (userProvidedUrls.length > 0) {
+      addGroundTruthUrls(userProvidedUrls);
+    }
 
     // 3. Format Sliding Window History (Last 5 messages max, 1000 chars per msg max)
     let historyContext = "";
@@ -242,13 +247,19 @@ export const chatWithAgentFlow = ai.defineFlow(
           if (Array.isArray(toolCalls)) {
             for (const call of toolCalls) {
               if (call.name === "manageGoogleSheetTool" && call.args) {
-                const toolRes = await manageGoogleSheetTool(call.args);
-                approvalId = toolRes.approvalId;
-                approvalRecord = toolRes.approvalRecord;
-                toolsUsed.push("manageGoogleSheetTool");
-                replyText =
-                  "📊 Ho estratto e organizzato i dati nel foglio Google Sheets. " +
-                  "Verifica l'anteprima nella scheda sottostante e clicca [✅ Approva ed Esegui] per confermare.";
+                try {
+                  const toolRes = await manageGoogleSheetTool(call.args);
+                  approvalId = toolRes.approvalId;
+                  approvalRecord = toolRes.approvalRecord;
+                  toolsUsed.push("manageGoogleSheetTool");
+                  replyText =
+                    "📊 Ho estratto e organizzato i dati nel foglio Google Sheets. " +
+                    "Verifica l'anteprima nella scheda sottostante e clicca [✅ Approva ed Esegui] per confermare.";
+                } catch (toolErr: unknown) {
+                  const errMsg = toolErr instanceof Error ? toolErr.message : String(toolErr);
+                  logger.warn("[chatFlow] Defensive manageGoogleSheetTool rejected by Gate 2", { error: errMsg });
+                  replyText = `🛑 Operazione interrotta dal Guardrail Anti-Allucinazione: ${errMsg}`;
+                }
               } else if (call.name === "createGmailDraftTool" && call.args) {
                 const toolRes = await createGmailDraftTool(call.args);
                 approvalId = toolRes.approvalId;
@@ -261,7 +272,7 @@ export const chatWithAgentFlow = ai.defineFlow(
             }
           }
         } catch (parseErr) {
-          console.warn("[chatWithAgentFlow] Failed to auto-parse textual tool_calls:", parseErr);
+          logger.warn("[chatWithAgentFlow] Failed to auto-parse textual tool_calls:", { error: parseErr });
         }
       }
 
@@ -327,13 +338,19 @@ export const chatWithAgentFlow = ai.defineFlow(
           if (Array.isArray(toolCalls)) {
             for (const call of toolCalls) {
               if (call.name === "manageGoogleSheetTool" && call.args) {
-                const toolRes = await manageGoogleSheetTool(call.args);
-                approvalId = toolRes.approvalId;
-                approvalRecord = toolRes.approvalRecord;
-                toolsUsed.push("manageGoogleSheetTool");
-                reply =
-                  "📊 Ho estratto e organizzato i dati nel foglio Google Sheets. " +
-                  "Verifica l'anteprima nella scheda sottostante e clicca [✅ Approva ed Esegui] per confermare.";
+                try {
+                  const toolRes = await manageGoogleSheetTool(call.args);
+                  approvalId = toolRes.approvalId;
+                  approvalRecord = toolRes.approvalRecord;
+                  toolsUsed.push("manageGoogleSheetTool");
+                  reply =
+                    "📊 Ho estratto e organizzato i dati nel foglio Google Sheets. " +
+                    "Verifica l'anteprima nella scheda sottostante e clicca [✅ Approva ed Esegui] per confermare.";
+                } catch (toolErr: unknown) {
+                  const errMsg = toolErr instanceof Error ? toolErr.message : String(toolErr);
+                  logger.warn("[chatFlow] Fallback manageGoogleSheetTool rejected by Gate 2", { error: errMsg });
+                  reply = `🛑 Operazione interrotta dal Guardrail Anti-Allucinazione: ${errMsg}`;
+                }
               } else if (call.name === "createGmailDraftTool" && call.args) {
                 const toolRes = await createGmailDraftTool(call.args);
                 approvalId = toolRes.approvalId;
@@ -346,7 +363,7 @@ export const chatWithAgentFlow = ai.defineFlow(
             }
           }
         } catch (parseErr) {
-          console.warn("[chatWithAgentFlow] Fallback parse error:", parseErr);
+          logger.warn("[chatWithAgentFlow] Fallback parse error:", { error: parseErr });
         }
       }
 

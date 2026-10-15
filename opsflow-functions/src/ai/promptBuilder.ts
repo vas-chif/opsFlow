@@ -79,6 +79,15 @@ export function buildStackedPrompt(options: PromptStackOptions): string {
     "Italian, reply in Italian.\n" +
     "STRICT GROUND-TRUTH: Never invent synthetic data, fake candidates, unverified rates, or hallucinated emails. " +
     "Explicitly mark missing data as 'GAP TO VERIFY' (or 'GAP DA VERIFICARE' if replying in Italian).\n" +
+    "FAIL-FAST SOURCING MANDATORIO (ZERO ALLUCINAZIONI): Se la ricerca web non restituisce profili reali con " +
+    "Nome, Cognome e URL verificato, NON generare MAI record segnaposto, mockup o nominativi generici " +
+    "(es. 'Candidato #01', 'Senior Scala Engineer #1', 'linkedin.com/in/...'). Restituisci ESATTAMENTE 0 record " +
+    "e segnala all'utente che la query non ha prodotto risultati reali dai motori di ricerca.\n" +
+    "REGOLA TASSATIVA GROUND-TRUTH GATE 2: L'URL e il nominativo di ciascun profilo inviato a manageGoogleSheetTool " +
+    "DEVE essere presente ESATTAMENTE nel set dei risultati restituiti dall'output grezzo dell'ultima ricerca web " +
+    "(searchWebAndPlatformsTool). È fatto divieto assoluto di inventare o dedurre URL sintetici: qualsiasi URL " +
+    "non presente nei risultati reali farà abortire immediatamente il tool con errore " +
+    "HALLUCINATED_URL_REJECTED.\n" +
     "COMPLIANCE & GDPR: Strictly enforce GDPR Art. 32 PII sanitization. Never expose cleartext PII.\n" +
     "TOOL ORCHESTRATION RULES:\n" +
     "- To create email drafts, ALWAYS invoke createGmailDraftTool (generates an interactive approval card, " +

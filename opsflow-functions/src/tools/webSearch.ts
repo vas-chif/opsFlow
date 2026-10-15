@@ -45,6 +45,9 @@ import { ai } from "../ai/genkitConfig";
 import { z } from "genkit";
 import * as logger from "firebase-functions/logger";
 
+// ── Anti-Hallucination Guardrail ──────────────────────────────────────────────
+import { addGroundTruthSearchResults } from "./antiHallucinationGuardrail";
+
 // ── Firebase ──────────────────────────────────────────────────────────────────
 import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
 
@@ -620,7 +623,9 @@ export const searchWebAndPlatformsTool = ai.defineTool(
   {
     name: "searchWebAndPlatformsTool",
     description:
-      "Cerca sul web e su piattaforme professionali (LinkedIn, Indeed, siti IT) per trovare prospect o trainer.",
+      "Cerca sul web e piattaforme (LinkedIn, Indeed, siti IT) per trovare dati reali e certificati. " +
+      "I risultati alimentano istantaneamente il Ground-Truth Buffer. Se la ricerca non produce profili " +
+      "verificabili con Nome, Cognome e URL reale, restituisci 0 risultati senza inventare profili mockup.",
     inputSchema: WebSearchQuerySchema.extend({
       tenantId: z.string().optional().describe("Tenant ID for cache & quota isolation"),
       workspaceId: z.string().optional().describe("Workspace ID for freemium quota cap"),
@@ -693,6 +698,7 @@ export const searchWebAndPlatformsTool = ai.defineTool(
         queryHash,
         providerUsed: cached.providerUsed,
       });
+      addGroundTruthSearchResults(cached.results);
       const preFiltered = extractStructuredDataFromResults(cached.results);
       return {
         success: true,
@@ -721,6 +727,7 @@ export const searchWebAndPlatformsTool = ai.defineTool(
       if (braveResults && braveResults.length > 0) {
         logger.info("searchWebAndPlatformsTool: Brave Search API success", { query, category });
         void writeSearchCache(resolvedTenantId, queryHash, braveResults, "brave");
+        addGroundTruthSearchResults(braveResults);
         const preFiltered = extractStructuredDataFromResults(braveResults);
         return {
           success: true,
@@ -744,6 +751,7 @@ export const searchWebAndPlatformsTool = ai.defineTool(
       if (tavilyResults && tavilyResults.length > 0) {
         logger.info("searchWebAndPlatformsTool: Tavily AI success", { query, category });
         void writeSearchCache(resolvedTenantId, queryHash, tavilyResults, "tavily");
+        addGroundTruthSearchResults(tavilyResults);
         const preFiltered = extractStructuredDataFromResults(tavilyResults);
         return {
           success: true,
@@ -767,6 +775,7 @@ export const searchWebAndPlatformsTool = ai.defineTool(
       if (exaResults && exaResults.length > 0) {
         logger.info("searchWebAndPlatformsTool: Exa.ai success", { query, category });
         void writeSearchCache(resolvedTenantId, queryHash, exaResults, "exa");
+        addGroundTruthSearchResults(exaResults);
         const preFiltered = extractStructuredDataFromResults(exaResults);
         return {
           success: true,
@@ -789,6 +798,7 @@ export const searchWebAndPlatformsTool = ai.defineTool(
     if (jinaResults && jinaResults.length > 0) {
       logger.info("searchWebAndPlatformsTool: Jina Search success", { query, category });
       void writeSearchCache(resolvedTenantId, queryHash, jinaResults, "jina");
+      addGroundTruthSearchResults(jinaResults);
       const preFiltered = extractStructuredDataFromResults(jinaResults);
       return {
         success: true,

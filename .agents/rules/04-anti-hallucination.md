@@ -36,9 +36,11 @@ Every prompt and AI pipeline must respect the three-level DBS standard:
 
 ### Gate 2: Deterministico in Node.js (Post-Execution Middleware)
 
-- **Link Grounding:** Bi-directional verification of every cited URL against the raw HTTP result buffer from Brave/Google Search. Phantom URLs are stripped or set to `null`.
-- **Synthetic Pattern Blocker:** Regex rejection of mock emails (`@example.com`) and synthetic numbers (`02 1234567`, `555-`).
-- **GDPR Art. 14 Enforcer:** Automatic deterministic calculation of `firstContactDeadline = now() + 30 days`.
+- **Strict Exact-Match Ground-Truth Buffer:** Ogni URL inviato a Google Sheets DEVE essere presente ESATTAMENTE nel set degli URL restituiti dall'output grezzo della ricerca web (`groundTruthUrlBuffer`). Vietato convalidare profili solo per dominio corretto o prefisso permissivo. Qualsiasi URL assente causa l'aborto immediato con errore `HALLUCINATED_URL_REJECTED`.
+- **Blacklist Nomi Segnaposto e Anonimi:** Validazione deterministica tramite `PLACEHOLDER_NAME_REGEX` (`/^(candidato|candidate|senior|lead|engineer|developer|profilo|profile|specialist)\s*(#|\d+|[a-z]+)?/i`). Un record è valido solo se contiene Nome e Cognome reale di persona fisica verificabile negli snippet/risultati di ricerca.
+- **Fail-Fast Mandatorio:** Se la ricerca non restituisce profili reali con Nome, Cognome e URL verificato, l'agente restituisce ESATTAMENTE 0 record senza mockup o segnaposto.
+- **Synthetic Pattern Blocker:** Regex rejection di email sintetiche (`@example.com`, `@fake.`) e numeri sequenziali (`1234567`, `555-`).
+- **GDPR Art. 14 Enforcer:** Calcolo deterministico automatico di `firstContactDeadline = now() + 30 days`.
 
 ---
 
