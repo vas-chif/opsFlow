@@ -23,6 +23,7 @@ import {
   updateDoc,
   deleteDoc,
   serverTimestamp,
+  onSnapshot,
 } from "firebase/firestore";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -415,8 +416,14 @@ const removeEditSubtaskItem = (idx: number): void => {
 const showSubtaskModal = ref<boolean>(false);
 const isLoadingSubtasks = ref<boolean>(false);
 
-const fetchSubtasks = async (): Promise<void> => {
-  const tId = authStore.tenantId;
+let unsubscribeSubtasks: (() => void) | null = null;
+
+const subscribeSubtasks = (): void => {
+  if (unsubscribeSubtasks) {
+    unsubscribeSubtasks();
+    unsubscribeSubtasks = null;
+  }
+  const tId = authStore.tenantId || workspace.value?.tenantId || task.value?.tenantId;
   const wsId = workspace.value?.id || task.value?.workspaceId;
   const taskId = task.value?.id;
   if (!tId || !wsId || !taskId) return;
@@ -425,18 +432,30 @@ const fetchSubtasks = async (): Promise<void> => {
   try {
     const db = getFirestore();
     const subCol = collection(db, "tenants", tId, "workspaces", wsId, "tasks", taskId, "subtasks");
-    const snap = await getDocs(subCol);
-    const list: EntitySubTask[] = [];
-    snap.forEach((d) => {
-      list.push({ id: d.id, ...(d.data() as Omit<EntitySubTask, "id">) });
-    });
-    list.sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
-    subtasks.value = list;
+    unsubscribeSubtasks = onSnapshot(
+      subCol,
+      (snap) => {
+        const list: EntitySubTask[] = [];
+        snap.forEach((d) => {
+          list.push({ id: d.id, ...(d.data() as Omit<EntitySubTask, "id">) });
+        });
+        list.sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
+        subtasks.value = list;
+        isLoadingSubtasks.value = false;
+      },
+      (err: unknown) => {
+        logger.warn("TaskChatWindow", "Failed to subscribe to subtasks", err);
+        isLoadingSubtasks.value = false;
+      },
+    );
   } catch (err: unknown) {
-    logger.warn("TaskChatWindow", "Failed to fetch subtasks", err);
-  } finally {
+    logger.warn("TaskChatWindow", "Failed to setup subtasks subscription", err);
     isLoadingSubtasks.value = false;
   }
+}; /*end subscribeSubtasks*/
+
+const fetchSubtasks = async (): Promise<void> => {
+  subscribeSubtasks();
 }; /*end fetchSubtasks*/
 
 const openSubtaskModal = (st: EntitySubTask): void => {
@@ -559,14 +578,14 @@ const isInProgressEntry = (entry: TaskTimelineEvent): boolean => {
 
 const isTargetSubtasksEntry = (entry: TaskTimelineEvent): boolean => {
   const entries = activeSession.value.timelineEvents || [];
+  if (entries.length === 0) return false;
   const inProgressEntries = entries.filter(isInProgressEntry);
   if (inProgressEntries.length > 0) {
     return entry.id === inProgressEntries[inProgressEntries.length - 1]!.id;
   }
-  if (task.value?.status === "in-progress") {
-    return entries.length > 0 && entry.id === entries[entries.length - 1]!.id;
-  }
-  return false;
+  // Resilient Fallback: If no explicit in-progress entry exists, attach to the latest entry
+  // so the Operational Subtasks dashboard and actions are always accessible.
+  return entry.id === entries[entries.length - 1]!.id;
 }; /*end isTargetSubtasksEntry*/
 
 const getSubtaskStatusBadge = (status: EntitySubTaskStatus): { label: string; color: string } => {
@@ -822,11 +841,16 @@ watch(
   () => task.value?.id,
   (newTaskId) => {
     if (newTaskId) {
+      initTaskTimeline();
       fetchActiveScheduledJob();
-      fetchSubtasks();
+      subscribeSubtasks();
     } else {
       activeScheduledJob.value = null;
       subtasks.value = [];
+      if (unsubscribeSubtasks) {
+        unsubscribeSubtasks();
+        unsubscribeSubtasks = null;
+      }
     }
   },
   { immediate: true },
@@ -834,6 +858,10 @@ watch(
 
 onUnmounted(() => {
   window.removeEventListener("keydown", handleKeyDown);
+  if (unsubscribeSubtasks) {
+    unsubscribeSubtasks();
+    unsubscribeSubtasks = null;
+  }
 });
 
 const scrollToBottom = (): void => {

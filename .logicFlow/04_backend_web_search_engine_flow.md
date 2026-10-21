@@ -139,14 +139,14 @@ graph LR
 
 Per prevenire timeout, blocchi di memoria o addebiti inutili su istanze inattive, la Cloud Function `chatWithAgent` è configurata secondo i parametri ottimali di governance GCP (§5 AGENTS.md):
 
-| Parametro Cloud Run | Valore Impostato         | Motivazione Architetturale                                                                |
-| :------------------ | :----------------------- | :---------------------------------------------------------------------------------------- |
-| `region`            | `europe-west1`           | Zero costi di egress verso il database Firestore (stessa regione)                         |
-| `memory`            | `1GiB`                   | Garantisce 1 vCPU completa a Cloud Run (elimina il boot timeout su container healthcheck) |
-| `timeoutSeconds`    | `60`                     | Elimina la fatturazione su richieste bloccate (ridotto da 300s a 60s)                     |
-| `minInstances`      | `0`                      | **Scale-to-Zero:** Costo € 0,00 durante i periodi di inattività                           |
-| `maxInstances`      | `10`                     | Hard-Cap per contenere i costi totali sotto il budget target                              |
-| `secrets`           | `[BRAVE_SEARCH_API_KEY]` | Iniezione sicura da GCP Secret Manager (Zero secrets in `.env` di produzione)             |
+| Parametro Cloud Run | Valore Impostato         | Motivazione Architetturale                                                                    |
+| :------------------ | :----------------------- | :-------------------------------------------------------------------------------------------- |
+| `region`            | `europe-west1`           | Zero costi di egress verso il database Firestore (stessa regione)                             |
+| `memory`            | `1GiB`                   | Garantisce 1 vCPU completa a Cloud Run (elimina il boot timeout su container healthcheck)     |
+| `timeoutSeconds`    | `120`                    | Consente catene di ricerca multi-turn (Brave/Tavily) e formattazione fogli senza interruzioni |
+| `minInstances`      | `0`                      | **Scale-to-Zero:** Costo € 0,00 durante i periodi di inattività                               |
+| `maxInstances`      | `10`                     | Hard-Cap per contenere i costi totali sotto il budget target                                  |
+| `secrets`           | `[BRAVE_SEARCH_API_KEY]` | Iniezione sicura da GCP Secret Manager (Zero secrets in `.env` di produzione)                 |
 
 ---
 
@@ -187,6 +187,15 @@ I risultati grezzi non vengono passati integralmente al modello linguistico:
 
 - Un middleware Node.js applica espressioni regolari per estrarre telefoni territoriali (es. `0584`/`0585`), email palesi conformi a RFC 5322 e URL LinkedIn/web normalizzati.
 - A Gemini Flash viene passato solo il compendio semantico pre-strutturato, **riducendo i token di input del 40%** e prevenendo allucinazioni di formattazione.
+
+### 5.5 Accumulo nel Ground-Truth Buffer & Alimentazione Gate 2
+
+Tutti gli URL reali e gli snippet informativi scoperti durante le chiamate di ricerca vengono accumulati in memoria nei buffer globali:
+
+- `groundTruthUrlBuffer`: set di URL normalizzati unici, filtrati contro portali generici (`isRootOrGenericPortal`).
+- `groundTruthSnippetBuffer`: compendio testuale di titoli e descrizioni per la validazione incrociata delle entità.
+
+Questo buffer è il presupposto per il controllo deterministico di Gate 2: nessun dato può essere salvato su Google Sheets senza corrispondere a un record presente nel buffer.
 
 Per i dettagli completi su Gate 1, Gate 2, Evidence Citation Chips (Dust.tt) e Checkpointing (LangGraph), consultare:  
 👉 [07_agentic_control_plane_and_governance_flow.md](file:///home/chif-vas/projects/opsflow/.logicFlow/07_agentic_control_plane_and_governance_flow.md).

@@ -156,6 +156,8 @@ Il cruscotto operativo dei Sub-Task è stato rimosso dall'area chat e integrato 
   - `[📊 Sheets]`: Apre il Google Sheet collegato al task in una nuova scheda del browser oppure istruisce l'Agente AI a sincronizzare le righe.
   - `[✉️ Email]`: Invia un prompt guidato all'Agente AI per generare una bozza di email formale di contatto per i profili monitorati.
   - `[🔄 Ricarica]`: Sincronizzazione on-demand della sotto-collezione Firestore `subtasks`.
+- **Sottoscrizione Real-Time (`onSnapshot`):** La lista non richiede reload manuali: `TaskChatWindow.vue` mantiene una connessione reattiva `onSnapshot` su `tenants/{tId}/workspaces/{wsId}/tasks/{taskId}/subtasks`. Ogni risorsa estratta dall'Agente o modificata dall'utente si sincronizza all'istante.
+- **Resilient Timeline Fallback:** Se il task non è ancora avanzato allo stato `in-progress` (es. `pending` o appena creato), il guardrail visivo aggancia automaticamente la card dei Sub-Task all'ultimo evento attivo della timeline, evitando che la pulsantiera operativa e le risorse monitorate spariscano dalla vista.
 - **Lista Compatta e Reattiva:** Ciascuna riga mostra l'avatar tematico del dominio (`medical_services`, `inventory_2`, `precision_manufacturing`, `person`), il nome dell'entità, il ruolo/categoria, i badge di stato/esito e l'icona chevron. Il click sull'intera riga apre istantaneamente la modale di dettaglio `SubTaskEntityModal.vue`.
 - **Vantaggio Operativo:** L'area Chat a sinistra rimane pulita al 100% per conversare con l'Agente IA, mentre il cruscotto di controllo operativo rimane visibile e fermo a schermo sulla destra.
 

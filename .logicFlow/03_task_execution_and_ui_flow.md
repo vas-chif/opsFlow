@@ -321,7 +321,27 @@ A livello di sistema (`promptBuilder.ts` e callable functions), il generatore AI
 - Risponde rigorosamente e con naturalezza nativa nella medesima lingua dell'utente (Italiano con Italiano, Inglese con Inglese, Spagnolo con Spagnolo, ecc.).
 - Rifiuta qualsiasi bias o forzatura statica dell'italiano derivante da titoli di workspace o keyword di contesto.
 
-### 10.5 Riferimento al Flusso di Controllo Agentico (Flow 07)
+### 10.5 Disaccoppiamento System Instruction & Prompt Utente (`chatFlow.ts`)
+
+Per evitare che l'agente replichi il prompt di sistema in chat (_Prompt Echoing_) o fallisca l'orchestrazione dei tool:
+
+1. **Separazione Rigorosa dei Canali:** I Livelli 1 (Regole Base, Sicurezza, Fail-Fast) e 2 (Costituzione DBS Workspace, Fogli Assegnati, Firma Email) vengono passati esclusivamente nel parametro `system` di Genkit (`ai.generate({ system: assembledSystemInstruction, prompt: userTaskMessage })`).
+2. **Isolamento Input Utente:** Il parametro `prompt` contiene unicamente il prompt/messaggio contestuale dell'utente.
+3. **Turni Agentici Incrementati:** Il parametro `maxTurns` è impostato a 10 per consentire catene articolate di ricerca web (Tavily/Brave) seguite da formattazione tabellare con `manageGoogleSheetTool`.
+
+### 10.6 Allineamento Timeout Client/Backend (115s / 120s)
+
+Per supportare task ad alta intensità di scraping senza interruzioni di rete:
+
+- **Cloud Run Timeout:** La Cloud Function `chatWithAgent` è configurata con `timeoutSeconds: 120`.
+- **Client Timeout:** `TaskChatWindow.vue` applica un timeout di `115000` ms (115s) all'`AbortController`, garantendo 5 secondi di margine rispetto al backend per ricevere risposte complesse multi-step senza falsi positivi di errore rete.
+
+### 10.7 Sincronizzazione Real-Time dei Sub-Task (`onSnapshot`) & Resilient Timeline Fallback
+
+- **Sottoscrizione Real-Time:** `TaskChatWindow.vue` aggancia un listener `onSnapshot` su `tenants/{tId}/workspaces/{wsId}/tasks/{taskId}/subtasks` con teardown automatico al cambio task o chiusura finestra. I sub-task generati dall'Agente o da trigger Cloud Run compaiono istantaneamente a schermo senza richiedere refresh manuale.
+- **Resilient Timeline Fallback:** La card operativa dei sub-task e la relativa action bar rapida ("New Resource", "Sheets", "Email", "Reload") sono ancorate all'evento `in-progress` della timeline. Qualora il task si trovi in stato iniziale `pending` o privo di evento `in-progress`, il fallback automatico ancora i sub-task all'ultimo evento attivo, impedendo che i controlli operativi scompaiano dalla vista.
+
+### 10.8 Riferimento al Flusso di Controllo Agentico (Flow 07)
 
 L'intero ciclo di vita esecutivo descritto in questo documento (Gate cognitivo, grounding deterministico delle fonti, Human-in-the-Loop tramite `ApprovalCard.vue` e orchestrazione multi-agente) è governato formalmente dall'**Universal Agentic Control Plane** documentato in:
 👉 [07_agentic_control_plane_and_governance_flow.md](file:///home/chif-vas/projects/opsflow/.logicFlow/07_agentic_control_plane_and_governance_flow.md).

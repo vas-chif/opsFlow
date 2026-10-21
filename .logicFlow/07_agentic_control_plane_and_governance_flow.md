@@ -161,9 +161,12 @@ Prima di inoltrare le pagine web o gli snippet di ricerca a Gemini Flash, un wor
 
 Il secondo cancello risiede in `antiHallucinationGuardrail.ts`, completamente svincolato dall'intelligenza artificiale:
 
-1. **Verificatore di Link (Link Grounding):** Confronto biunivoco di ogni URL generata con la lista delle URL fornite dal provider di ricerca reale (Google Search / Brave Search). Se l'LLM cita un link non presente nel buffer HTTP, l'URL viene istantaneamente eliminata o valorizzata a `null`.
-2. **Bloccatore di Dati Sintetici (Pattern Blocker):** Regex di scarto automatico per email fittizie (`@example.com`, email generate con il nome del candidato) e telefoni finti (`02 1234567`, `555-`).
-3. **GDPR Art. 14 Enforcer:** Iniezione deterministica della scadenza informativa perentoria a 30 giorni:
+1. **Strict Exact-Match su Ground-Truth Buffer (`isUrlGroundTruth`):** Confronto rigoroso di ogni URL generato con il set `groundTruthUrlBuffer` popolato dai risultati grezzi della ricerca web. È bandito qualsiasi match inverso o prefisso permissivo: un URL è valido SOLO se corrisponde esattamente a una fonte web reale certificata.
+2. **Root Domain & Generic Portal Blacklist (`isRootOrGenericPortal`):** URL generiche senza path profondo (es. `https://dominio.it/`, root con solo slash o `index.html`) vengono categoricamente scartate e non possono fungere da prove documentali per singole entità.
+3. **Verifica Nominativi Circoscritta alle Colonne Anagrafiche:** `PLACEHOLDER_NAME_REGEX` e la verifica della presenza del nome negli snippet di ricerca (`isNameVerifiableInSnippets`) vengono applicate tassativamente solo sulle colonne anagrafiche dei candidati (`candidateColumnIndices.has(colIndex)`). Le colonne di ruolo/titolo possono legittimamente contenere denominazioni come "Senior Consultant" o "Lead Developer".
+4. **Resilienza Row-Level (Feedback Loop vs Crash):** Invece di lanciare un `throw` non gestito che interrompe l'intero flow, `validateAndSanitizeRows` scarta le sole righe non conformi (`flags.rejectedRowsCount`) e preserva le righe valide, consentendo la generazione dell'Approval Card e l'ispezione Human-in-the-Loop a schermo (lanciando eccezione solo se il 100% delle righe è allucinato).
+5. **Bloccatore di Dati Sintetici (Pattern Blocker):** Regex di scarto automatico per email fittizie (`@example.com`, email generate con il nome del candidato) e telefoni finti (`02 1234567`, `555-`), convertiti in fallback trasparente `Contatto via InMail / Profilo Pubblico`.
+6. **GDPR Art. 14 Enforcer:** Iniezione deterministica della scadenza informativa perentoria a 30 giorni:
    `contactDeadline = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)`.
 
 ### 3.4 Evidence Citation Chips & Quick Actions sui GAP (Pattern Dust.tt & Lindy.ai)
