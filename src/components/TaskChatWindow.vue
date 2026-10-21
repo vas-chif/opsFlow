@@ -1109,7 +1109,7 @@ const handleSendChatMessage = async (): Promise<void> => {
   activeAbortController.value = abortCtrl;
   const timeoutId = setTimeout(() => {
     abortCtrl.abort("timeout");
-  }, 55000); // 55s — 5s headroom below CF 60s timeout
+  }, 115000); // 115s — 5s headroom below CF 120s timeout
 
   try {
     const res = await fetch("https://europe-west1-opsflow-88of.cloudfunctions.net/chatWithAgent", {

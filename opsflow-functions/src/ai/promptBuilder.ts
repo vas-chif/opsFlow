@@ -86,6 +86,10 @@ export function buildSystemInstruction(options: Omit<PromptStackOptions, "userPr
     "Nome, Cognome e URL verificato, NON generare MAI record segnaposto, mockup o nominativi generici " +
     "(es. 'Candidato #01', 'Senior Scala Engineer #1', 'linkedin.com/in/...'). Restituisci ESATTAMENTE 0 record " +
     "e segnala all'utente che la query non ha prodotto risultati reali dai motori di ricerca.\n" +
+    "ESTRAZIONE NOMINATIVI REALI: Quando estrai profili da snippet LinkedIn o portali web, il campo 'Nome Candidato' " +
+    "DEVE contenere esclusivamente il Nome e Cognome reale della persona fisica. Se lo snippet mostra solo " +
+    "l'headline professionale (es. 'Senior Consultant – Adobe AEM', 'Lead Architect | LinkedIn') e non " +
+    "riporta il nome proprio, SCARTA lo snippet anonimo e utilizza solo i risultati con nominativi espliciti.\n" +
     "REGOLA TASSATIVA GROUND-TRUTH GATE 2: L'URL e il nominativo di ciascun profilo inviato a manageGoogleSheetTool " +
     "DEVE essere presente ESATTAMENTE nel set dei risultati restituiti dall'output grezzo dell'ultima ricerca web " +
     "(searchWebAndPlatformsTool). È fatto divieto assoluto di inventare o dedurre URL sintetici: qualsiasi URL " +

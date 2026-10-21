@@ -30,13 +30,14 @@
 export interface SanitizationResult {
   /** Sanitized 2D string array ready for Firestore/Sheets storage. */
   sanitizedValues: string[][];
-  /** Total number of cells that were corrected. */
+  /** Total number of cells or rows that were corrected or filtered. */
   correctionsCount: number;
   /** Granular breakdown of correction types. */
   flags: {
     unverifiedUrlsRemoved: number;
     syntheticEmailsBlocked: number;
     gdprDatesNormalized: number;
+    rejectedRowsCount: number;
   };
 } /* end SanitizationResult */
 
@@ -72,7 +73,7 @@ const URL_LIKE_REGEX = /^https?:\/\//i;
  * Categorically blocks strings like "Candidato #01", "Senior Scala Engineer #1", "Developer #2", etc.
  */
 export const PLACEHOLDER_NAME_REGEX =
-  /^(candidato|candidate|senior|lead|engineer|developer|profilo|profile|specialist)\s*(#|\d+|[a-z]+)?/i;
+  /^(candidato|candidate|profilo|profile)\b|^(senior|lead|engineer|developer|specialist|consultant)\s*(#|\d+)/i;
 
 /**
  * Regex: Detects candidate / person name columns from headers.
@@ -370,6 +371,7 @@ export const validateAndSanitizeRows = (
     unverifiedUrlsRemoved: 0,
     syntheticEmailsBlocked: 0,
     gdprDatesNormalized: 0,
+    rejectedRowsCount: 0,
   };
 
   if (!values || values.length === 0) {
@@ -403,74 +405,107 @@ export const validateAndSanitizeRows = (
   // Pre-compute GDPR deadline once (deterministic for the whole batch)
   const gdprDeadline = computeGdprDeadline();
 
-  // Process each data row
-  const sanitizedDataRows = dataRows.map((row) => {
-    return row.map((cell, colIndex) => {
+  // Process each data row resiliently: filter out non-compliant rows rather than crashing batch
+  const sanitizedDataRows: string[][] = [];
+  const rejectedReasons: string[] = [];
+
+  for (const row of dataRows) {
+    let rowRejected = false;
+    let rejectReason = "";
+    const sanitizedRow: string[] = [];
+
+    for (let colIndex = 0; colIndex < row.length; colIndex++) {
+      const cell = row[colIndex];
       const trimmed = cell.trim();
 
       // ── Rule 1: GDPR Date Normalization (highest priority) ──────────────
       if (gdprColumnIndices.has(colIndex) && trimmed !== "") {
         flags.gdprDatesNormalized++;
-        return gdprDeadline;
+        sanitizedRow.push(gdprDeadline);
+        continue;
       }
 
       // ── Rule 2: Strict Exact-Match URL Ground-Truth Verification ───────
       if (isUrlLike(trimmed)) {
         if (!isUrlGroundTruth(trimmed, groundTruthUrls)) {
-          throw new Error(
-            `HALLUCINATED_URL_REJECTED: L'URL ${trimmed} non proviene dai risultati reali della ricerca web.`,
-          );
+          rowRejected = true;
+          rejectReason =
+            `HALLUCINATED_URL_REJECTED: L'URL ${trimmed} non proviene dai risultati reali della ricerca web.`;
+          break;
         }
-        return cell; // URL strictly verified against ground truth
+        sanitizedRow.push(cell); // URL strictly verified against ground truth
+        continue;
       }
 
-      // ── Rule 2b: Candidate Name Blacklist & Verification ────────────────
-      if (trimmed !== "" && trimmed !== "-" && trimmed.toLowerCase() !== "n/a") {
-        // Universal placeholder blacklist (blocks 'Candidato #01', 'Senior Scala Engineer #1', etc.)
+      // ── Rule 2b: Candidate Name Blacklist & Verification (Candidate Column Only) ─
+      if (
+        candidateColumnIndices.has(colIndex) &&
+        trimmed !== "" &&
+        trimmed !== "-" &&
+        trimmed.toLowerCase() !== "n/a"
+      ) {
+        // Universal placeholder blacklist on candidate name
         if (PLACEHOLDER_NAME_REGEX.test(trimmed)) {
-          throw new Error(
-            `HALLUCINATED_NAME_REJECTED: Il nominativo '${trimmed}' è un segnaposto fittizio non verificabile. ` +
-            "I record devono contenere un Nome e Cognome reale di persona fisica.",
-          );
+          rowRejected = true;
+          rejectReason =
+            `HALLUCINATED_NAME_REJECTED: Il nominativo '${trimmed}' è un segnaposto fittizio non verificabile.`;
+          break;
         }
-        // Strict verification on candidate/entity name columns
-        if (candidateColumnIndices.has(colIndex)) {
-          const words = trimmed.split(/\s+/).filter(Boolean);
-          if (words.length < 2) {
-            throw new Error(
-              `HALLUCINATED_NAME_REJECTED: Il nominativo '${trimmed}' ` +
-              "non contiene un Nome e Cognome reale di persona fisica.",
-            );
-          }
-          if (evidenceText && !isNameVerifiableInSnippets(trimmed, evidenceText)) {
-            throw new Error(
-              `HALLUCINATED_NAME_REJECTED: Il nominativo '${trimmed}' ` +
-              "non è verificabile nei risultati della ricerca web.",
-            );
-          }
+        const words = trimmed.split(/\s+/).filter(Boolean);
+        if (words.length < 2) {
+          rowRejected = true;
+          rejectReason =
+            `HALLUCINATED_NAME_REJECTED: Il nominativo '${trimmed}' non contiene un Nome e Cognome reale.`;
+          break;
+        }
+        if (evidenceText && !isNameVerifiableInSnippets(trimmed, evidenceText)) {
+          rowRejected = true;
+          rejectReason =
+            `HALLUCINATED_NAME_REJECTED: Il nominativo '${trimmed}' non è verificabile nei risultati web.`;
+          break;
         }
       }
 
       // ── Rule 3: Synthetic Email Blocker ─────────────────────────────────
       if (isSyntheticEmail(trimmed)) {
         flags.syntheticEmailsBlocked++;
-        return CONTACT_FALLBACK;
+        sanitizedRow.push(CONTACT_FALLBACK);
+        continue;
       }
 
       // ── Rule 4: Dummy Phone Number Blocker ──────────────────────────────
       if (isDummyPhone(trimmed)) {
         flags.syntheticEmailsBlocked++;
-        return CONTACT_FALLBACK;
+        sanitizedRow.push(CONTACT_FALLBACK);
+        continue;
       }
 
-      return cell; // Cell passed all checks
-    });
-  }); /* end dataRows.map */
+      sanitizedRow.push(cell); // Cell passed all checks
+    }
+
+    if (rowRejected) {
+      flags.rejectedRowsCount++;
+      rejectedReasons.push(rejectReason);
+    } else {
+      sanitizedDataRows.push(sanitizedRow);
+    }
+  }
+
+  // If input had data rows but ALL were non-compliant, fail-fast
+  if (dataRows.length > 0 && sanitizedDataRows.length === 0) {
+    const mainReason =
+      rejectedReasons[0] ||
+      "Tutte le righe contengono dati non conformi o allucinati rispetto al ground truth.";
+    throw new Error(mainReason);
+  }
 
   // Reassemble with headers if present
   const sanitizedValues = hasHeaders ? [headers, ...sanitizedDataRows] : sanitizedDataRows;
   const correctionsCount =
-    flags.unverifiedUrlsRemoved + flags.syntheticEmailsBlocked + flags.gdprDatesNormalized;
+    flags.unverifiedUrlsRemoved +
+    flags.syntheticEmailsBlocked +
+    flags.gdprDatesNormalized +
+    flags.rejectedRowsCount;
 
   return { sanitizedValues, correctionsCount, flags };
 }; /* end validateAndSanitizeRows */
@@ -492,6 +527,9 @@ export const buildGuardrailSummary = (result: SanitizationResult): string | null
   }
   if (result.flags.gdprDatesNormalized > 0) {
     parts.push(`${result.flags.gdprDatesNormalized} date GDPR forzate a +30gg (Art. 14)`);
+  }
+  if (result.flags.rejectedRowsCount > 0) {
+    parts.push(`${result.flags.rejectedRowsCount} righe non conformi scartate`);
   }
   return `\u{1F6E1}\uFE0F OpsFlow Guardrail: ${parts.join(", ")}.`;
 }; /* end buildGuardrailSummary */

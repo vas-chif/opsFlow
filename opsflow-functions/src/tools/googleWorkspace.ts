@@ -266,6 +266,12 @@ export const manageGoogleSheetTool = ai.defineTool(
     const normalizedValues = guardrailResult.sanitizedValues;
     const guardrailSummary = buildGuardrailSummary(guardrailResult);
 
+    if (guardrailResult.flags.rejectedRowsCount > 0) {
+      logger.warn("[manageGoogleSheetTool] Rejected non-compliant rows during sanitization", {
+        rejectedRowsCount: guardrailResult.flags.rejectedRowsCount,
+      });
+    }
+
     if (guardrailResult.correctionsCount > 0) {
       logger.info("[manageGoogleSheetTool] Anti-hallucination guardrail applied", {
         corrections: guardrailResult.correctionsCount,
@@ -288,7 +294,7 @@ export const manageGoogleSheetTool = ai.defineTool(
 
     // Firestore does not permit direct nested arrays (e.g. string[][]).
     // We store previewRows as an array of objects { cells: [...] } and full data as rowsJson.
-    const baseRowCount = rawNormalized.length > 0 ? rawNormalized.length - 1 : 0; // exclude header
+    const baseRowCount = normalizedValues.length > 0 ? normalizedValues.length - 1 : 0; // exclude header
     const approvalRecord = {
       id: approvalId,
       taskId: effectiveTaskId,
