@@ -300,11 +300,20 @@ const openEditDescriptionDialog = (): void => {
 }; /*end openEditDescriptionDialog*/
 
 const saveEditedDescription = async (): Promise<void> => {
-  if (!task.value || !workspace.value) return;
+  const currentWorkspaceId =
+    props.windowState.workspaceId || task.value?.workspaceId || workspace.value?.id;
+  if (!task.value || !currentWorkspaceId) return;
   try {
-    await taskStore.updateTask(workspace.value.id, task.value.id, {
-      description: editDescriptionDraft.value.trim(),
+    const trimmed = editDescriptionDraft.value.trim();
+    await taskStore.updateTask(currentWorkspaceId, task.value.id, {
+      description: trimmed,
     });
+    if (task.value) {
+      task.value.description = trimmed;
+    }
+    if (props.windowState.task) {
+      props.windowState.task.description = trimmed;
+    }
     showEditDescriptionDialog.value = false;
     q.notify({
       type: "positive",
@@ -330,18 +339,49 @@ const openEditSubtasksDialog = (): void => {
 }; /*end openEditSubtasksDialog*/
 
 const saveEditedSubtasks = async (): Promise<void> => {
-  if (!task.value || !workspace.value) return;
+  const currentWorkspaceId =
+    props.windowState.workspaceId || task.value?.workspaceId || workspace.value?.id;
+  if (!task.value || !currentWorkspaceId) {
+    q.notify({
+      type: "warning",
+      message: "Workspace or Task not identified. Cannot save subtasks.",
+      position: "top",
+    });
+    return;
+  }
   try {
-    await taskStore.updateTask(workspace.value.id, task.value.id, {
+    editSubtasksDraft.value.forEach((st, idx) => {
+      st.order = idx + 1;
+      st.title = (st.title || "").trim();
+      st.description = (st.description || "").trim();
+    });
+
+    const updatedSubtasks = JSON.parse(JSON.stringify(editSubtasksDraft.value));
+
+    await taskStore.updateTask(currentWorkspaceId, task.value.id, {
       aiMetadata: {
-        ...task.value.aiMetadata,
-        subtasks: editSubtasksDraft.value,
+        ...(task.value.aiMetadata || {
+          complexityScore: 5,
+          suggestedCategory: "operations",
+          confidence: 1,
+          modelVersion: "gemini-1.5-flash",
+          lastAnalyzed: new Date(),
+        }),
+        subtasks: updatedSubtasks,
       },
     });
+
+    if (task.value.aiMetadata) {
+      task.value.aiMetadata.subtasks = updatedSubtasks;
+    }
+    if (props.windowState.task?.aiMetadata) {
+      props.windowState.task.aiMetadata.subtasks = updatedSubtasks;
+    }
+
     showEditSubtasksDialog.value = false;
     q.notify({
       type: "positive",
-      message: "Subtasks updated!",
+      message: "Subtasks synchronized and updated!",
       icon: "checklist",
       position: "top",
       timeout: 1500,
@@ -357,7 +397,7 @@ const saveEditedSubtasks = async (): Promise<void> => {
 
 const addEditSubtaskItem = (): void => {
   editSubtasksDraft.value.push({
-    id: `st-${Date.now()}`,
+    id: `st-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     taskId: task.value?.id || "",
     tenantId: "",
     title: "",
@@ -3291,7 +3331,7 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
 
     <!-- Step 21 §2.2: Dialog — Modifica Sotto-Task AI Operative -->
     <q-dialog v-model="showEditSubtasksDialog" persistent>
-      <q-card style="min-width: 500px; max-width: 92vw" class="bg-white rounded-xl">
+      <q-card style="width: 680px; max-width: 95vw" class="bg-white rounded-xl">
         <q-card-section
           class="row items-center q-py-sm q-px-md"
           style="background: #0a2342; border-bottom: 2px solid #c5a065"
@@ -3301,36 +3341,58 @@ const toggleSubTask = async (subtaskIndex: number): Promise<void> => {
           <q-space />
           <q-btn flat round dense icon="close" color="white" v-close-popup />
         </q-card-section>
-        <q-card-section class="q-pa-md" style="max-height: 55vh; overflow-y: auto">
+        <q-card-section class="q-pa-md" style="max-height: 65vh; overflow-y: auto">
           <div
             v-if="editSubtasksDraft.length === 0"
-            class="text-caption text-grey-6 italic q-mb-sm"
+            class="text-caption text-grey-6 italic q-mb-sm text-center q-pa-md"
           >
-            No subtasks. Add one below.
+            No subtasks defined. Click &quot;Add Subtask&quot; below to add one.
           </div>
           <div
             v-for="(st, idx) in editSubtasksDraft"
             :key="st.id || idx"
-            class="row items-center q-col-gutter-xs q-mb-xs no-wrap"
+            class="subtask-edit-item q-pa-sm q-mb-sm rounded-borders"
+            style="border: 1px solid rgba(10, 35, 66, 0.15); background: #fdfdfd"
           >
-            <div class="col-auto">
-              <q-badge color="grey-5" text-color="dark" :label="idx + 1" />
+            <div class="row items-center q-col-gutter-xs no-wrap q-mb-xs">
+              <div class="col-auto">
+                <q-badge color="primary" text-color="white" :label="idx + 1" />
+              </div>
+              <div class="col">
+                <q-input
+                  v-model="st.title"
+                  outlined
+                  dense
+                  label="Titolo Sotto-Task"
+                  placeholder="Es. Configurazione query booleane X-Ray..."
+                />
+              </div>
+              <div class="col-auto">
+                <q-btn
+                  flat
+                  round
+                  dense
+                  size="xs"
+                  icon="delete"
+                  color="negative"
+                  @click="removeEditSubtaskItem(idx)"
+                >
+                  <q-tooltip>Elimina Sotto-Task</q-tooltip>
+                </q-btn>
+              </div>
             </div>
-            <div class="col">
-              <q-input v-model="st.title" outlined dense placeholder="Subtask title..." />
-            </div>
-            <div class="col-auto">
-              <q-btn
-                flat
-                round
+            <div class="q-mt-xs">
+              <q-input
+                v-model="st.description"
+                type="textarea"
+                autogrow
+                rows="2"
+                outlined
                 dense
-                size="xs"
-                icon="delete"
-                color="negative"
-                @click="removeEditSubtaskItem(idx)"
-              >
-                <q-tooltip>Delete</q-tooltip>
-              </q-btn>
+                label="Descrizione & Dettagli Operativi"
+                placeholder="Dettagli operativi, query, logica di estrazione..."
+                style="font-size: 0.85rem"
+              />
             </div>
           </div>
           <q-btn
