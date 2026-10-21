@@ -15,7 +15,7 @@ import { ai } from "./genkitConfig";
 import { z } from "genkit";
 import * as logger from "firebase-functions/logger";
 import { sanitizePii } from "./piiSanitizer";
-import { buildStackedPrompt } from "./promptBuilder";
+import { buildSystemInstruction, buildUserPrompt } from "./promptBuilder";
 import {
   createGmailDraftTool,
   manageGoogleSheetTool,
@@ -163,23 +163,25 @@ export const chatWithAgentFlow = ai.defineFlow(
         `${cleanHistory}\n--- FINE CRONOLOGIA ---`;
     }
 
-    // 4. Build 3-Level Dynamic Stacked Prompt
-    const systemInstruction =
-      buildStackedPrompt({
-        userPrompt: sanitized.sanitizedText,
-        workspacePrompt,
-        workspaceName,
-        taskTitle: taskId,
-        taskSettings,
-        attitude,
-        linkedResources,
-      }) + historyContext;
+    // 4. Build Separated System Instruction (Level 1 + Level 2) and User Prompt (Level 3)
+    const systemInstruction = buildSystemInstruction({
+      workspacePrompt,
+      workspaceName,
+      taskTitle: taskTitle || taskId,
+      taskSettings,
+      attitude,
+      linkedResources,
+    });
+
+    const userTaskMessage =
+      buildUserPrompt(sanitized.sanitizedText, taskTitle || taskId) + historyContext;
 
     // 5. Generate response with tool calling support via Gemini 3.6 Flash
     try {
       const llmResponse = await ai.generate({
         model: "googleai/gemini-3.6-flash",
-        prompt: systemInstruction,
+        system: systemInstruction,
+        prompt: userTaskMessage,
         tools: [
           createGmailDraftTool,
           manageGoogleSheetTool,
@@ -188,6 +190,7 @@ export const chatWithAgentFlow = ai.defineFlow(
           jinaReaderTool,
           contentMarketingTool,
         ],
+        maxTurns: 10,
       });
 
       let replyText =
@@ -300,33 +303,45 @@ export const chatWithAgentFlow = ai.defineFlow(
         approvalRecord,
       };
     } catch (err) {
+      const errorDetails = err instanceof Error ? err.message : String(err);
       // Step 18: Structured error log on tool calling failure
-      console.error("[chatWithAgentFlow] Tool calling failed, fallback to direct mode:", {
-        error: err instanceof Error ? err.message : String(err),
+      logger.error("[chatWithAgentFlow] Tool calling failed, fallback to direct mode:", {
+        error: errorDetails,
       });
 
-      // Fallback: Generate direct response without external tool calling if network/tools fail
-      const fallbackResponse = await ai.generate({
-        model: "googleai/gemini-3.6-flash",
-        prompt: systemInstruction,
-      });
-
-      let reply = fallbackResponse.text?.trim() || "";
-      if (!reply && fallbackResponse.messages) {
-        for (const msg of fallbackResponse.messages) {
-          if (msg.content) {
-            for (const part of msg.content) {
-              if (part.text) reply += part.text;
-            }
-          }
-        }
-      }
-      if (!reply) {
-        reply = "Operazione completata in modalità diretta dall'Agente IA OpsFlow.";
-      }
+      let reply = "";
       let approvalId: string | undefined;
       let approvalRecord: unknown = undefined;
       const toolsUsed: string[] = [];
+
+      // Intercept Anti-Hallucination Gate 2 rejection: do not hallucinate direct response, report guardrail block
+      if (
+        errorDetails.includes("HALLUCINATED_") ||
+        errorDetails.includes("Anti-Hallucination Gate 2")
+      ) {
+        reply = `🛑 Operazione interrotta dal Guardrail Anti-Allucinazione: ${errorDetails}`;
+      } else {
+        // Fallback: Generate direct response without external tool calling if network/tools fail
+        const fallbackResponse = await ai.generate({
+          model: "googleai/gemini-3.6-flash",
+          system: systemInstruction,
+          prompt: userTaskMessage,
+        });
+
+        reply = fallbackResponse.text?.trim() || "";
+        if (!reply && fallbackResponse.messages) {
+          for (const msg of fallbackResponse.messages) {
+            if (msg.content) {
+              for (const part of msg.content) {
+                if (part.text) reply += part.text;
+              }
+            }
+          }
+        }
+        if (!reply) {
+          reply = "Operazione completata in modalità diretta dall'Agente IA OpsFlow.";
+        }
+      }
 
       // Defensive Parsing in fallback mode:
       if (reply.includes("\"tool_calls\"")) {

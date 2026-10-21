@@ -57,13 +57,16 @@ export interface PromptStackOptions {
 }
 
 /**
- * Builds the stacked system instruction dynamically at runtime.
- * @param {PromptStackOptions} options - Prompt stacking options
- * @return {string} Formatted 3-level stacked prompt string
+ * Builds the Level 1 and Level 2 system instruction dynamically at runtime.
+ * Contains Base Architecture, Anti-Hallucination Gate 2 constraints, Tool Orchestration,
+ * and Workspace Constitution with linked resources.
+ * Designed to be passed into Genkit's `system` option.
+ *
+ * @param {Omit<PromptStackOptions, "userPrompt">} options - Stacking options without user prompt
+ * @return {string} Formatted Level 1 & Level 2 system instruction string
  */
-export function buildStackedPrompt(options: PromptStackOptions): string {
-  const { userPrompt, workspacePrompt, workspaceName, taskTitle, attitude, linkedResources, taskSettings } =
-    options;
+export function buildSystemInstruction(options: Omit<PromptStackOptions, "userPrompt">): string {
+  const { workspacePrompt, workspaceName, attitude, linkedResources, taskSettings } = options;
 
   const level1Base =
     "=== LEVEL 1: OPSFLOW BASE ARCHITECTURE & SECURITY ===\n" +
@@ -191,14 +194,32 @@ export function buildStackedPrompt(options: PromptStackOptions): string {
 
   level2Constitution += "=== FINE COSTITUZIONE WORKSPACE — RISPETTA RIGOROSAMENTE ===\n";
 
+  return `${level1Base}${level2Constitution}`;
+} // end buildSystemInstruction
+
+/**
+ * Builds the Level 3 user task instruction.
+ * Designed to be passed into Genkit's `prompt` option.
+ *
+ * @param {string} userPrompt - User prompt or instruction
+ * @param {string} [taskTitle] - Optional active task title
+ * @return {string} Formatted Level 3 task instruction string
+ */
+export function buildUserPrompt(userPrompt: string, taskTitle?: string): string {
   let taskContextStr = "";
   if (taskTitle) {
     taskContextStr = ` [Task Attivo: "${taskTitle}"]`;
   }
+  return `Richiesta Utente${taskContextStr}: "${userPrompt}"`;
+} // end buildUserPrompt
 
-  const level3Task =
-    "\n=== LEVEL 3: TASK CONTEXT & INSTRUCTION ===\n" +
-    `Richiesta Utente${taskContextStr}: "${userPrompt}"`;
-
-  return `${level1Base}${level2Constitution}${level3Task}`;
+/**
+ * Builds the stacked system instruction dynamically at runtime (legacy assembly wrapper).
+ * @param {PromptStackOptions} options - Prompt stacking options
+ * @return {string} Formatted 3-level stacked prompt string
+ */
+export function buildStackedPrompt(options: PromptStackOptions): string {
+  const system = buildSystemInstruction(options);
+  const user = buildUserPrompt(options.userPrompt, options.taskTitle);
+  return `${system}\n=== LEVEL 3: TASK CONTEXT & INSTRUCTION ===\n${user}`;
 } // end buildStackedPrompt
